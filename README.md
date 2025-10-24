@@ -154,6 +154,141 @@ npm test
 pnpm test
 ```
 
+## Deployment
+
+### Deploying to Render
+
+This application is optimized for deployment on [Render](https://render.com/). You can deploy using either the Render Dashboard or the `render.yaml` configuration file.
+
+#### Option 1: Using render.yaml (Recommended)
+
+The repository includes a `render.yaml` file for Infrastructure as Code deployment:
+
+1. **Fork or push this repository to GitHub**
+
+2. **Connect to Render:**
+   - Go to [Render Dashboard](https://dashboard.render.com/)
+   - Click "New" → "Blueprint"
+   - Connect your GitHub repository
+   - Render will automatically detect the `render.yaml` file
+
+3. **Set Secret Environment Variables:**
+
+   You must manually add these sensitive variables in the Render Dashboard (they're marked as `sync: false` in render.yaml):
+
+   ```
+   OPENAI_API_KEY=your_openai_api_key_here
+   NEXT_PUBLIC_OPENAI_API_KEY=your_openai_api_key_here
+   DATAFORSEO_LOGIN=your_dataforseo_login
+   DATAFORSEO_PASSWORD=your_dataforseo_password
+   NEXT_PUBLIC_DATAFORSEO_LOGIN=your_dataforseo_login
+   NEXT_PUBLIC_DATAFORSEO_PASSWORD=your_dataforseo_password
+   ```
+
+4. **Deploy:** Click "Apply" and Render will build and deploy your application
+
+#### Option 2: Manual Setup via Dashboard
+
+1. **Create a New Web Service:**
+   - Go to [Render Dashboard](https://dashboard.render.com/)
+   - Click "New" → "Web Service"
+   - Connect your GitHub repository
+
+2. **Configure Settings:**
+   - **Name**: `query-fan-out-analysis` (or your preference)
+   - **Language**: Node
+   - **Branch**: `claude/serp-query-clustering-app-011CUNsdMyBEmq6BaSMBTc3C` (or your main branch)
+   - **Region**: Frankfurt (EU Central) or your preferred region
+   - **Build Command**: `npm install && npm run build`
+   - **Start Command**: `npm start`
+   - **Plan**: Starter (or Free for testing)
+
+3. **Add Environment Variables:**
+
+   Navigate to the "Environment" tab and add:
+
+   **Required:**
+   ```
+   NODE_VERSION=18
+   OPENAI_API_KEY=your_openai_api_key_here
+   NEXT_PUBLIC_OPENAI_API_KEY=your_openai_api_key_here
+   ```
+
+   **Optional (pre-fills form defaults):**
+   ```
+   DATAFORSEO_LOGIN=your_dataforseo_login
+   DATAFORSEO_PASSWORD=your_dataforseo_password
+   NEXT_PUBLIC_DATAFORSEO_LOGIN=your_dataforseo_login
+   NEXT_PUBLIC_DATAFORSEO_PASSWORD=your_dataforseo_password
+   DEFAULT_LOCATION=United Kingdom
+   DEFAULT_LANGUAGE=English
+   DEFAULT_DEVICE=desktop
+   DEFAULT_CLUSTERING_OVERLAP=4
+   NEXT_PUBLIC_DEFAULT_LOCATION=United Kingdom
+   NEXT_PUBLIC_DEFAULT_LANGUAGE=English
+   NEXT_PUBLIC_DEFAULT_DEVICE=desktop
+   NEXT_PUBLIC_DEFAULT_CLUSTERING_OVERLAP=4
+   NEXT_PUBLIC_MOCK_MODE=false
+   ```
+
+4. **Deploy:** Click "Create Web Service"
+
+#### Post-Deployment
+
+- **Health Checks**: Render automatically monitors your app at the root path (`/`)
+- **Auto-Deploy**: Enable in settings to automatically deploy on git push
+- **Logs**: View real-time logs in the Render Dashboard
+- **Custom Domain**: Add a custom domain in the "Settings" tab
+
+### Deploying to Other Platforms
+
+#### Vercel
+
+```bash
+npm install -g vercel
+vercel
+```
+
+Add environment variables in the Vercel Dashboard under "Settings" → "Environment Variables"
+
+#### Netlify
+
+1. Install Netlify CLI:
+```bash
+npm install -g netlify-cli
+```
+
+2. Deploy:
+```bash
+netlify deploy --prod
+```
+
+Add environment variables in Netlify Dashboard under "Site settings" → "Environment variables"
+
+#### Docker
+
+The app can be containerized using Docker. Example `Dockerfile`:
+
+```dockerfile
+FROM node:18-alpine AS base
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+
+COPY . .
+RUN npm run build
+
+EXPOSE 3000
+CMD ["npm", "start"]
+```
+
+Build and run:
+```bash
+docker build -t query-fan-out-analysis .
+docker run -p 3000:3000 --env-file .env query-fan-out-analysis
+```
+
 ## Usage
 
 ### Basic Workflow
