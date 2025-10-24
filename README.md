@@ -1,10 +1,10 @@
-# SERP Query Clustering App
+# Query Fan Out Analysis
 
 A production-ready Next.js 14 application that analyzes SERP (Search Engine Results Page) data to discover content opportunities and identify cannibalization issues using AI-powered query fan-out and SERP-similarity clustering.
 
 ## Features
 
-- **Query Fan-out**: Uses Gemini AI to generate diverse, semantically-related sub-queries covering multiple intents (informational, commercial, transactional, navigational)
+- **Query Fan-out**: Uses OpenAI to generate diverse, semantically-related sub-queries covering multiple intents (informational, commercial, transactional, navigational)
 - **SERP Analysis**: Retrieves real-time SERP data from DataForSEO API with support for multiple locations, languages, and devices
 - **Intelligent Clustering**: Groups queries by SERP similarity using overlap-based connected components algorithm
 - **Action Recommendations**: Provides actionable insights including:
@@ -12,7 +12,9 @@ A production-ready Next.js 14 application that analyzes SERP (Search Engine Resu
   - Cannibalization detection
   - Content expansion opportunities
   - New page suggestions
-- **AI Overview Detection**: Tracks presence of AI-generated overviews in search results
+- **AI Overview Detection**: Tracks presence of AI-generated overviews in search results with expandable content viewer
+- **Dark Mode Support**: Toggle between light and dark themes for comfortable viewing
+- **Enhanced UI**: Collapsible sections, resizable table columns, and expandable row details
 - **Export Capabilities**: Export results to CSV and JSON formats
 - **Mock Mode**: Test the application without API credentials using sample data
 
@@ -21,21 +23,65 @@ A production-ready Next.js 14 application that analyzes SERP (Search Engine Resu
 - **Framework**: Next.js 14 (App Router)
 - **Language**: TypeScript (strict mode, no `any`)
 - **Validation**: Zod
-- **Styling**: Tailwind CSS
+- **Styling**: Tailwind CSS with dark mode support
 - **APIs**:
-  - Google Gemini API (query generation & embeddings)
+  - OpenAI API (query generation and content briefs)
   - DataForSEO API v3 (SERP data)
 - **Testing**: Jest
 - **CSV Export**: PapaParse
+- **UI Enhancements**: Collapsible sections, resizable columns, theme switching
 
 ## Prerequisites
 
 - Node.js 18+ or compatible runtime
-- pnpm (recommended) or npm
-- Gemini API key ([Get one here](https://makersuite.google.com/app/apikey))
+- npm or pnpm (recommended)
+- OpenAI API key ([Get one here](https://platform.openai.com/api-keys))
 - DataForSEO API credentials ([Sign up here](https://dataforseo.com/))
 
 ## Installation
+
+### For Windows Users
+
+1. Clone the repository:
+```powershell
+git clone <repository-url>
+cd serp-query-clustering-app
+```
+
+2. Install dependencies:
+```powershell
+npm install
+# or if you have pnpm
+pnpm install
+```
+
+3. Create environment file:
+```powershell
+copy .env.example .env
+```
+
+4. (Optional) Add your API credentials to `.env`:
+```env
+OPENAI_API_KEY=your_openai_api_key_here
+NEXT_PUBLIC_OPENAI_API_KEY=your_openai_api_key_here
+DATAFORSEO_LOGIN=your_dataforseo_login_here
+DATAFORSEO_PASSWORD=your_dataforseo_password_here
+NEXT_PUBLIC_DATAFORSEO_LOGIN=your_dataforseo_login_here
+NEXT_PUBLIC_DATAFORSEO_PASSWORD=your_dataforseo_password_here
+
+# Optional: Set default configuration
+DEFAULT_LOCATION=United Kingdom
+DEFAULT_LANGUAGE=English
+DEFAULT_DEVICE=desktop
+DEFAULT_CLUSTERING_OVERLAP=4
+NEXT_PUBLIC_DEFAULT_LOCATION=United Kingdom
+NEXT_PUBLIC_DEFAULT_LANGUAGE=English
+NEXT_PUBLIC_DEFAULT_DEVICE=desktop
+NEXT_PUBLIC_DEFAULT_CLUSTERING_OVERLAP=4
+NEXT_PUBLIC_MOCK_MODE=false
+```
+
+### For Linux/macOS Users
 
 1. Clone the repository:
 ```bash
@@ -45,9 +91,9 @@ cd serp-query-clustering-app
 
 2. Install dependencies:
 ```bash
-pnpm install
-# or
 npm install
+# or
+pnpm install
 ```
 
 3. Create environment file:
@@ -55,43 +101,57 @@ npm install
 cp .env.example .env
 ```
 
-4. (Optional) Add your API credentials to `.env`:
-```env
-GEMINI_API_KEY=your_gemini_api_key_here
-DATAFORSEO_LOGIN=your_dataforseo_login_here
-DATAFORSEO_PASSWORD=your_dataforseo_password_here
-```
+4. (Optional) Add your API credentials to `.env` (same format as Windows above)
 
-Note: You can also provide API credentials directly in the UI form.
+**Note:** You can also provide API credentials directly in the UI form. Environment variables will pre-populate the form fields.
 
 ## Running the Application
 
 ### Development Mode
 
-```bash
-pnpm dev
-# or
+**Windows (PowerShell):**
+```powershell
 npm run dev
+# or
+pnpm dev
+```
+
+**Linux/macOS:**
+```bash
+npm run dev
+# or
+pnpm dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ### Production Build
 
-```bash
-pnpm build
-pnpm start
-# or
+**Windows (PowerShell):**
+```powershell
 npm run build
 npm start
+# or
+pnpm build
+pnpm start
+```
+
+**Linux/macOS:**
+```bash
+npm run build
+npm start
+# or
+pnpm build
+pnpm start
 ```
 
 ### Running Tests
 
+**Both Windows and Linux/macOS:**
 ```bash
-pnpm test
-# or
 npm test
+# or
+pnpm test
 ```
 
 ## Usage
@@ -121,6 +181,36 @@ npm test
 ### Mock Mode
 
 Enable "Mock Mode" in the form to test the application without API credentials. This generates sample data for all steps.
+
+### Dark Mode
+
+Toggle between light and dark themes using the theme switcher button in the top-right corner of the application. Your preference is automatically saved to browser local storage.
+
+**Features:**
+- System-wide dark mode support
+- Persistent theme selection
+- Optimized for reduced eye strain during extended analysis sessions
+- All UI components support both themes
+
+### UI Enhancements
+
+**Collapsible Sections:**
+Click on section headers to expand/collapse content areas:
+- Sub-Queries
+- SERP Results
+- AI Overviews
+- Clusters
+- Recommendations
+
+**Resizable Columns:**
+In the SERP Results table, drag column borders to adjust widths according to your preference.
+
+**Expandable Rows:**
+Click on any SERP result row to view detailed information including:
+- Full query text
+- Complete URL lists
+- AI Overview content (when present)
+- All ranking positions
 
 ### Example Analysis
 
@@ -171,25 +261,27 @@ The app implements:
 - Up to 4 retries for failed requests
 - Batch processing with configurable concurrency (default: 5)
 
-### Gemini API
+### OpenAI API
 
-- **Generous free tier**: 60 requests/minute
-- **Cost**: Minimal for query generation and embeddings
-- **Rate Limits**: Built-in retry logic with exponential backoff
+- **Pricing**: Pay-as-you-go (typically $0.002-0.01 per query generation)
+- **Cost Example**: 30 sub-queries = ~$0.06-0.30 per analysis
+- **Rate Limits**: Varies by tier; built-in retry logic with exponential backoff
+- **Models Used**: GPT-4 or GPT-3.5-turbo (configurable)
 
 ## Project Structure
 
 ```
 /app
   /api
-    /fanout/route.ts      # Query fan-out endpoint
-    /serp/route.ts        # SERP retrieval endpoint
+    /fanout/route.ts      # Query fan-out endpoint (OpenAI)
+    /serp/route.ts        # SERP retrieval endpoint (DataForSEO)
     /cluster/route.ts     # Clustering & recommendations endpoint
-  page.tsx                # Main UI page
+  page.tsx                # Main UI page with dark mode support
   layout.tsx              # App layout
-  globals.css             # Global styles
+  globals.css             # Global styles with dark mode
 /lib
-  gemini.ts               # Gemini API client
+  openai.ts               # OpenAI API client
+  gemini.ts               # Legacy Gemini support (deprecated)
   dataforseo.ts           # DataForSEO API client
   cluster.ts              # Clustering algorithms
   bucketing.ts            # Action bucketing logic
@@ -197,9 +289,11 @@ The app implements:
   types.ts                # Shared TypeScript types
   errors.ts               # Typed error classes
 /components
-  Form.tsx                # Input form component
-  Results.tsx             # Results display component
+  Form.tsx                # Input form component with env defaults
+  Results.tsx             # Results display with collapsible sections
   Diagnostics.tsx         # Logs and diagnostics component
+  ThemeProvider.tsx       # Dark mode context provider
+  ThemeToggle.tsx         # Theme switcher component
 /tests
   normalize.test.ts       # Normalization tests
   cluster.test.ts         # Clustering tests
@@ -236,25 +330,54 @@ Low semantic similarity. Create separate content piece with:
 ## Troubleshooting
 
 ### "Fan-out failed"
-- Check Gemini API key is valid
-- Ensure you have available quota
-- Try enabling Mock Mode to test
+- Check OpenAI API key is valid
+- Ensure you have available quota and credits
+- Verify your API key has proper permissions
+- Try enabling Mock Mode to test without API calls
 
 ### "SERP fetch failed"
-- Verify DataForSEO credentials
-- Check account balance
+- Verify DataForSEO credentials are correct
+- Check account balance and available credits
 - Ensure location/language combination is valid
 - Try reducing number of queries
+- Check your network connection and firewall settings (Windows users)
 
 ### "Clustering failed"
 - Ensure threshold is between 1-10
 - Check that SERP results were successfully fetched
 - Review diagnostics panel for specific errors
+- Verify sufficient SERP data was returned
 
 ### Rate Limit Errors
 - The app automatically retries with exponential backoff
 - If persistent, wait a few minutes and try again
 - Consider reducing concurrency or batch size
+- Check your OpenAI usage limits
+
+### Windows-Specific Issues
+
+**Port Already in Use:**
+If port 3000 is already in use on Windows:
+```powershell
+# Find process using port 3000
+netstat -ano | findstr :3000
+
+# Kill the process (replace PID with actual process ID)
+taskkill /PID <PID> /F
+```
+
+**PowerShell Execution Policy:**
+If you get script execution errors:
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
+**PATH Issues:**
+Ensure Node.js and npm are in your system PATH:
+```powershell
+node --version
+npm --version
+```
 
 ## Development
 
@@ -280,7 +403,7 @@ export const LANGUAGE_MAP: Record<string, string> = {
 
 ### Customizing Fan-out Prompt
 
-Edit the prompt in `lib/gemini.ts` function `fanOutQueries()` to adjust query generation strategy.
+Edit the prompt in `lib/openai.ts` function `fanOutQueries()` to adjust query generation strategy and AI model configuration.
 
 ## Security Notes
 
@@ -318,4 +441,5 @@ For issues and feature requests, please open an issue on GitHub.
 
 - Built with [Next.js](https://nextjs.org/)
 - SERP data by [DataForSEO](https://dataforseo.com/)
-- AI by [Google Gemini](https://ai.google.dev/)
+- AI query generation by [OpenAI](https://openai.com/)
+- Styling with [Tailwind CSS](https://tailwindcss.com/)
