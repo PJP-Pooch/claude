@@ -877,7 +877,7 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                     if (!actionsByType[action.type]) {
                       actionsByType[action.type] = [];
                     }
-                    actionsByType[action.type].push({
+                    actionsByType[action.type]!.push({
                       action,
                       clusterId: rec.clusterId,
                       exemplar: rec.exemplar
