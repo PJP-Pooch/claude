@@ -10,7 +10,7 @@ const RequestSchema = z.object({
   targetQuery: z.string().min(1),
   targetPageUrl: z.string().url(),
   clusteringOverlapThreshold: z.number().int().min(1).max(10),
-  geminiApiKey: z.string().min(1),
+  openaiApiKey: z.string().min(1),
 });
 
 /**
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
       targetQuery,
       targetPageUrl,
       clusteringOverlapThreshold,
-      geminiApiKey,
+      openaiApiKey,
     } = RequestSchema.parse(body);
 
     // Perform clustering
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
       clusters,
       targetQuery,
       targetPageUrl,
-      geminiApiKey
+      openaiApiKey
     );
 
     return NextResponse.json({

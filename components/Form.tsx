@@ -47,14 +47,14 @@ const LANGUAGES = [
 export default function Form({ onSubmit, isLoading }: FormProps) {
   const [targetQuery, setTargetQuery] = useState('');
   const [targetPageUrl, setTargetPageUrl] = useState('');
-  const [geminiApiKey, setGeminiApiKey] = useState('');
-  const [dataForSeoApiLogin, setDataForSeoApiLogin] = useState('');
-  const [dataForSeoApiPassword, setDataForSeoApiPassword] = useState('');
-  const [location, setLocation] = useState('United Kingdom');
-  const [language, setLanguage] = useState('English');
-  const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop');
-  const [clusteringOverlapThreshold, setClusteringOverlapThreshold] = useState(4);
-  const [mockMode, setMockMode] = useState(false);
+  const [openaiApiKey, setOpenaiApiKey] = useState(process.env.NEXT_PUBLIC_OPENAI_API_KEY || '');
+  const [dataForSeoApiLogin, setDataForSeoApiLogin] = useState(process.env.NEXT_PUBLIC_DATAFORSEO_LOGIN || '');
+  const [dataForSeoApiPassword, setDataForSeoApiPassword] = useState(process.env.NEXT_PUBLIC_DATAFORSEO_PASSWORD || '');
+  const [location, setLocation] = useState(process.env.NEXT_PUBLIC_DEFAULT_LOCATION || 'United Kingdom');
+  const [language, setLanguage] = useState(process.env.NEXT_PUBLIC_DEFAULT_LANGUAGE || 'English');
+  const [device, setDevice] = useState<'desktop' | 'mobile'>((process.env.NEXT_PUBLIC_DEFAULT_DEVICE as 'desktop' | 'mobile') || 'desktop');
+  const [clusteringOverlapThreshold, setClusteringOverlapThreshold] = useState(parseInt(process.env.NEXT_PUBLIC_DEFAULT_CLUSTERING_OVERLAP || '4'));
+  const [mockMode, setMockMode] = useState(process.env.NEXT_PUBLIC_MOCK_MODE === 'true');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,7 +62,7 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
     onSubmit({
       targetQuery,
       targetPageUrl,
-      geminiApiKey,
+      openaiApiKey,
       dataForSeoApiLogin,
       dataForSeoApiPassword,
       location,
@@ -114,18 +114,18 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
           />
         </div>
 
-        <div className="md:col-span-2">
-          <label htmlFor="geminiApiKey" className="block text-sm font-medium text-gray-700 mb-1">
-            Gemini API Key *
+        <div>
+          <label htmlFor="openaiApiKey" className="block text-sm font-medium text-gray-700 mb-1">
+            OpenAI API Key *
           </label>
           <input
             type="password"
-            id="geminiApiKey"
-            value={geminiApiKey}
-            onChange={(e) => setGeminiApiKey(e.target.value)}
+            id="openaiApiKey"
+            value={openaiApiKey}
+            onChange={(e) => setOpenaiApiKey(e.target.value)}
             required={!mockMode}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Enter your Gemini API key"
+            placeholder="Enter your OpenAI API key"
           />
         </div>
 

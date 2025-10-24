@@ -22,7 +22,11 @@ export function normalizeUrl(url: string): string {
     // Remove tracking parameters
     const trackingParams = [
       'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
-      'gclid', 'fbclid', 'msclkid', '_ga', 'mc_cid', 'mc_eid'
+      'gclid', 'fbclid', 'msclkid', '_ga', 'mc_cid', 'mc_eid',
+      'srsltid', // Google Shopping auto-tagging
+      'gbraid', 'wbraid', // Google Ads click identifiers
+      'dclid', // DoubleClick identifier
+      'ref', 'source', // Common referrer parameters
     ];
 
     trackingParams.forEach(param => {

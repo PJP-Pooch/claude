@@ -4,6 +4,8 @@ import { useState } from 'react';
 import Form from '@/components/Form';
 import Results from '@/components/Results';
 import Diagnostics from '@/components/Diagnostics';
+import ThemeToggle from '@/components/ThemeToggle';
+import { ThemeProvider } from '@/components/ThemeProvider';
 import { AppInput, SubQuery, SerpResult, Cluster, ClusterRecommendation, DiagnosticLog } from '@/lib/types';
 
 type Step = 'idle' | 'fanout' | 'serp' | 'cluster' | 'complete';
@@ -39,13 +41,13 @@ export default function Home() {
 
     try {
       // Step 1: Fan-out queries
-      addLog('info', 'Starting query fan-out with Gemini...');
+      addLog('info', 'Starting query fan-out with OpenAI...');
       const fanoutResponse = await fetch('/api/fanout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           targetQuery: input.targetQuery,
-          geminiApiKey: input.geminiApiKey,
+          openaiApiKey: input.openaiApiKey,
           mockMode: input.mockMode,
         }),
       });
@@ -105,7 +107,7 @@ export default function Home() {
           targetQuery: input.targetQuery,
           targetPageUrl: input.targetPageUrl,
           clusteringOverlapThreshold: input.clusteringOverlapThreshold,
-          geminiApiKey: input.geminiApiKey,
+          openaiApiKey: input.openaiApiKey,
         }),
       });
 
@@ -143,11 +145,13 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-gray-100 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-7xl mx-auto">
+    <ThemeProvider>
+      <ThemeToggle />
+      <main className="min-h-screen bg-gray-100 dark:bg-gray-900 py-8 px-4 sm:px-6 lg:px-8 transition-colors">
+        <div className="w-full mx-auto">
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">SERP Query Clustering</h1>
-          <p className="text-gray-600">
+          <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">Query Fan Out Analysis</h1>
+          <p className="text-gray-600 dark:text-gray-300">
             Analyze SERP results to discover content opportunities and identify cannibalization issues.
           </p>
         </div>
@@ -225,5 +229,6 @@ export default function Home() {
         </div>
       </div>
     </main>
+    </ThemeProvider>
   );
 }

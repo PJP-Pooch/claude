@@ -150,15 +150,40 @@ export function clusterBySerpSimilarity(
     throw new ClusteringError('Threshold must be between 1 and 10', { threshold });
   }
 
+  console.log(`🔢 Clustering ${serpResults.length} queries with threshold ${threshold}`);
+  
+  // Log SERP result summary
+  serpResults.forEach((serp, idx) => {
+    console.log(`📊 Query ${idx + 1}: "${serp.q}" has ${serp.top10.length} results`);
+    if (serp.top10.length > 0) {
+      console.log(`   First URL: ${serp.top10[0]?.url}`);
+    }
+  });
+
   try {
     // Build overlap matrix
     const overlapMatrix = buildOverlapMatrix(serpResults);
+    
+    // Log overlap matrix
+    console.log(`📈 Overlap Matrix:`);
+    overlapMatrix.forEach((row, i) => {
+      const query = serpResults[i]?.q?.substring(0, 30) + '...' || `Query ${i}`;
+      const overlaps = row.map((val, j) => i === j ? 'self' : val.toString()).join(',');
+      console.log(`   ${query}: [${overlaps}]`);
+    });
 
     // Build similarity graph
     const graph = buildSimilarityGraph(overlapMatrix, threshold);
+    
+    console.log(`🔗 Similarity graph (threshold ${threshold}):`);
+    for (const [node, neighbors] of graph.entries()) {
+      const query = serpResults[node]?.q?.substring(0, 30) + '...' || `Query ${node}`;
+      console.log(`   ${query} -> [${Array.from(neighbors).join(', ')}]`);
+    }
 
     // Find connected components
     const components = findConnectedComponents(graph);
+    console.log(`🎯 Found ${components.length} clusters:`, components.map(c => c.length));
 
     // Handle singleton nodes (not in any component due to no edges)
     const coveredNodes = new Set<number>();
