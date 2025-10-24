@@ -790,7 +790,7 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                             </svg>
                           </button>
                         </div>
-                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-inner">
+                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-inner mb-4">
                           <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
                             Queries in this cluster ({cluster.queries.length}):
                           </p>
@@ -806,6 +806,100 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                                 <span className="text-sm text-gray-900 dark:text-white">{q}</span>
                               </div>
                             ))}
+                          </div>
+                        </div>
+
+                        {/* URL Overlap Matrix */}
+                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-inner">
+                          <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                            Top 10 URL Comparison (Side-by-Side):
+                          </p>
+                          <div className="overflow-x-auto">
+                            <table className="min-w-full text-xs border-collapse">
+                              <thead>
+                                <tr className="bg-gray-100 dark:bg-gray-700">
+                                  <th className="border border-gray-300 dark:border-gray-600 px-2 py-2 text-left font-semibold text-gray-700 dark:text-gray-300 sticky left-0 bg-gray-100 dark:bg-gray-700 z-10 min-w-[200px] max-w-[200px]">
+                                    Query
+                                  </th>
+                                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(pos => (
+                                    <th key={pos} className="border border-gray-300 dark:border-gray-600 px-2 py-2 text-center font-semibold text-gray-700 dark:text-gray-300 min-w-[150px]">
+                                      #{pos}
+                                    </th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {cluster.queries.map((query, qIdx) => {
+                                  const serpResult = serpResults?.find(sr => sr.q === query);
+                                  return (
+                                    <tr key={qIdx} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                      <td className="border border-gray-300 dark:border-gray-600 px-2 py-2 font-medium text-gray-900 dark:text-white sticky left-0 bg-white dark:bg-gray-800 z-10 max-w-[200px]">
+                                        <div className="truncate" title={query}>
+                                          {query}
+                                        </div>
+                                      </td>
+                                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(pos => {
+                                        const result = serpResult?.top10?.find(r => r.position === pos);
+                                        if (!result) {
+                                          return (
+                                            <td key={pos} className="border border-gray-300 dark:border-gray-600 px-2 py-2 text-center text-gray-400">
+                                              —
+                                            </td>
+                                          );
+                                        }
+
+                                        // Extract domain from URL for display
+                                        const domain = result.url.replace(/^https?:\/\//, '').split('/')[0];
+
+                                        // Check if any query in cluster has the same URL at any position
+                                        const urlAppearances = cluster.queries.map(q => {
+                                          const sr = serpResults?.find(s => s.q === q);
+                                          return sr?.top10?.find(r => r.url === result.url);
+                                        }).filter(Boolean).length;
+
+                                        // Highlight if URL appears multiple times across queries
+                                        const isShared = urlAppearances > 1;
+
+                                        return (
+                                          <td
+                                            key={pos}
+                                            className={`border border-gray-300 dark:border-gray-600 px-2 py-2 ${
+                                              isShared
+                                                ? 'bg-green-50 dark:bg-green-900/20'
+                                                : ''
+                                            }`}
+                                          >
+                                            <a
+                                              href={result.url}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className={`block truncate hover:underline ${
+                                                isShared
+                                                  ? 'text-green-700 dark:text-green-400 font-semibold'
+                                                  : 'text-blue-600 dark:text-blue-400'
+                                              }`}
+                                              title={`${result.title}\n${result.url}\n${isShared ? `Appears in ${urlAppearances} queries` : ''}`}
+                                            >
+                                              {domain}
+                                            </a>
+                                          </td>
+                                        );
+                                      })}
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                          <div className="mt-3 flex items-center gap-4 text-xs text-gray-600 dark:text-gray-400">
+                            <div className="flex items-center gap-2">
+                              <div className="w-4 h-4 bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-700 rounded"></div>
+                              <span>Shared URL (appears in multiple queries)</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <div className="w-4 h-4 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded"></div>
+                              <span>Unique URL</span>
+                            </div>
                           </div>
                         </div>
                       </>
