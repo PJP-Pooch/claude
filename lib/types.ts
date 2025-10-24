@@ -16,6 +16,7 @@ export const InputSchema = z.object({
   device: z.enum(['desktop', 'mobile']).default('desktop'),
   clusteringOverlapThreshold: z.number().int().min(1).max(10).default(4),
   mockMode: z.boolean().optional().default(false),
+  customQueries: z.string().optional(), // One query per line
 });
 
 export type AppInput = z.infer<typeof InputSchema>;

@@ -29,6 +29,9 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
   // Track which cluster is selected
   const [selectedCluster, setSelectedCluster] = useState<string | null>(null);
 
+  // Track which action types are expanded
+  const [expandedActionTypes, setExpandedActionTypes] = useState<Set<string>>(new Set());
+
   // Column widths for SERP table
   const [columnWidths, setColumnWidths] = useState({
     query: 200,
@@ -63,6 +66,18 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
         newSet.delete(index);
       } else {
         newSet.add(index);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleActionType = (actionType: string) => {
+    setExpandedActionTypes(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(actionType)) {
+        newSet.delete(actionType);
+      } else {
+        newSet.add(actionType);
       }
       return newSet;
     });
@@ -990,17 +1005,31 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
 
                 return actionTypeOrder
                   .filter(actionType => actionsByType[actionType])
-                  .map((actionType) => (
-                    <div key={actionType} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center space-x-2 mb-4">
-                        <span className="text-xl">{getActionIcon(actionType)}</span>
-                        <h3 className="font-semibold text-gray-900 text-lg">
-                          {getActionLabel(actionType)} ({actionsByType[actionType]!.length})
-                        </h3>
-                      </div>
+                  .map((actionType) => {
+                    const isExpanded = expandedActionTypes.has(actionType);
+                    return (
+                      <div key={actionType} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
+                        <button
+                          onClick={() => toggleActionType(actionType)}
+                          className="flex items-center space-x-2 mb-4 w-full hover:opacity-80 transition-opacity"
+                        >
+                          <span className="text-xl">{getActionIcon(actionType)}</span>
+                          <h3 className="font-semibold text-gray-900 dark:text-white text-lg">
+                            {getActionLabel(actionType)} ({actionsByType[actionType]!.length})
+                          </h3>
+                          <svg
+                            className={`w-5 h-5 ml-auto transform transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
 
-                      <div className="space-y-3">
-                        {actionsByType[actionType]!.map((item, idx) => (
+                        {isExpanded && (
+                          <div className="space-y-3">
+                            {actionsByType[actionType]!.map((item, idx) => (
                           <div
                             key={idx}
                             className={`p-3 rounded-md ${
@@ -1054,10 +1083,12 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                               </div>
                             </div>
                           </div>
-                        ))}
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ));
+                    );
+                  });
               })()}
             </div>
           )}

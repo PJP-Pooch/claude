@@ -37,29 +37,55 @@ export default function Home() {
     setClusters([]);
     setRecommendations([]);
     setLogs([]);
-    setStep('fanout');
 
     try {
-      // Step 1: Fan-out queries
-      addLog('info', 'Starting query fan-out with OpenAI...');
-      const fanoutResponse = await fetch('/api/fanout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          targetQuery: input.targetQuery,
-          openaiApiKey: input.openaiApiKey,
-          mockMode: input.mockMode,
-        }),
-      });
+      let queries: string[] = [];
+      let subQueryObjects: SubQuery[] = [];
 
-      if (!fanoutResponse.ok) {
-        const error = await fanoutResponse.json();
-        throw new Error(error.error || 'Fan-out failed');
+      // Check if custom queries are provided
+      if (input.customQueries && input.customQueries.trim()) {
+        // Use custom queries
+        setStep('serp');
+        addLog('info', 'Using custom sub-queries...');
+        queries = input.customQueries
+          .split('\n')
+          .map(q => q.trim())
+          .filter(q => q.length > 0);
+
+        // Create SubQuery objects with default intent
+        subQueryObjects = queries.map(q => ({
+          q,
+          intent: 'info' as const,
+          rationale: 'Custom query provided by user'
+        }));
+
+        setSubQueries(subQueryObjects);
+        addLog('info', `Using ${queries.length} custom queries`);
+      } else {
+        // Step 1: Fan-out queries with AI
+        setStep('fanout');
+        addLog('info', 'Starting query fan-out with OpenAI...');
+        const fanoutResponse = await fetch('/api/fanout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            targetQuery: input.targetQuery,
+            openaiApiKey: input.openaiApiKey,
+            mockMode: input.mockMode,
+          }),
+        });
+
+        if (!fanoutResponse.ok) {
+          const error = await fanoutResponse.json();
+          throw new Error(error.error || 'Fan-out failed');
+        }
+
+        const fanoutData = await fanoutResponse.json();
+        subQueryObjects = fanoutData.subQueries;
+        queries = subQueryObjects.map((sq: SubQuery) => sq.q);
+        setSubQueries(subQueryObjects);
+        addLog('info', `Generated ${subQueryObjects.length} sub-queries`);
       }
-
-      const fanoutData = await fanoutResponse.json();
-      setSubQueries(fanoutData.subQueries);
-      addLog('info', `Generated ${fanoutData.subQueries.length} sub-queries`);
 
       // Step 2: Fetch SERP results
       setStep('serp');
@@ -68,7 +94,7 @@ export default function Home() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          queries: fanoutData.subQueries.map((sq: SubQuery) => sq.q),
+          queries,
           targetPageUrl: input.targetPageUrl,
           location: input.location,
           language: input.language,
