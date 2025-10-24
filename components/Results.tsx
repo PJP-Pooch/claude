@@ -627,8 +627,28 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                     {/* Collapsible Content */}
                     {isExpanded && (
                       <div className="px-5 pb-4 bg-gradient-to-br from-blue-50 to-purple-50 dark:from-gray-700 dark:to-gray-600">
-                        <div className="mb-4 p-4 bg-white dark:bg-gray-800 rounded-md border border-blue-200 dark:border-blue-900">
-                          <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{sr.aiOverviewData?.text}</p>
+                        <div className="mb-4 p-4 bg-white dark:bg-gray-800 rounded-md border border-blue-200 dark:border-blue-900 shadow-sm">
+                          <div className="prose prose-sm dark:prose-invert max-w-none">
+                            {(() => {
+                              // Strip out URLs and format text nicely
+                              const text = sr.aiOverviewData?.text || '';
+                              // Remove URLs (http/https links)
+                              const cleanText = text
+                                .replace(/https?:\/\/[^\s]+/g, '')
+                                .replace(/\[\d+\]/g, '') // Remove citation numbers like [1], [2]
+                                .replace(/\s+/g, ' ') // Clean up extra whitespace
+                                .trim();
+
+                              // Split into sentences for better readability
+                              const sentences = cleanText.split(/\.\s+/).filter(s => s.trim());
+
+                              return sentences.map((sentence, i) => (
+                                <p key={i} className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed mb-2 last:mb-0">
+                                  {sentence.trim()}{i < sentences.length - 1 ? '.' : ''}
+                                </p>
+                              ));
+                            })()}
+                          </div>
                         </div>
 
                         {sr.aiOverviewData && sr.aiOverviewData.urls.length > 0 && (

@@ -1,260 +1,170 @@
 'use client';
 
-import { useState } from 'react';
-import Form from '@/components/Form';
-import Results from '@/components/Results';
-import Diagnostics from '@/components/Diagnostics';
+import Link from 'next/link';
 import ThemeToggle from '@/components/ThemeToggle';
 import { ThemeProvider } from '@/components/ThemeProvider';
-import { AppInput, SubQuery, SerpResult, Cluster, ClusterRecommendation, DiagnosticLog } from '@/lib/types';
-
-type Step = 'idle' | 'fanout' | 'serp' | 'cluster' | 'complete';
 
 export default function Home() {
-  const [step, setStep] = useState<Step>('idle');
-  const [subQueries, setSubQueries] = useState<SubQuery[]>([]);
-  const [serpResults, setSerpResults] = useState<SerpResult[]>([]);
-  const [clusters, setClusters] = useState<Cluster[]>([]);
-  const [recommendations, setRecommendations] = useState<ClusterRecommendation[]>([]);
-  const [logs, setLogs] = useState<DiagnosticLog[]>([]);
-
-  const addLog = (level: DiagnosticLog['level'], message: string, context?: Record<string, unknown>) => {
-    setLogs((prev) => [
-      ...prev,
-      {
-        level,
-        timestamp: new Date().toISOString(),
-        message,
-        context,
-      },
-    ]);
-  };
-
-  const handleSubmit = async (input: AppInput) => {
-    // Reset state
-    setSubQueries([]);
-    setSerpResults([]);
-    setClusters([]);
-    setRecommendations([]);
-    setLogs([]);
-
-    try {
-      let queries: string[] = [];
-      let subQueryObjects: SubQuery[] = [];
-
-      // Check if custom queries are provided
-      if (input.customQueries && input.customQueries.trim()) {
-        // Use custom queries
-        setStep('serp');
-        addLog('info', 'Using custom sub-queries...');
-        queries = input.customQueries
-          .split('\n')
-          .map(q => q.trim())
-          .filter(q => q.length > 0);
-
-        // Create SubQuery objects with default intent
-        subQueryObjects = queries.map(q => ({
-          q,
-          intent: 'info' as const,
-          rationale: 'Custom query provided by user'
-        }));
-
-        setSubQueries(subQueryObjects);
-        addLog('info', `Using ${queries.length} custom queries`);
-      } else {
-        // Step 1: Fan-out queries with AI
-        setStep('fanout');
-        addLog('info', 'Starting query fan-out with OpenAI...');
-        const fanoutResponse = await fetch('/api/fanout', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            targetQuery: input.targetQuery,
-            openaiApiKey: input.openaiApiKey,
-            mockMode: input.mockMode,
-          }),
-        });
-
-        if (!fanoutResponse.ok) {
-          const error = await fanoutResponse.json();
-          throw new Error(error.error || 'Fan-out failed');
-        }
-
-        const fanoutData = await fanoutResponse.json();
-        subQueryObjects = fanoutData.subQueries;
-        queries = subQueryObjects.map((sq: SubQuery) => sq.q);
-        setSubQueries(subQueryObjects);
-        addLog('info', `Generated ${subQueryObjects.length} sub-queries`);
-      }
-
-      // Step 2: Fetch SERP results
-      setStep('serp');
-      addLog('info', 'Fetching SERP results from DataForSEO...');
-      const serpResponse = await fetch('/api/serp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          queries,
-          targetPageUrl: input.targetPageUrl,
-          location: input.location,
-          language: input.language,
-          device: input.device,
-          dataForSeoApiLogin: input.dataForSeoApiLogin,
-          dataForSeoApiPassword: input.dataForSeoApiPassword,
-          mockMode: input.mockMode,
-        }),
-      });
-
-      if (!serpResponse.ok) {
-        const error = await serpResponse.json();
-        throw new Error(error.error || 'SERP fetch failed');
-      }
-
-      const serpData = await serpResponse.json();
-      setSerpResults(serpData.results);
-      addLog('info', `Fetched SERP results for ${serpData.diagnostics.successCount} queries`);
-
-      if (serpData.diagnostics.failureCount > 0) {
-        addLog(
-          'warning',
-          `${serpData.diagnostics.failureCount} queries failed`,
-          { errors: serpData.diagnostics.errors }
-        );
-      }
-
-      // Step 3: Cluster and generate recommendations
-      setStep('cluster');
-      addLog('info', 'Clustering queries and generating recommendations...');
-      const clusterResponse = await fetch('/api/cluster', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          serpResults: serpData.results,
-          targetQuery: input.targetQuery,
-          targetPageUrl: input.targetPageUrl,
-          clusteringOverlapThreshold: input.clusteringOverlapThreshold,
-          openaiApiKey: input.openaiApiKey,
-        }),
-      });
-
-      if (!clusterResponse.ok) {
-        const error = await clusterResponse.json();
-        throw new Error(error.error || 'Clustering failed');
-      }
-
-      const clusterData = await clusterResponse.json();
-      setClusters(clusterData.clusters);
-      setRecommendations(clusterData.recommendations);
-      addLog('info', `Created ${clusterData.diagnostics.clusterCount} clusters`);
-
-      setStep('complete');
-      addLog('info', 'Analysis complete!');
-    } catch (error) {
-      addLog('error', error instanceof Error ? error.message : 'Unknown error occurred');
-      setStep('idle');
-    }
-  };
-
-  const getStepLabel = (currentStep: Step): string => {
-    switch (currentStep) {
-      case 'fanout':
-        return 'Fan-out: Generating sub-queries...';
-      case 'serp':
-        return 'SERP: Fetching search results...';
-      case 'cluster':
-        return 'Cluster: Analyzing and generating recommendations...';
-      case 'complete':
-        return 'Complete';
-      default:
-        return '';
-    }
-  };
+  const tools = [
+    {
+      id: 'serp',
+      title: 'Query Fan Out Analysis',
+      description: 'Analyze SERP results to discover content opportunities and identify cannibalization issues using AI-powered query fan-out and SERP-similarity clustering.',
+      icon: (
+        <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        </svg>
+      ),
+      href: '/tools/serp',
+      color: 'from-blue-500 to-indigo-600',
+      features: [
+        'AI-powered query generation',
+        'SERP similarity clustering',
+        'Cannibalization detection',
+        'Content gap analysis',
+        'AI Overview tracking',
+      ],
+    },
+    // Placeholder for future tools
+    {
+      id: 'coming-soon-1',
+      title: 'More Tools Coming Soon',
+      description: 'We\'re working on additional SEO and content analysis tools to help you optimize your digital presence.',
+      icon: (
+        <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+        </svg>
+      ),
+      href: '#',
+      color: 'from-gray-400 to-gray-500',
+      features: [
+        'More features in development',
+        'Stay tuned for updates',
+      ],
+      disabled: true,
+    },
+  ];
 
   return (
     <ThemeProvider>
       <ThemeToggle />
       <main className="min-h-screen bg-gray-100 dark:bg-gray-900 py-8 px-4 sm:px-6 lg:px-8 transition-colors">
-        <div className="w-full mx-auto">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">Query Fan Out Analysis</h1>
-          <p className="text-gray-600 dark:text-gray-300">
-            Analyze SERP results to discover content opportunities and identify cannibalization issues.
-          </p>
-        </div>
-
-        {/* Progress Indicator */}
-        {step !== 'idle' && (
-          <div className="mb-6 bg-white p-4 rounded-lg shadow-md">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-gray-700">Progress</span>
-              <span className="text-sm text-gray-600">{getStepLabel(step)}</span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div
-                className="bg-blue-600 h-2 rounded-full transition-all duration-500"
-                style={{
-                  width:
-                    step === 'fanout'
-                      ? '33%'
-                      : step === 'serp'
-                      ? '66%'
-                      : step === 'cluster'
-                      ? '90%'
-                      : '100%',
-                }}
-              />
-            </div>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-1">
-            <Form onSubmit={handleSubmit} isLoading={step !== 'idle' && step !== 'complete'} />
-
-            {logs.length > 0 && (
-              <div className="mt-6">
-                <Diagnostics logs={logs} currentStep={step !== 'idle' ? getStepLabel(step) : undefined} />
-              </div>
-            )}
+        <div className="max-w-7xl mx-auto">
+          {/* Header */}
+          <div className="mb-12 text-center">
+            <h1 className="text-5xl font-bold text-gray-900 dark:text-white mb-4">
+              SEO Analysis Tools
+            </h1>
+            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
+              Powerful tools to analyze, optimize, and improve your search engine performance
+            </p>
           </div>
 
-          <div className="lg:col-span-2">
-            {(subQueries.length > 0 || serpResults.length > 0 || clusters.length > 0 || recommendations.length > 0) && (
-              <Results
-                subQueries={subQueries.length > 0 ? subQueries : undefined}
-                serpResults={serpResults.length > 0 ? serpResults : undefined}
-                clusters={clusters.length > 0 ? clusters : undefined}
-                recommendations={recommendations.length > 0 ? recommendations : undefined}
-              />
-            )}
+          {/* Tools Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-8">
+            {tools.map((tool) => (
+              <Link
+                key={tool.id}
+                href={tool.href}
+                className={`block group ${tool.disabled ? 'pointer-events-none' : ''}`}
+              >
+                <div
+                  className={`h-full bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden transition-all duration-300 ${
+                    tool.disabled
+                      ? 'opacity-60'
+                      : 'hover:shadow-2xl hover:-translate-y-2'
+                  }`}
+                >
+                  {/* Card Header */}
+                  <div className={`bg-gradient-to-r ${tool.color} p-6 text-white`}>
+                    <div className="flex items-center space-x-4">
+                      <div className="flex-shrink-0">
+                        {tool.icon}
+                      </div>
+                      <div>
+                        <h2 className="text-2xl font-bold mb-1">
+                          {tool.title}
+                        </h2>
+                        {tool.disabled && (
+                          <span className="inline-block px-2 py-1 text-xs bg-white/20 rounded-full">
+                            Coming Soon
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
 
-            {step === 'idle' && subQueries.length === 0 && (
-              <div className="bg-white p-12 rounded-lg shadow-md text-center">
-                <div className="text-gray-400 mb-4">
-                  <svg
-                    className="mx-auto h-24 w-24"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1}
-                      d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                    />
-                  </svg>
+                  {/* Card Body */}
+                  <div className="p-6">
+                    <p className="text-gray-600 dark:text-gray-300 mb-4">
+                      {tool.description}
+                    </p>
+
+                    {/* Features List */}
+                    <div className="space-y-2">
+                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wide mb-3">
+                        Features
+                      </h3>
+                      <ul className="space-y-2">
+                        {tool.features.map((feature, idx) => (
+                          <li
+                            key={idx}
+                            className="flex items-start space-x-2 text-sm text-gray-700 dark:text-gray-300"
+                          >
+                            <svg
+                              className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M5 13l4 4L19 7"
+                              />
+                            </svg>
+                            <span>{feature}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+
+                  {/* Card Footer */}
+                  {!tool.disabled && (
+                    <div className="px-6 pb-6">
+                      <div className="flex items-center text-blue-600 dark:text-blue-400 font-semibold group-hover:text-blue-700 dark:group-hover:text-blue-300 transition-colors">
+                        <span>Launch Tool</span>
+                        <svg
+                          className="w-5 h-5 ml-2 transform group-hover:translate-x-1 transition-transform"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M13 7l5 5m0 0l-5 5m5-5H6"
+                          />
+                        </svg>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Ready to Analyze</h3>
-                <p className="text-gray-600">
-                  Fill in the form and click &quot;Start Analysis&quot; to begin.
-                </p>
-              </div>
-            )}
+              </Link>
+            ))}
+          </div>
+
+          {/* Footer */}
+          <div className="mt-16 text-center text-gray-600 dark:text-gray-400">
+            <p className="text-sm">
+              Built with Next.js 14 • Powered by OpenAI & DataForSEO
+            </p>
           </div>
         </div>
-      </div>
-    </main>
+      </main>
     </ThemeProvider>
   );
 }
