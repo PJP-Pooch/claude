@@ -901,12 +901,12 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                       <div className="flex items-center space-x-2 mb-4">
                         <span className="text-xl">{getActionIcon(actionType)}</span>
                         <h3 className="font-semibold text-gray-900 text-lg">
-                          {getActionLabel(actionType)} ({actionsByType[actionType].length})
+                          {getActionLabel(actionType)} ({actionsByType[actionType]!.length})
                         </h3>
                       </div>
-                      
+
                       <div className="space-y-3">
-                        {actionsByType[actionType].map((item, idx) => (
+                        {actionsByType[actionType]!.map((item, idx) => (
                           <div
                             key={idx}
                             className={`p-3 rounded-md ${
