@@ -15,6 +15,7 @@ export const InputSchema = z.object({
   searchEngine: z.literal('google').default('google'),
   device: z.enum(['desktop', 'mobile']).default('desktop'),
   clusteringOverlapThreshold: z.number().int().min(1).max(10).default(4),
+  maxQueries: z.number().int().min(1).max(50).default(25),
   mockMode: z.boolean().optional().default(false),
 });
 

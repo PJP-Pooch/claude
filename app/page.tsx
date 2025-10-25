@@ -1,12 +1,26 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Form from '@/components/Form';
 import Results from '@/components/Results';
 import Diagnostics from '@/components/Diagnostics';
 import { AppInput, SubQuery, SerpResult, Cluster, ClusterRecommendation, DiagnosticLog } from '@/lib/types';
 
 type Step = 'idle' | 'fanout' | 'serp' | 'cluster' | 'complete';
+
+type SavedState = {
+  step: Step;
+  subQueries: SubQuery[];
+  serpResults: SerpResult[];
+  clusters: Cluster[];
+  recommendations: ClusterRecommendation[];
+  logs: DiagnosticLog[];
+  input: AppInput;
+  timestamp: number;
+};
+
+const STORAGE_KEY = 'serp-analysis-state';
+const STORAGE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
 
 export default function Home() {
   const [step, setStep] = useState<Step>('idle');
@@ -15,6 +29,90 @@ export default function Home() {
   const [clusters, setClusters] = useState<Cluster[]>([]);
   const [recommendations, setRecommendations] = useState<ClusterRecommendation[]>([]);
   const [logs, setLogs] = useState<DiagnosticLog[]>([]);
+  const [savedInput, setSavedInput] = useState<AppInput | null>(null);
+  const [showResumePrompt, setShowResumePrompt] = useState(false);
+
+  // Check for saved state on mount
+  useEffect(() => {
+    const savedState = loadSavedState();
+    if (savedState) {
+      setShowResumePrompt(true);
+      setSavedInput(savedState.input);
+    }
+  }, []);
+
+  // Save progress after state changes
+  useEffect(() => {
+    if (step !== 'idle' && savedInput) {
+      saveProgress();
+    }
+  }, [step, subQueries, serpResults, clusters, recommendations, logs]);
+
+  const saveProgress = () => {
+    if (!savedInput) return;
+
+    const state: SavedState = {
+      step,
+      subQueries,
+      serpResults,
+      clusters,
+      recommendations,
+      logs,
+      input: savedInput,
+      timestamp: Date.now(),
+    };
+
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (error) {
+      console.error('Failed to save progress:', error);
+    }
+  };
+
+  const loadSavedState = (): SavedState | null => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (!saved) return null;
+
+      const state: SavedState = JSON.parse(saved);
+
+      // Check if state is expired
+      if (Date.now() - state.timestamp > STORAGE_EXPIRY) {
+        localStorage.removeItem(STORAGE_KEY);
+        return null;
+      }
+
+      return state;
+    } catch (error) {
+      console.error('Failed to load saved state:', error);
+      return null;
+    }
+  };
+
+  const resumeAnalysis = () => {
+    const savedState = loadSavedState();
+    if (!savedState) {
+      setShowResumePrompt(false);
+      return;
+    }
+
+    setStep(savedState.step);
+    setSubQueries(savedState.subQueries);
+    setSerpResults(savedState.serpResults);
+    setClusters(savedState.clusters);
+    setRecommendations(savedState.recommendations);
+    setLogs(savedState.logs);
+    setSavedInput(savedState.input);
+    setShowResumePrompt(false);
+
+    addLog('info', 'Resumed previous analysis');
+  };
+
+  const clearSavedState = () => {
+    localStorage.removeItem(STORAGE_KEY);
+    setShowResumePrompt(false);
+    setSavedInput(null);
+  };
 
   const addLog = (level: DiagnosticLog['level'], message: string, context?: Record<string, unknown>) => {
     setLogs((prev) => [
@@ -29,12 +127,14 @@ export default function Home() {
   };
 
   const handleSubmit = async (input: AppInput) => {
-    // Reset state
+    // Reset state and clear any old saved state
+    clearSavedState();
     setSubQueries([]);
     setSerpResults([]);
     setClusters([]);
     setRecommendations([]);
     setLogs([]);
+    setSavedInput(input);
     setStep('fanout');
 
     try {
@@ -56,8 +156,9 @@ export default function Home() {
       }
 
       const fanoutData = await fanoutResponse.json();
-      setSubQueries(fanoutData.subQueries);
-      addLog('info', `Generated ${fanoutData.subQueries.length} sub-queries`);
+      const limitedSubQueries = fanoutData.subQueries.slice(0, input.maxQueries);
+      setSubQueries(limitedSubQueries);
+      addLog('info', `Generated ${limitedSubQueries.length} sub-queries (max: ${input.maxQueries})`);
 
       // Step 2: Fetch SERP results
       setStep('serp');
@@ -66,7 +167,7 @@ export default function Home() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          queries: fanoutData.subQueries.map((sq: SubQuery) => sq.q),
+          queries: limitedSubQueries.map((sq: SubQuery) => sq.q),
           targetPageUrl: input.targetPageUrl,
           location: input.location,
           language: input.language,
@@ -121,9 +222,15 @@ export default function Home() {
 
       setStep('complete');
       addLog('info', 'Analysis complete!');
+
+      // Clear saved state on successful completion
+      setTimeout(() => {
+        clearSavedState();
+      }, 1000);
     } catch (error) {
       addLog('error', error instanceof Error ? error.message : 'Unknown error occurred');
       setStep('idle');
+      // Keep saved state on error so user can retry
     }
   };
 
@@ -151,6 +258,49 @@ export default function Home() {
             Analyze SERP results to discover content opportunities and identify cannibalization issues.
           </p>
         </div>
+
+        {/* Resume Prompt */}
+        {showResumePrompt && savedInput && (
+          <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <h3 className="text-sm font-medium text-blue-900 mb-1">
+                  📋 Previous Analysis Found
+                </h3>
+                <p className="text-sm text-blue-700 mb-3">
+                  You have an unfinished analysis for &quot;{savedInput.targetQuery}&quot;. Would you like to resume?
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={resumeAnalysis}
+                    className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"
+                  >
+                    Resume Analysis
+                  </button>
+                  <button
+                    onClick={clearSavedState}
+                    className="px-4 py-2 bg-white text-blue-600 text-sm font-medium rounded-md border border-blue-300 hover:bg-blue-50 transition-colors"
+                  >
+                    Start Fresh
+                  </button>
+                </div>
+              </div>
+              <button
+                onClick={clearSavedState}
+                className="ml-4 text-blue-400 hover:text-blue-600"
+                aria-label="Dismiss"
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path
+                    fillRule="evenodd"
+                    d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Progress Indicator */}
         {step !== 'idle' && (

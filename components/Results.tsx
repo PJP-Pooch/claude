@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { SubQuery, SerpResult, Cluster, ClusterRecommendation } from '@/lib/types';
 import Papa from 'papaparse';
 
@@ -11,6 +12,9 @@ type ResultsProps = {
 };
 
 export default function Results({ subQueries, serpResults, clusters, recommendations }: ResultsProps) {
+  const [subQueryFilter, setSubQueryFilter] = useState('');
+  const [serpFilter, setSerpFilter] = useState('');
+  const [actionFilter, setActionFilter] = useState('');
   const downloadCSV = (data: unknown[], filename: string) => {
     const csv = Papa.unparse(data);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -63,13 +67,34 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
     }
   };
 
+  // Apply filters
+  const filteredSubQueries = subQueries?.filter((sq) =>
+    sq.q.toLowerCase().includes(subQueryFilter.toLowerCase()) ||
+    sq.intent.toLowerCase().includes(subQueryFilter.toLowerCase()) ||
+    sq.rationale.toLowerCase().includes(subQueryFilter.toLowerCase())
+  );
+
+  const filteredSerpResults = serpResults?.filter((sr) =>
+    sr.q.toLowerCase().includes(serpFilter.toLowerCase())
+  );
+
+  const filteredRecommendations = recommendations?.map((rec) => ({
+    ...rec,
+    actions: rec.actions.filter((action) =>
+      action.q.toLowerCase().includes(actionFilter.toLowerCase()) ||
+      getActionLabel(action.type).toLowerCase().includes(actionFilter.toLowerCase())
+    ),
+  })).filter((rec) => rec.actions.length > 0 || actionFilter === '');
+
   return (
     <div className="space-y-8">
       {/* Sub-Queries Table */}
       {subQueries && subQueries.length > 0 && (
         <section className="bg-white p-6 rounded-lg shadow-md">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold text-gray-900">Sub-Queries ({subQueries.length})</h2>
+            <h2 className="text-xl font-bold text-gray-900">
+              Sub-Queries ({filteredSubQueries?.length || 0}/{subQueries.length})
+            </h2>
             <div className="space-x-2">
               <button
                 onClick={() => downloadCSV(subQueries, 'sub-queries.csv')}
@@ -84,6 +109,15 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                 Export JSON
               </button>
             </div>
+          </div>
+          <div className="mb-4">
+            <input
+              type="text"
+              placeholder="🔍 Search sub-queries..."
+              value={subQueryFilter}
+              onChange={(e) => setSubQueryFilter(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -101,7 +135,7 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {subQueries.map((sq, idx) => (
+                {filteredSubQueries?.map((sq, idx) => (
                   <tr key={idx} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-sm text-gray-900">{sq.q}</td>
                     <td className="px-4 py-3 text-sm">
@@ -132,7 +166,9 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
       {serpResults && serpResults.length > 0 && (
         <section className="bg-white p-6 rounded-lg shadow-md">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold text-gray-900">SERP Results ({serpResults.length})</h2>
+            <h2 className="text-xl font-bold text-gray-900">
+              SERP Results ({filteredSerpResults?.length || 0}/{serpResults.length})
+            </h2>
             <div className="space-x-2">
               <button
                 onClick={() =>
@@ -153,6 +189,15 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                 Export CSV
               </button>
             </div>
+          </div>
+          <div className="mb-4">
+            <input
+              type="text"
+              placeholder="🔍 Search SERP results..."
+              value={serpFilter}
+              onChange={(e) => setSerpFilter(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -176,7 +221,7 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {serpResults.map((sr, idx) => (
+                {filteredSerpResults?.map((sr, idx) => (
                   <tr key={idx} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-sm text-gray-900">{sr.q}</td>
                     <td className="px-4 py-3 text-sm">
@@ -297,8 +342,17 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
               Export CSV
             </button>
           </div>
+          <div className="mb-4">
+            <input
+              type="text"
+              placeholder="🔍 Search actions by query or type..."
+              value={actionFilter}
+              onChange={(e) => setActionFilter(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
           <div className="space-y-6">
-            {recommendations.map((rec) => (
+            {filteredRecommendations?.map((rec) => (
               <div key={rec.clusterId} className="border border-gray-200 rounded-lg p-4">
                 <h3 className="font-semibold text-gray-900 mb-2">{rec.clusterId}</h3>
                 <p className="text-sm text-gray-600 mb-3">

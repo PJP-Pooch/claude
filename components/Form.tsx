@@ -54,7 +54,12 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
   const [language, setLanguage] = useState('English');
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop');
   const [clusteringOverlapThreshold, setClusteringOverlapThreshold] = useState(4);
+  const [maxQueries, setMaxQueries] = useState(25);
   const [mockMode, setMockMode] = useState(false);
+
+  // Calculate estimated cost
+  const estimatedMinCost = maxQueries * 0.1;
+  const estimatedMaxCost = maxQueries * 0.5;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,6 +75,7 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
       searchEngine: 'google',
       device,
       clusteringOverlapThreshold,
+      maxQueries,
       mockMode,
     });
   };
@@ -227,6 +233,36 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
             <span>1 (Loose)</span>
             <span>10 (Strict)</span>
           </div>
+        </div>
+
+        <div className="md:col-span-2">
+          <label htmlFor="maxQueries" className="block text-sm font-medium text-gray-700 mb-1">
+            Max Queries to Analyze: {maxQueries}
+          </label>
+          <input
+            type="range"
+            id="maxQueries"
+            min="5"
+            max="50"
+            value={maxQueries}
+            onChange={(e) => setMaxQueries(parseInt(e.target.value))}
+            className="w-full"
+          />
+          <div className="flex justify-between text-xs text-gray-500 mt-1">
+            <span>5 queries</span>
+            <span>50 queries</span>
+          </div>
+          {!mockMode && (
+            <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
+              <p className="text-sm text-blue-900 font-medium mb-1">💰 Estimated Cost</p>
+              <p className="text-xs text-blue-700">
+                DataForSEO API: ${estimatedMinCost.toFixed(2)} - ${estimatedMaxCost.toFixed(2)}
+              </p>
+              <p className="text-xs text-blue-600 mt-1">
+                Gemini API cost is minimal (usually free tier)
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="md:col-span-2">
