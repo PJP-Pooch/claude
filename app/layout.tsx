@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'SERP Query Clustering App',
+  title: 'Query Fan Out Analysis',
   description: 'Analyze SERP results to discover content opportunities and identify cannibalization issues.',
 };
 

@@ -1,23 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { fanOutQueries } from '@/lib/gemini';
+import { fanOutQueries } from '@/lib/openai';
 import { handleError } from '@/lib/errors';
 import { filterNearDuplicates, deduplicateStrings } from '@/lib/normalize';
 
 const RequestSchema = z.object({
   targetQuery: z.string().min(1),
-  geminiApiKey: z.string().min(1),
+  openaiApiKey: z.string().min(1),
   mockMode: z.boolean().optional(),
 });
 
 /**
  * POST /api/fanout
- * Generates sub-queries using Gemini fan-out technique
+ * Generates sub-queries using OpenAI fan-out technique
  */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { targetQuery, geminiApiKey, mockMode } = RequestSchema.parse(body);
+    const { targetQuery, openaiApiKey, mockMode } = RequestSchema.parse(body);
 
     // Mock mode for testing
     if (mockMode) {
@@ -44,8 +44,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Call Gemini API
-    const result = await fanOutQueries(targetQuery, geminiApiKey);
+    // Call OpenAI API
+    const result = await fanOutQueries(targetQuery, openaiApiKey);
 
     // Deduplicate and filter near-duplicates
     const dedupedQueries = filterNearDuplicates(result.subQueries, 0.9);

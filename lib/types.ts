@@ -7,7 +7,7 @@ import { z } from 'zod';
 export const InputSchema = z.object({
   targetQuery: z.string().min(1, 'Target query is required'),
   targetPageUrl: z.string().url('Must be a valid URL'),
-  geminiApiKey: z.string().min(1, 'Gemini API key is required'),
+  openaiApiKey: z.string().min(1, 'OpenAI API key is required'),
   dataForSeoApiLogin: z.string().min(1, 'DataForSEO login is required'),
   dataForSeoApiPassword: z.string().min(1, 'DataForSEO password is required'),
   location: z.string().default('United Kingdom'),
@@ -17,6 +17,7 @@ export const InputSchema = z.object({
   clusteringOverlapThreshold: z.number().int().min(1).max(10).default(4),
   maxQueries: z.number().int().min(1).max(50).default(25),
   mockMode: z.boolean().optional().default(false),
+  customQueries: z.string().optional(), // One query per line
 });
 
 export type AppInput = z.infer<typeof InputSchema>;
@@ -54,10 +55,21 @@ export type OrganicResult = z.infer<typeof OrganicResultSchema>;
 export const AIOverviewSchema = z.enum(['present', 'absent', 'unknown']);
 export type AIOverview = z.infer<typeof AIOverviewSchema>;
 
+export const AIOverviewDataSchema = z.object({
+  text: z.string(),
+  urls: z.array(z.object({
+    url: z.string(),
+    title: z.string().optional(),
+  })),
+}).optional();
+
+export type AIOverviewData = z.infer<typeof AIOverviewDataSchema>;
+
 export const SerpResultSchema = z.object({
   q: z.string(),
   top10: z.array(OrganicResultSchema),
   aiOverview: AIOverviewSchema,
+  aiOverviewData: AIOverviewDataSchema,
   targetPageOnPage1: z.boolean(),
   sameDomainOnPage1: z.boolean(),
   firstMatch: z.object({
@@ -96,6 +108,7 @@ export const ActionSchema = z.discriminatedUnion('type', [
     q: z.string(),
     otherUrl: z.string(),
     details: z.string(),
+    suggestions: z.string().optional(), // How to improve the other page to target this query
   }),
   z.object({
     type: z.literal('cannibalisation'),
@@ -221,28 +234,26 @@ export const LANGUAGE_MAP: Record<string, string> = {
 };
 
 // ============================================================================
-// Gemini API Types
+// OpenAI API Types
 // ============================================================================
 
-export type GeminiEmbeddingRequest = {
+export type OpenAIEmbeddingRequest = {
   model: string;
-  content: {
-    parts: Array<{ text: string }>;
-  };
+  input: string;
 };
 
-export type GeminiEmbeddingResponse = {
-  embedding: {
-    values: number[];
-  };
+export type OpenAIEmbeddingResponse = {
+  data: Array<{
+    embedding: number[];
+  }>;
 };
 
-export type GeminiFanoutRequest = {
+export type OpenAIFanoutRequest = {
   targetQuery: string;
   apiKey: string;
 };
 
-export type GeminiSimilarityRequest = {
+export type OpenAISimilarityRequest = {
   text1: string;
   text2: string;
   apiKey: string;

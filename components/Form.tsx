@@ -47,19 +47,15 @@ const LANGUAGES = [
 export default function Form({ onSubmit, isLoading }: FormProps) {
   const [targetQuery, setTargetQuery] = useState('');
   const [targetPageUrl, setTargetPageUrl] = useState('');
-  const [geminiApiKey, setGeminiApiKey] = useState('');
-  const [dataForSeoApiLogin, setDataForSeoApiLogin] = useState('');
-  const [dataForSeoApiPassword, setDataForSeoApiPassword] = useState('');
-  const [location, setLocation] = useState('United Kingdom');
-  const [language, setLanguage] = useState('English');
-  const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop');
-  const [clusteringOverlapThreshold, setClusteringOverlapThreshold] = useState(4);
-  const [maxQueries, setMaxQueries] = useState(25);
-  const [mockMode, setMockMode] = useState(false);
-
-  // Calculate estimated cost
-  const estimatedMinCost = maxQueries * 0.1;
-  const estimatedMaxCost = maxQueries * 0.5;
+  const [openaiApiKey, setOpenaiApiKey] = useState(process.env.NEXT_PUBLIC_OPENAI_API_KEY || '');
+  const [dataForSeoApiLogin, setDataForSeoApiLogin] = useState(process.env.NEXT_PUBLIC_DATAFORSEO_LOGIN || '');
+  const [dataForSeoApiPassword, setDataForSeoApiPassword] = useState(process.env.NEXT_PUBLIC_DATAFORSEO_PASSWORD || '');
+  const [location, setLocation] = useState(process.env.NEXT_PUBLIC_DEFAULT_LOCATION || 'United Kingdom');
+  const [language, setLanguage] = useState(process.env.NEXT_PUBLIC_DEFAULT_LANGUAGE || 'English');
+  const [device, setDevice] = useState<'desktop' | 'mobile'>((process.env.NEXT_PUBLIC_DEFAULT_DEVICE as 'desktop' | 'mobile') || 'desktop');
+  const [clusteringOverlapThreshold, setClusteringOverlapThreshold] = useState(parseInt(process.env.NEXT_PUBLIC_DEFAULT_CLUSTERING_OVERLAP || '4'));
+  const [mockMode, setMockMode] = useState(process.env.NEXT_PUBLIC_MOCK_MODE === 'true');
+  const [customQueries, setCustomQueries] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,7 +63,7 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
     onSubmit({
       targetQuery,
       targetPageUrl,
-      geminiApiKey,
+      openaiApiKey,
       dataForSeoApiLogin,
       dataForSeoApiPassword,
       location,
@@ -75,8 +71,8 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
       searchEngine: 'google',
       device,
       clusteringOverlapThreshold,
-      maxQueries,
       mockMode,
+      customQueries: customQueries.trim() || undefined,
     });
   };
 
@@ -121,17 +117,46 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
         </div>
 
         <div className="md:col-span-2">
-          <label htmlFor="geminiApiKey" className="block text-sm font-medium text-gray-700 mb-1">
-            Gemini API Key *
+          <label htmlFor="customQueries" className="block text-sm font-medium text-gray-700 mb-1">
+            Custom Sub-Queries (Optional)
+          </label>
+          <textarea
+            id="customQueries"
+            value={customQueries}
+            onChange={(e) => setCustomQueries(e.target.value)}
+            rows={6}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+            placeholder="Enter one query per line, e.g.:
+best content marketing tools
+how to create content strategy
+content marketing for small business
+content marketing examples
+
+Leave empty to auto-generate queries using AI"
+          />
+          <p className="mt-1 text-xs text-gray-500">
+            {customQueries.trim() ? (
+              <span className="text-green-600 font-medium">
+                {customQueries.trim().split('\n').filter(q => q.trim()).length} custom queries provided - AI generation will be skipped
+              </span>
+            ) : (
+              <span>If left empty, queries will be automatically generated using OpenAI</span>
+            )}
+          </p>
+        </div>
+
+        <div>
+          <label htmlFor="openaiApiKey" className="block text-sm font-medium text-gray-700 mb-1">
+            OpenAI API Key {customQueries.trim() ? '' : '*'}
           </label>
           <input
             type="password"
-            id="geminiApiKey"
-            value={geminiApiKey}
-            onChange={(e) => setGeminiApiKey(e.target.value)}
-            required={!mockMode}
+            id="openaiApiKey"
+            value={openaiApiKey}
+            onChange={(e) => setOpenaiApiKey(e.target.value)}
+            required={!mockMode && !customQueries.trim()}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Enter your Gemini API key"
+            placeholder="Enter your OpenAI API key"
           />
         </div>
 
@@ -233,36 +258,6 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
             <span>1 (Loose)</span>
             <span>10 (Strict)</span>
           </div>
-        </div>
-
-        <div className="md:col-span-2">
-          <label htmlFor="maxQueries" className="block text-sm font-medium text-gray-700 mb-1">
-            Max Queries to Analyze: {maxQueries}
-          </label>
-          <input
-            type="range"
-            id="maxQueries"
-            min="5"
-            max="50"
-            value={maxQueries}
-            onChange={(e) => setMaxQueries(parseInt(e.target.value))}
-            className="w-full"
-          />
-          <div className="flex justify-between text-xs text-gray-500 mt-1">
-            <span>5 queries</span>
-            <span>50 queries</span>
-          </div>
-          {!mockMode && (
-            <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
-              <p className="text-sm text-blue-900 font-medium mb-1">💰 Estimated Cost</p>
-              <p className="text-xs text-blue-700">
-                DataForSEO API: ${estimatedMinCost.toFixed(2)} - ${estimatedMaxCost.toFixed(2)}
-              </p>
-              <p className="text-xs text-blue-600 mt-1">
-                Gemini API cost is minimal (usually free tier)
-              </p>
-            </div>
-          )}
         </div>
 
         <div className="md:col-span-2">

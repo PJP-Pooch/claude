@@ -140,7 +140,8 @@ export function selectExemplar(
  */
 export function clusterBySerpSimilarity(
   serpResults: SerpResult[],
-  threshold: number
+  threshold: number,
+  targetQuery?: string
 ): Cluster[] {
   if (serpResults.length === 0) {
     return [];
@@ -150,15 +151,40 @@ export function clusterBySerpSimilarity(
     throw new ClusteringError('Threshold must be between 1 and 10', { threshold });
   }
 
+  console.log(`🔢 Clustering ${serpResults.length} queries with threshold ${threshold}`);
+  
+  // Log SERP result summary
+  serpResults.forEach((serp, idx) => {
+    console.log(`📊 Query ${idx + 1}: "${serp.q}" has ${serp.top10.length} results`);
+    if (serp.top10.length > 0) {
+      console.log(`   First URL: ${serp.top10[0]?.url}`);
+    }
+  });
+
   try {
     // Build overlap matrix
     const overlapMatrix = buildOverlapMatrix(serpResults);
+    
+    // Log overlap matrix
+    console.log(`📈 Overlap Matrix:`);
+    overlapMatrix.forEach((row, i) => {
+      const query = serpResults[i]?.q?.substring(0, 30) + '...' || `Query ${i}`;
+      const overlaps = row.map((val, j) => i === j ? 'self' : val.toString()).join(',');
+      console.log(`   ${query}: [${overlaps}]`);
+    });
 
     // Build similarity graph
     const graph = buildSimilarityGraph(overlapMatrix, threshold);
+    
+    console.log(`🔗 Similarity graph (threshold ${threshold}):`);
+    for (const [node, neighbors] of graph.entries()) {
+      const query = serpResults[node]?.q?.substring(0, 30) + '...' || `Query ${node}`;
+      console.log(`   ${query} -> [${Array.from(neighbors).join(', ')}]`);
+    }
 
     // Find connected components
     const components = findConnectedComponents(graph);
+    console.log(`🎯 Found ${components.length} clusters:`, components.map(c => c.length));
 
     // Handle singleton nodes (not in any component due to no edges)
     const coveredNodes = new Set<number>();
@@ -176,6 +202,15 @@ export function clusterBySerpSimilarity(
 
     // Create clusters from components
     const queries = serpResults.map(s => s.q);
+
+    // Find the cluster containing the target query
+    let targetClusterIndex = -1;
+    if (targetQuery) {
+      targetClusterIndex = components.findIndex(componentIndices =>
+        componentIndices.some(i => queries[i] === targetQuery)
+      );
+    }
+
     const clusters: Cluster[] = components.map((componentIndices, idx) => {
       const clusterQueries = componentIndices.map(i => queries[i] || '').filter(q => q);
       const exemplar = selectExemplar(componentIndices, overlapMatrix, queries);
@@ -185,8 +220,11 @@ export function clusterBySerpSimilarity(
         componentIndices.map(j => overlapMatrix[i]?.[j] || 0)
       );
 
+      // Name the cluster containing the target query as "target"
+      const clusterId = idx === targetClusterIndex ? 'target' : `cluster-${idx + 1}`;
+
       return {
-        id: `cluster-${idx + 1}`,
+        id: clusterId,
         queries: clusterQueries,
         exemplar,
         overlapMatrix: clusterOverlapMatrix,

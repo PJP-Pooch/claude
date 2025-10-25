@@ -1,6 +1,6 @@
 import { SerpResult, OrganicResult, LOCATION_MAP, LANGUAGE_MAP } from './types';
 import { DataForSEOAPIError, RateLimitError } from './errors';
-import { extractDomain, sameDomain, urlsMatch } from './normalize';
+import { extractDomain, sameDomain, urlsMatch, normalizeUrl } from './normalize';
 
 const DATAFORSEO_API_BASE = 'https://api.dataforseo.com/v3';
 const MAX_RETRIES = 4;
@@ -63,18 +63,21 @@ export async function fetchSerpResult(
   const { query, location, language, device, targetPageUrl } = params;
   const locationCode = getLocationCode(location);
   const languageCode = getLanguageCode(language);
+  
+  console.log(`🔍 Fetching SERP for query: "${query}"`);
+  console.log(`📍 Location: ${location} (code: ${locationCode})`);
+  console.log(`🌐 Language: ${language} (code: ${languageCode})`);
+  console.log(`📱 Device: ${device}`);
 
-  const requestBody: DataForSEORequest = {
-    tasks: [
-      {
-        keyword: query,
-        location_code: locationCode,
-        language_code: languageCode,
-        device,
-        depth: 100, // Get top 100 to ensure we have page 1
-      },
-    ],
-  };
+  const requestBody = [
+    {
+      keyword: query,
+      location_code: locationCode,
+      language_code: languageCode,
+      device,
+      load_async_ai_overview: true,
+    },
+  ];
 
   try {
     const authString = Buffer.from(`${credentials.login}:${credentials.password}`).toString('base64');
@@ -126,14 +129,29 @@ export async function fetchSerpResult(
     }
 
     const data = await response.json();
+    console.log(`📦 DataForSEO API Response Status:`, response.status);
+    console.log(`📊 Response data structure:`, {
+      tasks: data.tasks?.length || 0,
+      version: data.version,
+      status_code: data.status_code,
+      status_message: data.status_message
+    });
 
     if (!data.tasks || data.tasks.length === 0) {
+      console.error(`❌ No tasks in DataForSEO response for query "${query}"`);
       throw new DataForSEOAPIError('No tasks in DataForSEO response', { data, query });
     }
 
     const task = data.tasks[0];
+    console.log(`📋 Task info:`, {
+      id: task.id,
+      status_code: task.status_code,
+      status_message: task.status_message,
+      result_count: task.result?.length || 0
+    });
 
     if (!task.result || task.result.length === 0) {
+      console.warn(`⚠️ No results in task for query "${query}"`);
       // No results found - return empty result
       return {
         q: query,
@@ -146,38 +164,91 @@ export async function fetchSerpResult(
 
     const result = task.result[0];
     const items = result.items || [];
+    console.log(`🔍 Found ${items.length} total items in SERP result`);
+    
+    // Log first few items to understand structure
+    if (items.length > 0) {
+      console.log(`📝 First item structure:`, {
+        type: items[0].type,
+        rank_absolute: items[0].rank_absolute,
+        url: items[0].url,
+        title: items[0].title?.substring(0, 50) + '...'
+      });
+    }
 
     // Extract organic results
-    const organicResults: OrganicResult[] = items
-      .filter((item: { type: string }) => item.type === 'organic')
+    const organicItems = items.filter((item: { type: string }) => item.type === 'organic');
+    console.log(`🌱 Found ${organicItems.length} organic items`);
+
+    const organicResults: OrganicResult[] = organicItems
       .slice(0, 10)
       .map((item: { rank_absolute: number; url: string; title: string; description?: string }) => ({
         position: item.rank_absolute,
-        url: item.url,
+        url: normalizeUrl(item.url), // Normalize URL to strip tracking parameters
         title: item.title,
         snippet: item.description,
       }));
+      
+    console.log(`✅ Processed ${organicResults.length} organic results`);
 
-    // Check for AI Overview
-    const hasAIOverview = items.some(
-      (item: { type: string }) => item.type === 'ai_overview' || item.type === 'featured_snippet'
-    );
-    const aiOverview = hasAIOverview ? 'present' : 'absent';
+    // Extract AI Overview data
+    const aiOverviewItem = items.find((item: { type: string }) => item.type === 'ai_overview');
+    let aiOverview: 'present' | 'absent' | 'unknown' = 'absent';
+    let aiOverviewData: { text: string; urls: Array<{ url: string; title?: string }> } | undefined;
+
+    if (aiOverviewItem) {
+      aiOverview = 'present';
+      // Extract text from AI overview
+      const text = aiOverviewItem.text || aiOverviewItem.markdown || '';
+
+      // Extract URLs from references
+      const urls: Array<{ url: string; title?: string }> = [];
+      if (aiOverviewItem.items && Array.isArray(aiOverviewItem.items)) {
+        for (const subItem of aiOverviewItem.items) {
+          if (subItem.references && Array.isArray(subItem.references)) {
+            for (const ref of subItem.references) {
+              if (ref.url) {
+                urls.push({
+                  url: normalizeUrl(ref.url),
+                  title: ref.title || ref.source,
+                });
+              }
+            }
+          }
+        }
+      }
+
+      // Deduplicate URLs
+      const uniqueUrls = urls.filter((url, index, self) =>
+        index === self.findIndex((u) => u.url === url.url)
+      );
+
+      aiOverviewData = {
+        text: text,
+        urls: uniqueUrls,
+      };
+
+      console.log(`🤖 AI Overview found with ${uniqueUrls.length} unique URLs`);
+    }
 
     // Check if target page or same domain ranks on page 1
     const targetDomain = extractDomain(targetPageUrl);
+    
     let targetPageOnPage1 = false;
     let sameDomainOnPage1 = false;
     let firstMatch: { position: number; url: string } | undefined;
 
     for (const orgResult of organicResults) {
       if (orgResult.position <= 10) {
-        if (urlsMatch(orgResult.url, targetPageUrl)) {
+        const urlMatches = urlsMatch(orgResult.url, targetPageUrl);
+        const domainMatches = sameDomain(orgResult.url, targetPageUrl);
+        
+        if (urlMatches) {
           targetPageOnPage1 = true;
           if (!firstMatch) {
             firstMatch = { position: orgResult.position, url: orgResult.url };
           }
-        } else if (sameDomain(orgResult.url, targetPageUrl)) {
+        } else if (domainMatches) {
           sameDomainOnPage1 = true;
           if (!firstMatch) {
             firstMatch = { position: orgResult.position, url: orgResult.url };
@@ -186,14 +257,25 @@ export async function fetchSerpResult(
       }
     }
 
-    return {
+    const finalResult = {
       q: query,
       top10: organicResults,
       aiOverview,
+      aiOverviewData,
       targetPageOnPage1,
       sameDomainOnPage1,
       firstMatch,
     };
+    
+    console.log(`🎯 Final result for "${query}":`, {
+      top10_count: finalResult.top10.length,
+      aiOverview: finalResult.aiOverview,
+      targetPageOnPage1: finalResult.targetPageOnPage1,
+      sameDomainOnPage1: finalResult.sameDomainOnPage1,
+      firstMatch: finalResult.firstMatch ? `Position ${finalResult.firstMatch.position}` : 'None'
+    });
+    
+    return finalResult;
   } catch (error) {
     if (error instanceof DataForSEOAPIError || error instanceof RateLimitError) {
       throw error;
@@ -287,6 +369,13 @@ export function getMockSerpResults(queries: string[], targetPageUrl: string): Se
       q,
       top10: mockResults,
       aiOverview: index % 2 === 0 ? 'present' : 'absent',
+      aiOverviewData: index % 2 === 0 ? {
+        text: `This is a mock AI Overview for "${q}". It provides a comprehensive answer based on multiple sources.`,
+        urls: [
+          { url: 'https://example1.com/article', title: 'Example Article 1' },
+          { url: 'https://example2.com/guide', title: 'Example Guide 2' },
+        ],
+      } : undefined,
       targetPageOnPage1,
       sameDomainOnPage1,
       firstMatch: firstMatch ? { position: firstMatch.position, url: firstMatch.url } : undefined,

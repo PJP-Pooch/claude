@@ -1,0 +1,43 @@
+services:
+  - type: web
+    name: query-fan-out-analysis
+    env: node
+    region: frankfurt
+    plan: starter
+    branch: claude/serp-query-clustering-app-011CUNsdMyBEmq6BaSMBTc3C
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: 18
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: NEXT_PUBLIC_OPENAI_API_KEY
+        sync: false
+      - key: DATAFORSEO_LOGIN
+        sync: false
+      - key: DATAFORSEO_PASSWORD
+        sync: false
+      - key: NEXT_PUBLIC_DATAFORSEO_LOGIN
+        sync: false
+      - key: NEXT_PUBLIC_DATAFORSEO_PASSWORD
+        sync: false
+      - key: DEFAULT_LOCATION
+        value: United Kingdom
+      - key: DEFAULT_LANGUAGE
+        value: English
+      - key: DEFAULT_DEVICE
+        value: desktop
+      - key: DEFAULT_CLUSTERING_OVERLAP
+        value: 4
+      - key: NEXT_PUBLIC_DEFAULT_LOCATION
+        value: United Kingdom
+      - key: NEXT_PUBLIC_DEFAULT_LANGUAGE
+        value: English
+      - key: NEXT_PUBLIC_DEFAULT_DEVICE
+        value: desktop
+      - key: NEXT_PUBLIC_DEFAULT_CLUSTERING_OVERLAP
+        value: 4
+      - key: NEXT_PUBLIC_MOCK_MODE
+        value: false

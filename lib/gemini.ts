@@ -3,7 +3,7 @@ import { GeminiAPIError } from './errors';
 import { cosineSimilarity } from './normalize';
 
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
-const GEMINI_MODEL = 'gemini-1.5-flash';
+const GEMINI_MODEL = 'gemini-2.5-flash';
 const GEMINI_EMBEDDING_MODEL = 'models/text-embedding-004';
 
 /**
@@ -13,13 +13,14 @@ export async function fanOutQueries(
   targetQuery: string,
   apiKey: string
 ): Promise<{ subQueries: SubQuery[]; diagnostics: { model: string; timestamp: string } }> {
-  const prompt = `Using the fan-out technique, generate facets/subqueries/questions closely related to the target topic.
+  const prompt = `Using the fan-out technique, generate comprehensive facets/subqueries/questions closely related to the target topic.
 Cover multiple intents (informational, commercial, transactional, navigational), modifiers (who/what/when/where/how),
-entities, synonyms, brand vs non-brand, and long-tail variations.
+entities, synonyms, and long-tail variations.
+DO NOT include brand comparisons or "vs" queries.
 Return strict JSON array items with:
   { "q": string, "intent": "info" | "comm" | "trans" | "nav", "rationale": string }
 Avoid duplicates; ensure diversity and usefulness for SERP testing.
-Aim for 15-40 queries depending on topic complexity.
+Generate as many relevant queries as possible (aim for 20-30 diverse queries).
 Target topic: ${targetQuery}
 
 Return ONLY a valid JSON array, no other text or markdown.`;
@@ -68,7 +69,10 @@ Return ONLY a valid JSON array, no other text or markdown.`;
 
     const candidate = data.candidates[0];
     if (!candidate.content?.parts || candidate.content.parts.length === 0) {
-      throw new GeminiAPIError('No content parts in Gemini response', { data });
+      throw new GeminiAPIError('No content parts in Gemini response', { 
+        candidate: JSON.stringify(candidate, null, 2),
+        fullResponse: JSON.stringify(data, null, 2)
+      });
     }
 
     const text = candidate.content.parts[0].text;
@@ -214,18 +218,16 @@ export async function generateContentBrief(
   context: string,
   apiKey: string
 ): Promise<string> {
-  const prompt = `Generate a detailed content brief for creating content about: "${query}"
+  const prompt = `Create a content outline for: "${query}"
 
-Context: ${context}
+Based on this context: ${context}
 
-Include:
-1. Recommended H2 and H3 headings
-2. Key topics to cover
-3. Suggested FAQs
-4. Internal linking opportunities
-5. Schema markup suggestions
+Please provide:
+1. Main headings to cover
+2. Key topics to include
+3. Common questions people ask
 
-Format as markdown.`;
+Format as simple text.`;
 
   try {
     const response = await fetch(
@@ -263,14 +265,37 @@ Format as markdown.`;
     }
 
     const data = await response.json();
+    console.log('Gemini content brief response:', JSON.stringify(data, null, 2));
 
     if (!data.candidates || data.candidates.length === 0) {
       throw new GeminiAPIError('No candidates returned from Gemini API');
     }
 
     const candidate = data.candidates[0];
+    console.log('Candidate:', JSON.stringify(candidate, null, 2));
+    
+    // Check if response was blocked
+    if (candidate.finishReason === 'SAFETY') {
+      throw new GeminiAPIError('Content generation blocked by safety filters');
+    }
+    
     if (!candidate.content?.parts || candidate.content.parts.length === 0) {
-      throw new GeminiAPIError('No content parts in Gemini response');
+      // If no content parts, return a fallback response instead of throwing
+      console.warn('No content parts in response, using fallback');
+      return `# Content Outline for: ${query}
+
+## Main Topics to Cover
+- Overview and definition
+- Key benefits and features  
+- Best practices and tips
+- Common questions and answers
+
+## Suggested Structure
+1. Introduction
+2. Main content sections based on user intent
+3. Conclusion with actionable takeaways
+
+*Note: This is a simplified outline due to content generation limitations.*`;
     }
 
     return candidate.content.parts[0].text.trim();

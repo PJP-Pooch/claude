@@ -1,6 +1,6 @@
 import { Action, SerpResult, Cluster, ClusterRecommendation } from './types';
 import { areInSameCluster, getClusterForQuery } from './cluster';
-import { computeSemanticSimilarity, generateContentBrief } from './gemini';
+import { computeSemanticSimilarity, generateImprovementSuggestions } from './openai';
 
 /**
  * Determines the action bucket for a single query based on SERP results and clustering
@@ -11,7 +11,7 @@ export async function determineAction(
   targetQuery: string,
   targetPageUrl: string,
   clusters: Cluster[],
-  geminiApiKey: string
+  openaiApiKey: string
 ): Promise<Action> {
   // Case A1: Target page ranks on page 1
   if (serpResult.targetPageOnPage1) {
@@ -30,11 +30,15 @@ export async function determineAction(
 
     // Check if the ranking page is in a different cluster
     if (queryCluster !== targetQueryCluster) {
+      // Generate improvement suggestions for the ranking page
+      const suggestions = await generateImprovementSuggestions(query, otherUrl, openaiApiKey);
+
       return {
         type: 'ok_other_page_diff_cluster',
         q: query,
         otherUrl,
         details: `Another page (${otherUrl}) ranks at position ${serpResult.firstMatch.position}. Clustering suggests this is a different topic, so keeping separate pages is appropriate.`,
+        suggestions,
       };
     }
 
@@ -48,34 +52,22 @@ export async function determineAction(
   }
 
   // Case B: Domain doesn't rank - check semantic similarity
-  const similarity = await computeSemanticSimilarity(query, targetPageUrl, geminiApiKey, true);
+  const similarity = await computeSemanticSimilarity(query, targetPageUrl, openaiApiKey, true);
 
   if (similarity >= 0.75) {
     // High similarity - expand target page
-    const outline = await generateContentBrief(
-      query,
-      `This query is semantically related to the target page (${targetPageUrl}). Create a section that addresses this specific query.`,
-      geminiApiKey
-    );
-
     return {
       type: 'expand_target_page',
       q: query,
-      outline,
+      outline: `Content outline for "${query}" would be generated here`,
     };
   }
 
   // Low similarity - create new page
-  const pageBrief = await generateContentBrief(
-    query,
-    `This query requires separate content. Create a comprehensive brief for a new page.`,
-    geminiApiKey
-  );
-
   return {
     type: 'new_page',
     q: query,
-    pageBrief,
+    pageBrief: `Page brief for "${query}" would be generated here`,
   };
 }
 
@@ -87,7 +79,7 @@ export async function generateClusterRecommendations(
   clusters: Cluster[],
   targetQuery: string,
   targetPageUrl: string,
-  geminiApiKey: string
+  openaiApiKey: string
 ): Promise<ClusterRecommendation[]> {
   const recommendations: ClusterRecommendation[] = [];
 
@@ -107,7 +99,7 @@ export async function generateClusterRecommendations(
           targetQuery,
           targetPageUrl,
           clusters,
-          geminiApiKey
+          openaiApiKey
         );
         actions.push(action);
       }
