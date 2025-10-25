@@ -44,6 +44,13 @@ export default function Home() {
       let queries: string[] = [];
       let subQueryObjects: SubQuery[] = [];
 
+      // Always include the target query first
+      const targetQueryObject: SubQuery = {
+        q: input.targetQuery,
+        intent: 'info' as const,
+        rationale: 'Target keyword'
+      };
+
       // Check if custom queries are provided
       if (input.customQueries && input.customQueries.trim()) {
         // Use custom queries
@@ -61,8 +68,14 @@ export default function Home() {
           rationale: 'Custom query provided by user'
         }));
 
+        // Add target query at the beginning if not already included
+        if (!queries.includes(input.targetQuery)) {
+          subQueryObjects.unshift(targetQueryObject);
+          queries.unshift(input.targetQuery);
+        }
+
         setSubQueries(subQueryObjects);
-        addLog('info', `Using ${queries.length} custom queries`);
+        addLog('info', `Using ${queries.length} queries (including target keyword)`);
       } else {
         // Step 1: Fan-out queries with AI
         setStep('fanout');
@@ -85,8 +98,15 @@ export default function Home() {
         const fanoutData = await fanoutResponse.json();
         subQueryObjects = fanoutData.subQueries;
         queries = subQueryObjects.map((sq: SubQuery) => sq.q);
+
+        // Add target query at the beginning if not already included
+        if (!queries.includes(input.targetQuery)) {
+          subQueryObjects.unshift(targetQueryObject);
+          queries.unshift(input.targetQuery);
+        }
+
         setSubQueries(subQueryObjects);
-        addLog('info', `Generated ${subQueryObjects.length} sub-queries`);
+        addLog('info', `Generated ${subQueryObjects.length} queries (including target keyword)`);
       }
 
       // Step 2: Fetch SERP results

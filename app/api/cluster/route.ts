@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     } = RequestSchema.parse(body);
 
     // Perform clustering
-    const clusters = clusterBySerpSimilarity(serpResults, clusteringOverlapThreshold);
+    const clusters = clusterBySerpSimilarity(serpResults, clusteringOverlapThreshold, targetQuery);
 
     // Generate recommendations
     const recommendations = await generateClusterRecommendations(

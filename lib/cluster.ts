@@ -140,7 +140,8 @@ export function selectExemplar(
  */
 export function clusterBySerpSimilarity(
   serpResults: SerpResult[],
-  threshold: number
+  threshold: number,
+  targetQuery?: string
 ): Cluster[] {
   if (serpResults.length === 0) {
     return [];
@@ -201,6 +202,15 @@ export function clusterBySerpSimilarity(
 
     // Create clusters from components
     const queries = serpResults.map(s => s.q);
+
+    // Find the cluster containing the target query
+    let targetClusterIndex = -1;
+    if (targetQuery) {
+      targetClusterIndex = components.findIndex(componentIndices =>
+        componentIndices.some(i => queries[i] === targetQuery)
+      );
+    }
+
     const clusters: Cluster[] = components.map((componentIndices, idx) => {
       const clusterQueries = componentIndices.map(i => queries[i] || '').filter(q => q);
       const exemplar = selectExemplar(componentIndices, overlapMatrix, queries);
@@ -210,8 +220,11 @@ export function clusterBySerpSimilarity(
         componentIndices.map(j => overlapMatrix[i]?.[j] || 0)
       );
 
+      // Name the cluster containing the target query as "target"
+      const clusterId = idx === targetClusterIndex ? 'target' : `cluster-${idx + 1}`;
+
       return {
-        id: `cluster-${idx + 1}`,
+        id: clusterId,
         queries: clusterQueries,
         exemplar,
         overlapMatrix: clusterOverlapMatrix,
