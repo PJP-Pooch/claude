@@ -476,21 +476,43 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                               return <span className="text-gray-400">—</span>;
                             }
 
-                            // Check if target page is in AI Overview citations
-                            const targetDomain = targetQuery ? new URL(serpResults.find(s => s.q === targetQuery)?.firstMatch?.url || 'https://example.com').hostname : '';
-                            const citationIndex = sr.aiOverviewData.urls.findIndex(u =>
-                              targetDomain && u.url.includes(targetDomain)
-                            );
+                            // Helper function to strip hash fragments from URLs for comparison
+                            const stripHash = (url: string) => {
+                              try {
+                                const urlObj = new URL(url);
+                                return `${urlObj.protocol}//${urlObj.hostname}${urlObj.pathname}${urlObj.search}`;
+                              } catch {
+                                return url;
+                              }
+                            };
 
-                            if (citationIndex >= 0) {
+                            // Get the target page URL
+                            const targetPageUrl = serpResults.find(s => s.q === targetQuery)?.firstMatch?.url;
+                            if (!targetPageUrl) {
+                              return <span className="text-gray-400">—</span>;
+                            }
+
+                            const targetUrlWithoutHash = stripHash(targetPageUrl);
+
+                            // Check if target page is in AI Overview citations
+                            const isCited = sr.aiOverviewData.urls.some(u => {
+                              const citationUrlWithoutHash = stripHash(u.url);
+                              return citationUrlWithoutHash === targetUrlWithoutHash;
+                            });
+
+                            if (isCited) {
                               return (
-                                <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                  #{citationIndex + 1}
+                                <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
+                                  Cited
                                 </span>
                               );
                             }
 
-                            return <span className="text-gray-400 text-xs">Not cited</span>;
+                            return (
+                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                                Not cited
+                              </span>
+                            );
                           })()}
                         </td>
                         <td className="px-4 py-3 text-sm overflow-hidden" style={{ width: `${columnWidths.targetPage}px` }}>
