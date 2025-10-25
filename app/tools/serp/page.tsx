@@ -17,6 +17,7 @@ export default function Home() {
   const [clusters, setClusters] = useState<Cluster[]>([]);
   const [recommendations, setRecommendations] = useState<ClusterRecommendation[]>([]);
   const [logs, setLogs] = useState<DiagnosticLog[]>([]);
+  const [targetQuery, setTargetQuery] = useState<string>('');
 
   const addLog = (level: DiagnosticLog['level'], message: string, context?: Record<string, unknown>) => {
     setLogs((prev) => [
@@ -37,6 +38,7 @@ export default function Home() {
     setClusters([]);
     setRecommendations([]);
     setLogs([]);
+    setTargetQuery(input.targetQuery);
 
     try {
       let queries: string[] = [];
@@ -248,6 +250,7 @@ export default function Home() {
                 serpResults={serpResults.length > 0 ? serpResults : undefined}
                 clusters={clusters.length > 0 ? clusters : undefined}
                 recommendations={recommendations.length > 0 ? recommendations : undefined}
+                targetQuery={targetQuery || undefined}
               />
             )}
 

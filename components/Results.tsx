@@ -9,9 +9,10 @@ type ResultsProps = {
   serpResults?: SerpResult[];
   clusters?: Cluster[];
   recommendations?: ClusterRecommendation[];
+  targetQuery?: string;
 };
 
-export default function Results({ subQueries, serpResults, clusters, recommendations }: ResultsProps) {
+export default function Results({ subQueries, serpResults, clusters, recommendations, targetQuery }: ResultsProps) {
   const [expandedSections, setExpandedSections] = useState({
     subQueries: false,
     serpResults: false,
@@ -38,6 +39,7 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
     url: 400,
     clientUrl: 400,
     aiOverview: 120,
+    aiCitation: 100,
     targetPage: 120,
     otherUrl: 300,
     firstMatch: 120,
@@ -212,42 +214,89 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
           </div>
           {expandedSections.subQueries && (
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead className="bg-gray-50 dark:bg-gray-700">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                       Query
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      Cluster
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                       Intent
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                       Rationale
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {subQueries.map((sq, idx) => (
-                    <tr key={idx} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-sm text-gray-900">{sq.q}</td>
-                      <td className="px-4 py-3 text-sm">
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            sq.intent === 'info'
-                              ? 'bg-blue-100 text-blue-800'
-                              : sq.intent === 'comm'
-                              ? 'bg-green-100 text-green-800'
-                              : sq.intent === 'trans'
-                              ? 'bg-purple-100 text-purple-800'
-                              : 'bg-orange-100 text-orange-800'
-                          }`}
-                        >
-                          {sq.intent}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{sq.rationale}</td>
-                    </tr>
-                  ))}
+                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                  {subQueries.map((sq, idx) => {
+                    // Find which cluster this query belongs to
+                    const cluster = clusters?.find(c => c.queries.includes(sq.q));
+
+                    // Highlight target keyword in query
+                    const highlightKeyword = (text: string) => {
+                      if (!targetQuery) return text;
+                      const keywords = targetQuery.toLowerCase().split(' ');
+                      let highlighted = text;
+
+                      // Try to match full phrase first
+                      const regex = new RegExp(`(${targetQuery})`, 'gi');
+                      if (regex.test(text)) {
+                        const parts = text.split(regex);
+                        return (
+                          <>
+                            {parts.map((part, i) =>
+                              regex.test(part) ? (
+                                <mark key={i} className="bg-yellow-200 dark:bg-yellow-600 font-semibold px-0.5 rounded">
+                                  {part}
+                                </mark>
+                              ) : (
+                                <span key={i}>{part}</span>
+                              )
+                            )}
+                          </>
+                        );
+                      }
+
+                      return text;
+                    };
+
+                    return (
+                      <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                        <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
+                          {highlightKeyword(sq.q)}
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          {cluster ? (
+                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-indigo-100 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-200">
+                              {cluster.id}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 dark:text-gray-500 text-xs">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              sq.intent === 'info'
+                                ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200'
+                                : sq.intent === 'comm'
+                                ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
+                                : sq.intent === 'trans'
+                                ? 'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200'
+                                : 'bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200'
+                            }`}
+                          >
+                            {sq.intent}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{sq.rationale}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -295,9 +344,9 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
             </div>
           </div>
           {expandedSections.serpResults && (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto max-h-[600px] relative">
               <table className="min-w-full divide-y divide-gray-200" style={{ tableLayout: 'fixed' }}>
-                <thead className="bg-gray-50">
+                <thead className="bg-gray-50 sticky top-0 z-10">
                   <tr>
                     <th
                       className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider relative"
@@ -337,6 +386,16 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                       <div
                         className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-blue-500 active:bg-blue-600"
                         onMouseDown={(e) => handleMouseDown(e, 'aiOverview')}
+                      />
+                    </th>
+                    <th
+                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider relative"
+                      style={{ width: `${columnWidths.aiCitation}px` }}
+                    >
+                      AI Citation
+                      <div
+                        className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-blue-500 active:bg-blue-600"
+                        onMouseDown={(e) => handleMouseDown(e, 'aiCitation')}
                       />
                     </th>
                     <th
@@ -410,6 +469,29 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                           >
                             {sr.aiOverview}
                           </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm overflow-hidden" style={{ width: `${columnWidths.aiCitation}px` }}>
+                          {(() => {
+                            if (!sr.aiOverviewData || !sr.aiOverviewData.urls || sr.aiOverviewData.urls.length === 0) {
+                              return <span className="text-gray-400">—</span>;
+                            }
+
+                            // Check if target page is in AI Overview citations
+                            const targetDomain = targetQuery ? new URL(serpResults.find(s => s.q === targetQuery)?.firstMatch?.url || 'https://example.com').hostname : '';
+                            const citationIndex = sr.aiOverviewData.urls.findIndex(u =>
+                              targetDomain && u.url.includes(targetDomain)
+                            );
+
+                            if (citationIndex >= 0) {
+                              return (
+                                <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                  #{citationIndex + 1}
+                                </span>
+                              );
+                            }
+
+                            return <span className="text-gray-400 text-xs">Not cited</span>;
+                          })()}
                         </td>
                         <td className="px-4 py-3 text-sm overflow-hidden" style={{ width: `${columnWidths.targetPage}px` }}>
                           {sr.targetPageOnPage1 ? (
@@ -1075,7 +1157,19 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                                   <p>{item.action.details}</p>
                                 )}
                                 {item.action.type === 'ok_other_page_diff_cluster' && (
-                                  <p>{item.action.details}</p>
+                                  <>
+                                    <p>{item.action.details}</p>
+                                    {item.action.suggestions && (
+                                      <details className="mt-2">
+                                        <summary className="cursor-pointer text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300">
+                                          View improvement suggestions
+                                        </summary>
+                                        <div className="mt-2 text-xs bg-white dark:bg-gray-700 p-3 rounded border border-gray-200 dark:border-gray-600 whitespace-pre-wrap">
+                                          {item.action.suggestions}
+                                        </div>
+                                      </details>
+                                    )}
+                                  </>
                                 )}
                                 {item.action.type === 'cannibalisation' && (
                                   <p>{item.action.recommendedFix}</p>

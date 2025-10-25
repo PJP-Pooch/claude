@@ -258,3 +258,72 @@ Format as markdown.`;
     });
   }
 }
+
+/**
+ * Generates improvement suggestions for a page to better target a specific query
+ */
+export async function generateImprovementSuggestions(
+  query: string,
+  pageUrl: string,
+  apiKey: string
+): Promise<string> {
+  const prompt = `A page at ${pageUrl} currently ranks for "${query}" but is in a different topic cluster than the target page.
+
+Provide specific, actionable suggestions for how this page could be improved to better target the query "${query}":
+
+1. Content improvements (what topics/sections to add or expand)
+2. On-page SEO optimizations (title, meta, headers)
+3. Internal linking opportunities
+4. User intent considerations
+
+Keep suggestions concise and practical.`;
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+        max_tokens: 1000,
+        temperature: 0.7,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new GeminiAPIError(`OpenAI API request failed: ${response.status} ${errorText}`, {
+        status: response.status,
+        statusText: response.statusText,
+      });
+    }
+
+    const data = await response.json();
+
+    if (!data.choices || data.choices.length === 0) {
+      throw new GeminiAPIError('No choices returned from OpenAI API', { data });
+    }
+
+    const choice = data.choices[0];
+    if (!choice.message?.content) {
+      throw new GeminiAPIError('No content in OpenAI response', { choice });
+    }
+
+    return choice.message.content.trim();
+  } catch (error) {
+    if (error instanceof GeminiAPIError) {
+      throw error;
+    }
+    throw new GeminiAPIError(`Failed to generate improvement suggestions with OpenAI: ${String(error)}`, {
+      originalError: error instanceof Error ? error.message : String(error),
+    });
+  }
+}

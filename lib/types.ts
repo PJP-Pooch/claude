@@ -107,6 +107,7 @@ export const ActionSchema = z.discriminatedUnion('type', [
     q: z.string(),
     otherUrl: z.string(),
     details: z.string(),
+    suggestions: z.string().optional(), // How to improve the other page to target this query
   }),
   z.object({
     type: z.literal('cannibalisation'),

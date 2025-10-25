@@ -1,7 +1,6 @@
 import { Action, SerpResult, Cluster, ClusterRecommendation } from './types';
 import { areInSameCluster, getClusterForQuery } from './cluster';
-import { computeSemanticSimilarity } from './openai';
-import { generateContentBriefOpenAI } from './openai';
+import { computeSemanticSimilarity, generateImprovementSuggestions } from './openai';
 
 /**
  * Determines the action bucket for a single query based on SERP results and clustering
@@ -31,11 +30,15 @@ export async function determineAction(
 
     // Check if the ranking page is in a different cluster
     if (queryCluster !== targetQueryCluster) {
+      // Generate improvement suggestions for the ranking page
+      const suggestions = await generateImprovementSuggestions(query, otherUrl, openaiApiKey);
+
       return {
         type: 'ok_other_page_diff_cluster',
         q: query,
         otherUrl,
         details: `Another page (${otherUrl}) ranks at position ${serpResult.firstMatch.position}. Clustering suggests this is a different topic, so keeping separate pages is appropriate.`,
+        suggestions,
       };
     }
 
