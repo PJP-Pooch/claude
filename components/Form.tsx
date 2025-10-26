@@ -54,6 +54,7 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
   const [language, setLanguage] = useState(process.env.NEXT_PUBLIC_DEFAULT_LANGUAGE || 'English');
   const [device, setDevice] = useState<'desktop' | 'mobile'>((process.env.NEXT_PUBLIC_DEFAULT_DEVICE as 'desktop' | 'mobile') || 'desktop');
   const [clusteringOverlapThreshold, setClusteringOverlapThreshold] = useState(parseInt(process.env.NEXT_PUBLIC_DEFAULT_CLUSTERING_OVERLAP || '4'));
+  const [maxQueries, setMaxQueries] = useState(parseInt(process.env.NEXT_PUBLIC_MAX_QUERIES || '25'));
   const [mockMode, setMockMode] = useState(process.env.NEXT_PUBLIC_MOCK_MODE === 'true');
   const [customQueries, setCustomQueries] = useState('');
 
@@ -71,6 +72,7 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
       searchEngine: 'google',
       device,
       clusteringOverlapThreshold,
+      maxQueries,
       mockMode,
       customQueries: customQueries.trim() || undefined,
     });
