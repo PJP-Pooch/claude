@@ -8,7 +8,7 @@ import ThemeToggle from '@/components/ThemeToggle';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { AppInput, SubQuery, SerpResult, Cluster, ClusterRecommendation, DiagnosticLog } from '@/lib/types';
 
-type Step = 'idle' | 'fanout' | 'serp' | 'cluster' | 'complete';
+type Step = 'idle' | 'fanout' | 'awaiting_confirmation' | 'serp' | 'cluster' | 'complete';
 
 export default function Home() {
   const [step, setStep] = useState<Step>('idle');
@@ -18,6 +18,7 @@ export default function Home() {
   const [recommendations, setRecommendations] = useState<ClusterRecommendation[]>([]);
   const [logs, setLogs] = useState<DiagnosticLog[]>([]);
   const [targetQuery, setTargetQuery] = useState<string>('');
+  const [pendingInput, setPendingInput] = useState<AppInput | null>(null);
 
   const addLog = (level: DiagnosticLog['level'], message: string, context?: Record<string, unknown>) => {
     setLogs((prev) => [
@@ -31,6 +32,17 @@ export default function Home() {
     ]);
   };
 
+  const handleRemoveQuery = (query: string) => {
+    setSubQueries(prev => prev.filter(sq => sq.q !== query));
+    addLog('info', `Removed query: "${query}"`);
+  };
+
+  const handleAddQuery = (query: string, intent: 'info' | 'comm' | 'trans' | 'nav', rationale: string) => {
+    const newQuery: SubQuery = { q: query, intent, rationale };
+    setSubQueries(prev => [...prev, newQuery]);
+    addLog('info', `Added query: "${query}" with intent: ${intent}`);
+  };
+
   const handleSubmit = async (input: AppInput) => {
     // Reset state
     setSubQueries([]);
@@ -39,6 +51,7 @@ export default function Home() {
     setRecommendations([]);
     setLogs([]);
     setTargetQuery(input.targetQuery);
+    setPendingInput(input);
 
     try {
       let queries: string[] = [];
@@ -54,7 +67,6 @@ export default function Home() {
       // Check if custom queries are provided
       if (input.customQueries && input.customQueries.trim()) {
         // Use custom queries
-        setStep('serp');
         addLog('info', 'Using custom sub-queries...');
         queries = input.customQueries
           .split('\n')
@@ -109,6 +121,21 @@ export default function Home() {
         addLog('info', `Generated ${subQueryObjects.length} queries (including target keyword)`);
       }
 
+      // Wait for user confirmation before proceeding
+      setStep('awaiting_confirmation');
+      addLog('info', 'Please review the sub-queries and click "Confirm & Continue" to proceed');
+    } catch (error) {
+      addLog('error', error instanceof Error ? error.message : 'Unknown error occurred');
+      setStep('idle');
+    }
+  };
+
+  const handleConfirm = async () => {
+    if (!pendingInput) return;
+
+    try {
+      const queries = subQueries.map(sq => sq.q);
+
       // Step 2: Fetch SERP results
       setStep('serp');
       addLog('info', 'Fetching SERP results from DataForSEO...');
@@ -117,13 +144,13 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           queries,
-          targetPageUrl: input.targetPageUrl,
-          location: input.location,
-          language: input.language,
-          device: input.device,
-          dataForSeoApiLogin: input.dataForSeoApiLogin,
-          dataForSeoApiPassword: input.dataForSeoApiPassword,
-          mockMode: input.mockMode,
+          targetPageUrl: pendingInput.targetPageUrl,
+          location: pendingInput.location,
+          language: pendingInput.language,
+          device: pendingInput.device,
+          dataForSeoApiLogin: pendingInput.dataForSeoApiLogin,
+          dataForSeoApiPassword: pendingInput.dataForSeoApiPassword,
+          mockMode: pendingInput.mockMode,
         }),
       });
 
@@ -152,10 +179,10 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           serpResults: serpData.results,
-          targetQuery: input.targetQuery,
-          targetPageUrl: input.targetPageUrl,
-          clusteringOverlapThreshold: input.clusteringOverlapThreshold,
-          openaiApiKey: input.openaiApiKey,
+          targetQuery: pendingInput.targetQuery,
+          targetPageUrl: pendingInput.targetPageUrl,
+          clusteringOverlapThreshold: pendingInput.clusteringOverlapThreshold,
+          openaiApiKey: pendingInput.openaiApiKey,
         }),
       });
 
@@ -181,6 +208,8 @@ export default function Home() {
     switch (currentStep) {
       case 'fanout':
         return 'Fan-out: Generating sub-queries...';
+      case 'awaiting_confirmation':
+        return 'Awaiting Confirmation: Review and confirm sub-queries';
       case 'serp':
         return 'SERP: Fetching search results...';
       case 'cluster':
@@ -240,6 +269,8 @@ export default function Home() {
                 style={{
                   width:
                     step === 'fanout'
+                      ? '25%'
+                      : step === 'awaiting_confirmation'
                       ? '33%'
                       : step === 'serp'
                       ? '66%'
@@ -254,7 +285,7 @@ export default function Home() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-1">
-            <Form onSubmit={handleSubmit} isLoading={step !== 'idle' && step !== 'complete'} />
+            <Form onSubmit={handleSubmit} isLoading={step !== 'idle' && step !== 'complete' && step !== 'awaiting_confirmation'} />
 
             {logs.length > 0 && (
               <div className="mt-6">
@@ -265,13 +296,39 @@ export default function Home() {
 
           <div className="lg:col-span-2">
             {(subQueries.length > 0 || serpResults.length > 0 || clusters.length > 0 || recommendations.length > 0) && (
-              <Results
-                subQueries={subQueries.length > 0 ? subQueries : undefined}
-                serpResults={serpResults.length > 0 ? serpResults : undefined}
-                clusters={clusters.length > 0 ? clusters : undefined}
-                recommendations={recommendations.length > 0 ? recommendations : undefined}
-                targetQuery={targetQuery || undefined}
-              />
+              <>
+                <Results
+                  subQueries={subQueries.length > 0 ? subQueries : undefined}
+                  serpResults={serpResults.length > 0 ? serpResults : undefined}
+                  clusters={clusters.length > 0 ? clusters : undefined}
+                  recommendations={recommendations.length > 0 ? recommendations : undefined}
+                  targetQuery={targetQuery || undefined}
+                  onRemoveQuery={step === 'awaiting_confirmation' ? handleRemoveQuery : undefined}
+                  onAddQuery={step === 'awaiting_confirmation' ? handleAddQuery : undefined}
+                />
+
+                {/* Confirmation Button */}
+                {step === 'awaiting_confirmation' && (
+                  <div className="mt-6 bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                          Ready to Continue?
+                        </h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-300">
+                          Review the sub-queries above. You can add or remove queries before proceeding.
+                        </p>
+                      </div>
+                      <button
+                        onClick={handleConfirm}
+                        className="px-6 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors shadow-md hover:shadow-lg"
+                      >
+                        Confirm & Continue
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
 
             {step === 'idle' && subQueries.length === 0 && (

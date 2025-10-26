@@ -15,11 +15,6 @@ describe('bucketing', () => {
       aiOverviewPresence: ['present', 'absent'],
       actions: [
         {
-          type: 'great_target_page_ranking',
-          q: 'query1',
-          details: 'Target page ranks well',
-        },
-        {
           type: 'cannibalisation',
           q: 'query2',
           otherUrl: 'https://example.com/other',
@@ -55,7 +50,6 @@ describe('bucketing', () => {
   describe('getActionSummary', () => {
     it('should count actions by type', () => {
       const summary = getActionSummary(mockRecommendations);
-      expect(summary.great_target_page_ranking).toBe(1);
       expect(summary.cannibalisation).toBe(1);
       expect(summary.expand_target_page).toBe(2);
       expect(summary.new_page).toBe(1);
@@ -64,7 +58,6 @@ describe('bucketing', () => {
 
     it('should handle empty recommendations', () => {
       const summary = getActionSummary([]);
-      expect(summary.great_target_page_ranking).toBe(0);
       expect(summary.cannibalisation).toBe(0);
     });
   });
@@ -103,9 +96,9 @@ describe('bucketing', () => {
           aiOverviewPresence: ['absent'],
           actions: [
             {
-              type: 'great_target_page_ranking',
+              type: 'expand_target_page',
               q: 'query1',
-              details: 'All good',
+              outline: 'Expand with more content',
             },
           ],
         },

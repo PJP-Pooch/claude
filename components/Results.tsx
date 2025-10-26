@@ -10,9 +10,11 @@ type ResultsProps = {
   clusters?: Cluster[];
   recommendations?: ClusterRecommendation[];
   targetQuery?: string;
+  onRemoveQuery?: (query: string) => void;
+  onAddQuery?: (query: string, intent: 'info' | 'comm' | 'trans' | 'nav', rationale: string) => void;
 };
 
-export default function Results({ subQueries, serpResults, clusters, recommendations, targetQuery }: ResultsProps) {
+export default function Results({ subQueries, serpResults, clusters, recommendations, targetQuery, onRemoveQuery, onAddQuery }: ResultsProps) {
   const [expandedSections, setExpandedSections] = useState({
     subQueries: false,
     serpResults: false,
@@ -20,6 +22,10 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
     clusters: false,
     recommendations: false,
   });
+
+  // State for adding new queries
+  const [newQueryText, setNewQueryText] = useState('');
+  const [newQueryIntent, setNewQueryIntent] = useState<'info' | 'comm' | 'trans' | 'nav'>('info');
 
   // Track which SERP result rows are expanded
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
@@ -145,8 +151,6 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
 
   const getActionIcon = (type: string) => {
     switch (type) {
-      case 'great_target_page_ranking':
-        return '✅';
       case 'ok_other_page_diff_cluster':
         return '✅';
       case 'cannibalisation':
@@ -162,8 +166,6 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
 
   const getActionLabel = (type: string) => {
     switch (type) {
-      case 'great_target_page_ranking':
-        return 'Great: Target page ranks';
       case 'ok_other_page_diff_cluster':
         return 'OK: Different topic';
       case 'cannibalisation':
@@ -197,20 +199,12 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </button>
-            <div className="space-x-2">
-              <button
-                onClick={() => downloadCSV(subQueries, 'sub-queries.csv')}
-                className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700"
-              >
-                Export CSV
-              </button>
-              <button
-                onClick={() => downloadJSON(subQueries, 'sub-queries.json')}
-                className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
-              >
-                Export JSON
-              </button>
-            </div>
+            <button
+              onClick={() => downloadCSV(subQueries, 'sub-queries.csv')}
+              className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700"
+            >
+              Export CSV
+            </button>
           </div>
           {expandedSections.subQueries && (
             <div className="overflow-x-auto">
@@ -229,6 +223,11 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                       Rationale
                     </th>
+                    {onRemoveQuery && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
@@ -264,9 +263,19 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                       return text;
                     };
 
+                    const isTargetRow = sq.q === targetQuery;
+
                     return (
-                      <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                      <tr
+                        key={idx}
+                        className={`hover:bg-gray-50 dark:hover:bg-gray-700 ${
+                          isTargetRow
+                            ? 'bg-amber-50 dark:bg-amber-900/20 border-2 border-amber-400 dark:border-amber-600'
+                            : ''
+                        }`}
+                      >
                         <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
+                          {isTargetRow && <span className="mr-2">🎯</span>}
                           {highlightKeyword(sq.q)}
                         </td>
                         <td className="px-4 py-3 text-sm">
@@ -298,11 +307,62 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                           </span>
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{sq.rationale}</td>
+                        {onRemoveQuery && (
+                          <td className="px-4 py-3 text-sm">
+                            {!isTargetRow && (
+                              <button
+                                onClick={() => onRemoveQuery(sq.q)}
+                                className="px-2 py-1 text-xs bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded hover:bg-red-200 dark:hover:bg-red-800 transition-colors"
+                                title="Remove this query"
+                              >
+                                Remove
+                              </button>
+                            )}
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
+
+              {/* Add Query Form */}
+              {onAddQuery && (
+                <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                  <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Add Custom Query</h4>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <input
+                      type="text"
+                      value={newQueryText}
+                      onChange={(e) => setNewQueryText(e.target.value)}
+                      placeholder="Enter query text..."
+                      className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <select
+                      value={newQueryIntent}
+                      onChange={(e) => setNewQueryIntent(e.target.value as 'info' | 'comm' | 'trans' | 'nav')}
+                      className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="info">Info</option>
+                      <option value="comm">Commercial</option>
+                      <option value="trans">Transactional</option>
+                      <option value="nav">Navigational</option>
+                    </select>
+                    <button
+                      onClick={() => {
+                        if (newQueryText.trim()) {
+                          onAddQuery(newQueryText.trim(), newQueryIntent, 'Custom query added by user');
+                          setNewQueryText('');
+                        }
+                      }}
+                      disabled={!newQueryText.trim()}
+                      className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Add Query
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </section>
@@ -376,7 +436,7 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                       className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider relative"
                       style={{ width: `${columnWidths.firstMatch}px` }}
                     >
-                      Rank
+                      Ranking Absolute
                       <div
                         className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-blue-500 active:bg-blue-600"
                         onMouseDown={(e) => handleMouseDown(e, 'firstMatch')}
@@ -490,6 +550,16 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                               }
                             };
 
+                            // Helper function to get domain from URL
+                            const getDomain = (url: string) => {
+                              try {
+                                const urlObj = new URL(url);
+                                return urlObj.hostname.replace(/^www\./, '');
+                              } catch {
+                                return '';
+                              }
+                            };
+
                             // Get the target page URL
                             const targetPageUrl = serpResults.find(s => s.q === targetQuery)?.firstMatch?.url;
                             if (!targetPageUrl) {
@@ -497,17 +567,31 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                             }
 
                             const targetUrlWithoutHash = stripHash(targetPageUrl);
+                            const targetDomain = getDomain(targetPageUrl);
 
-                            // Check if target page is in AI Overview citations
-                            const isCited = sr.aiOverviewData.urls.some(u => {
+                            // Check if exact target page is cited
+                            const isExactCited = sr.aiOverviewData.urls.some(u => {
                               const citationUrlWithoutHash = stripHash(u.url);
                               return citationUrlWithoutHash === targetUrlWithoutHash;
                             });
 
-                            if (isCited) {
+                            if (isExactCited) {
                               return (
                                 <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
                                   Cited
+                                </span>
+                              );
+                            }
+
+                            // Check if same domain but different URL is cited
+                            const isSameDomainCited = sr.aiOverviewData.urls.some(u => {
+                              return getDomain(u.url) === targetDomain;
+                            });
+
+                            if (isSameDomainCited) {
+                              return (
+                                <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
+                                  Other URL
                                 </span>
                               );
                             }
@@ -706,6 +790,26 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                 const isExpanded = expandedAIOverviews.has(idx);
                 const targetDomain = sr.firstMatch ? new URL(sr.firstMatch.url).hostname.replace('www.', '') : '';
 
+                // Calculate citation rank and domain count for collapsed view
+                const getDomainFromUrl = (url: string) => {
+                  try {
+                    return new URL(url).hostname.replace('www.', '');
+                  } catch {
+                    return '';
+                  }
+                };
+
+                const targetDomainCitations = sr.aiOverviewData?.urls
+                  .map((urlData, urlIdx) => ({
+                    domain: getDomainFromUrl(urlData.url),
+                    rank: urlIdx + 1,
+                    url: urlData.url
+                  }))
+                  .filter(citation => citation.domain === targetDomain) || [];
+
+                const firstCitationRank = targetDomainCitations.length > 0 ? targetDomainCitations[0]?.rank : null;
+                const domainCitationCount = targetDomainCitations.length;
+
                 return (
                   <div key={idx} className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 overflow-hidden">
                     {/* Collapsible Header */}
@@ -727,9 +831,16 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                         </svg>
                         <span className="font-semibold text-gray-900 dark:text-white text-left">{sr.q}</span>
                       </div>
-                      <span className="text-xs text-gray-500 dark:text-gray-400 bg-purple-100 dark:bg-purple-900 px-2 py-1 rounded-full">
-                        {sr.aiOverviewData?.urls.length || 0} URLs
-                      </span>
+                      <div className="flex items-center space-x-2">
+                        {firstCitationRank !== null && (
+                          <span className="text-xs font-semibold text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900 px-2 py-1 rounded-full">
+                            Rank #{firstCitationRank} • {domainCitationCount} {domainCitationCount === 1 ? 'citation' : 'citations'}
+                          </span>
+                        )}
+                        <span className="text-xs text-gray-500 dark:text-gray-400 bg-purple-100 dark:bg-purple-900 px-2 py-1 rounded-full">
+                          {sr.aiOverviewData?.urls.length || 0} URLs
+                        </span>
+                      </div>
                     </button>
 
                     {/* Collapsible Content */}
@@ -740,19 +851,75 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                             {(() => {
                               // Strip out URLs and format text nicely
                               const text = sr.aiOverviewData?.text || '';
-                              // Remove URLs (http/https links)
+
+                              // Extract citation numbers that correspond to target domain
+                              const targetCitationNumbers: number[] = [];
+                              const citationRegex = /\[(\d+)\]/g;
+                              let match;
+                              const textBeforeClean = text;
+
+                              // Find all citation numbers in the original text
+                              while ((match = citationRegex.exec(textBeforeClean)) !== null) {
+                                const citationNum = parseInt(match[1] || '0', 10);
+                                // Check if this citation index corresponds to a target domain URL
+                                if (sr.aiOverviewData?.urls[citationNum - 1]) {
+                                  const citedUrl = sr.aiOverviewData.urls[citationNum - 1]?.url || '';
+                                  const citedDomain = getDomainFromUrl(citedUrl);
+                                  if (citedDomain === targetDomain) {
+                                    targetCitationNumbers.push(citationNum);
+                                  }
+                                }
+                              }
+
+                              // Remove URLs but keep citation numbers temporarily
                               const cleanText = text
                                 .replace(/https?:\/\/[^\s]+/g, '')
-                                .replace(/\[\d+\]/g, '') // Remove citation numbers like [1], [2]
                                 .replace(/\s+/g, ' ') // Clean up extra whitespace
                                 .trim();
 
                               // Split into sentences for better readability
                               const sentences = cleanText.split(/\.\s+/).filter(s => s.trim());
 
+                              // Function to highlight target domain citations in text
+                              const highlightCitations = (sentence: string) => {
+                                const parts: React.ReactNode[] = [];
+                                let lastIndex = 0;
+                                const regex = /\[(\d+)\]/g;
+                                let citationMatch;
+
+                                while ((citationMatch = regex.exec(sentence)) !== null) {
+                                  const citationNum = parseInt(citationMatch[1] || '0', 10);
+                                  const isTargetCitation = targetCitationNumbers.includes(citationNum);
+
+                                  // Add text before the citation
+                                  if (citationMatch.index > lastIndex) {
+                                    parts.push(sentence.substring(lastIndex, citationMatch.index));
+                                  }
+
+                                  // Add the citation with or without highlighting
+                                  parts.push(
+                                    <mark
+                                      key={citationMatch.index}
+                                      className={isTargetCitation ? 'bg-green-200 dark:bg-green-700 font-semibold px-1 rounded' : 'bg-transparent'}
+                                    >
+                                      {citationMatch[0]}
+                                    </mark>
+                                  );
+
+                                  lastIndex = regex.lastIndex;
+                                }
+
+                                // Add remaining text
+                                if (lastIndex < sentence.length) {
+                                  parts.push(sentence.substring(lastIndex));
+                                }
+
+                                return parts.length > 0 ? parts : sentence;
+                              };
+
                               return sentences.map((sentence, i) => (
                                 <p key={i} className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed mb-2 last:mb-0">
-                                  {sentence.trim()}{i < sentences.length - 1 ? '.' : ''}
+                                  {highlightCitations(sentence.trim())}{i < sentences.length - 1 ? '.' : ''}
                                 </p>
                               ));
                             })()}
@@ -1097,9 +1264,7 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                       actionType: action.type,
                       actionLabel: getActionLabel(action.type),
                       details:
-                        action.type === 'great_target_page_ranking'
-                          ? action.details
-                          : action.type === 'ok_other_page_diff_cluster'
+                        action.type === 'ok_other_page_diff_cluster'
                           ? action.details
                           : action.type === 'cannibalisation'
                           ? action.recommendedFix
@@ -1138,7 +1303,6 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                 // Sort action types by priority (most important first)
                 const actionTypeOrder = [
                   'cannibalisation',
-                  'great_target_page_ranking',
                   'expand_target_page',
                   'new_page',
                   'ok_other_page_diff_cluster'
@@ -1176,8 +1340,6 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                             className={`p-3 rounded-md ${
                               actionType === 'cannibalisation'
                                 ? 'bg-red-50 border border-red-200'
-                                : actionType === 'great_target_page_ranking'
-                                ? 'bg-green-50 border border-green-200'
                                 : 'bg-gray-50 border border-gray-200'
                             }`}
                           >
@@ -1192,9 +1354,6 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                               </div>
                               
                               <div className="text-sm text-gray-600">
-                                {item.action.type === 'great_target_page_ranking' && (
-                                  <p>{item.action.details}</p>
-                                )}
                                 {item.action.type === 'ok_other_page_diff_cluster' && (
                                   <>
                                     <p>{item.action.details}</p>

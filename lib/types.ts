@@ -47,7 +47,7 @@ export const OrganicResultSchema = z.object({
   position: z.number(),
   url: z.string(),
   title: z.string(),
-  snippet: z.string().optional(),
+  snippet: z.string().nullish(), // Allow both null and undefined
 });
 
 export type OrganicResult = z.infer<typeof OrganicResultSchema>;
@@ -98,11 +98,6 @@ export type Cluster = z.infer<typeof ClusterSchema>;
 // ============================================================================
 
 export const ActionSchema = z.discriminatedUnion('type', [
-  z.object({
-    type: z.literal('great_target_page_ranking'),
-    q: z.string(),
-    details: z.string(),
-  }),
   z.object({
     type: z.literal('ok_other_page_diff_cluster'),
     q: z.string(),

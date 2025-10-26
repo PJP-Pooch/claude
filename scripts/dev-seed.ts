@@ -95,11 +95,6 @@ const mockRecommendations: ClusterRecommendation[] = [
     aiOverviewPresence: ['present', 'present'],
     actions: [
       {
-        type: 'great_target_page_ranking',
-        q: 'best seo tools',
-        details: 'Target page ranks at position 4 for this query.',
-      },
-      {
         type: 'cannibalisation',
         q: 'top seo software',
         otherUrl: 'https://example.com/comparison',
@@ -198,7 +193,6 @@ function runDemo() {
   console.log('-'.repeat(80));
   const actionSummary = getActionSummary(mockRecommendations);
   console.log('Action Distribution:');
-  console.log(`  ✅ Great (target page ranks): ${actionSummary.great_target_page_ranking}`);
   console.log(`  ✅ OK (different topic): ${actionSummary.ok_other_page_diff_cluster}`);
   console.log(`  ⚠️  Cannibalization: ${actionSummary.cannibalisation}`);
   console.log(`  ➕ Expand target page: ${actionSummary.expand_target_page}`);
@@ -226,14 +220,11 @@ function runDemo() {
     console.log(`  Queries: ${rec.queries.join(', ')}`);
     console.log(`  Actions:`);
     rec.actions.forEach((action, idx) => {
-      const icon = action.type === 'great_target_page_ranking' ? '✅' :
-                   action.type === 'ok_other_page_diff_cluster' ? '✅' :
+      const icon = action.type === 'ok_other_page_diff_cluster' ? '✅' :
                    action.type === 'cannibalisation' ? '⚠️' :
                    action.type === 'expand_target_page' ? '➕' : '🆕';
       console.log(`    ${icon} [${action.type}] ${action.q}`);
-      if (action.type === 'great_target_page_ranking') {
-        console.log(`       ${action.details}`);
-      } else if (action.type === 'cannibalisation') {
+      if (action.type === 'cannibalisation') {
         console.log(`       ${action.recommendedFix}`);
       } else if (action.type === 'ok_other_page_diff_cluster') {
         console.log(`       ${action.details}`);

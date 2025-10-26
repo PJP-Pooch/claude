@@ -12,14 +12,10 @@ export async function determineAction(
   targetPageUrl: string,
   clusters: Cluster[],
   openaiApiKey: string
-): Promise<Action> {
-  // Case A1: Target page ranks on page 1
+): Promise<Action | null> {
+  // Case A1: Target page ranks on page 1 - no action needed
   if (serpResult.targetPageOnPage1) {
-    return {
-      type: 'great_target_page_ranking',
-      q: query,
-      details: `Target page ranks at position ${serpResult.firstMatch?.position || 'unknown'} for this query.`,
-    };
+    return null;
   }
 
   // Case A2: Same domain ranks (but not the target page)
@@ -51,11 +47,14 @@ export async function determineAction(
     };
   }
 
-  // Case B: Domain doesn't rank - check semantic similarity
+  // Case B: Domain doesn't rank - check semantic similarity and cluster
+  const queryClusterId = getClusterForQuery(query, clusters);
+  const isInTargetCluster = queryClusterId === 'target';
+
   const similarity = await computeSemanticSimilarity(query, targetPageUrl, openaiApiKey, true);
 
-  if (similarity >= 0.75) {
-    // High similarity - expand target page
+  if (similarity >= 0.75 || isInTargetCluster) {
+    // High similarity or in target cluster - expand target page
     return {
       type: 'expand_target_page',
       q: query,
@@ -63,7 +62,7 @@ export async function determineAction(
     };
   }
 
-  // Low similarity - create new page
+  // Low similarity and not in target cluster - create new page
   return {
     type: 'new_page',
     q: query,
@@ -101,7 +100,10 @@ export async function generateClusterRecommendations(
           clusters,
           openaiApiKey
         );
-        actions.push(action);
+        // Only add non-null actions
+        if (action !== null) {
+          actions.push(action);
+        }
       }
     }
 
@@ -121,14 +123,12 @@ export async function generateClusterRecommendations(
  * Gets a summary of action types across all recommendations
  */
 export function getActionSummary(recommendations: ClusterRecommendation[]): {
-  great_target_page_ranking: number;
   ok_other_page_diff_cluster: number;
   cannibalisation: number;
   expand_target_page: number;
   new_page: number;
 } {
   const summary = {
-    great_target_page_ranking: 0,
     ok_other_page_diff_cluster: 0,
     cannibalisation: 0,
     expand_target_page: 0,
