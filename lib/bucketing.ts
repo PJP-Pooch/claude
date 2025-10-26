@@ -72,6 +72,7 @@ export async function determineAction(
 
 /**
  * Generates cluster-level recommendations with actions for all queries
+ * Parallelized for maximum performance - processes all queries across all clusters simultaneously
  */
 export async function generateClusterRecommendations(
   serpResults: SerpResult[],
@@ -80,41 +81,41 @@ export async function generateClusterRecommendations(
   targetPageUrl: string,
   openaiApiKey: string
 ): Promise<ClusterRecommendation[]> {
-  const recommendations: ClusterRecommendation[] = [];
+  // Process all clusters in parallel
+  const recommendations = await Promise.all(
+    clusters.map(async (cluster) => {
+      const clusterSerpResults = serpResults.filter(s => cluster.queries.includes(s.q));
+      const aiOverviewPresence = clusterSerpResults.map(s => s.aiOverview);
 
-  for (const cluster of clusters) {
-    const clusterSerpResults = serpResults.filter(s => cluster.queries.includes(s.q));
-    const aiOverviewPresence = clusterSerpResults.map(s => s.aiOverview);
-
-    // Determine actions for each query in the cluster
-    const actions: Action[] = [];
-
-    for (const query of cluster.queries) {
-      const serpResult = serpResults.find(s => s.q === query);
-      if (serpResult) {
-        const action = await determineAction(
-          query,
-          serpResult,
-          targetQuery,
-          targetPageUrl,
-          clusters,
-          openaiApiKey
-        );
-        // Only add non-null actions
-        if (action !== null) {
-          actions.push(action);
+      // Process all queries within this cluster in parallel
+      const actionPromises = cluster.queries.map(async (query) => {
+        const serpResult = serpResults.find(s => s.q === query);
+        if (serpResult) {
+          return await determineAction(
+            query,
+            serpResult,
+            targetQuery,
+            targetPageUrl,
+            clusters,
+            openaiApiKey
+          );
         }
-      }
-    }
+        return null;
+      });
 
-    recommendations.push({
-      clusterId: cluster.id,
-      exemplar: cluster.exemplar,
-      queries: cluster.queries,
-      aiOverviewPresence,
-      actions,
-    });
-  }
+      // Wait for all actions to complete and filter out nulls
+      const allActions = await Promise.all(actionPromises);
+      const actions = allActions.filter((action): action is Action => action !== null);
+
+      return {
+        clusterId: cluster.id,
+        exemplar: cluster.exemplar,
+        queries: cluster.queries,
+        aiOverviewPresence,
+        actions,
+      };
+    })
+  );
 
   return recommendations;
 }
