@@ -289,12 +289,13 @@ export async function fetchSerpResult(
 
 /**
  * Fetches SERP results for multiple queries with rate-limit aware batching
+ * @param concurrency Number of parallel requests (default: 15 for optimal performance)
  */
 export async function fetchBatchSerpResults(
   queries: string[],
   params: Omit<SerpApiParams, 'query'>,
   credentials: DataForSEOCredentials,
-  concurrency: number = 5
+  concurrency: number = 15
 ): Promise<{
   results: SerpResult[];
   errors: Array<{ query: string; error: string }>;
