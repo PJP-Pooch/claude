@@ -56,7 +56,6 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
   const [clusteringOverlapThreshold, setClusteringOverlapThreshold] = useState(parseInt(process.env.NEXT_PUBLIC_DEFAULT_CLUSTERING_OVERLAP || '4'));
   const [maxQueries, setMaxQueries] = useState(parseInt(process.env.NEXT_PUBLIC_MAX_QUERIES || '25'));
   const [mockMode, setMockMode] = useState(process.env.NEXT_PUBLIC_MOCK_MODE === 'true');
-  const [customQueries, setCustomQueries] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,7 +73,6 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
       clusteringOverlapThreshold,
       maxQueries,
       mockMode,
-      customQueries: customQueries.trim() || undefined,
     });
   };
 
@@ -118,48 +116,22 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
           />
         </div>
 
-        <div className="md:col-span-2">
-          <label htmlFor="customQueries" className="block text-sm font-medium text-gray-700 mb-1">
-            Custom Sub-Queries (Optional)
-          </label>
-          <textarea
-            id="customQueries"
-            value={customQueries}
-            onChange={(e) => setCustomQueries(e.target.value)}
-            rows={6}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
-            placeholder="Enter one query per line, e.g.:
-best content marketing tools
-how to create content strategy
-content marketing for small business
-content marketing examples
-
-Leave empty to auto-generate queries using AI"
-          />
-          <p className="mt-1 text-xs text-gray-500">
-            {customQueries.trim() ? (
-              <span className="text-green-600 font-medium">
-                {customQueries.trim().split('\n').filter(q => q.trim()).length} custom queries provided - AI generation will be skipped
-              </span>
-            ) : (
-              <span>If left empty, queries will be automatically generated using OpenAI</span>
-            )}
-          </p>
-        </div>
-
         <div>
           <label htmlFor="openaiApiKey" className="block text-sm font-medium text-gray-700 mb-1">
-            OpenAI API Key {customQueries.trim() ? '' : '*'}
+            OpenAI API Key *
           </label>
           <input
             type="password"
             id="openaiApiKey"
             value={openaiApiKey}
             onChange={(e) => setOpenaiApiKey(e.target.value)}
-            required={!mockMode && !customQueries.trim()}
+            required={!mockMode}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="Enter your OpenAI API key"
           />
+          <p className="mt-1 text-xs text-gray-500">
+            Used to generate sub-queries and semantic analysis. You can add/remove queries after generation.
+          </p>
         </div>
 
         <div>

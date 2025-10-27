@@ -145,9 +145,6 @@ export default function Home() {
     setPendingInput(input);
 
     try {
-      let queries: string[] = [];
-      let subQueryObjects: SubQuery[] = [];
-
       // Always include the target query first
       const targetQueryObject: SubQuery = {
         q: input.targetQuery,
@@ -155,62 +152,36 @@ export default function Home() {
         rationale: 'Target keyword'
       };
 
-      // Check if custom queries are provided
-      if (input.customQueries && input.customQueries.trim()) {
-        // Use custom queries
-        addLog('info', 'Using custom sub-queries...');
-        queries = input.customQueries
-          .split('\n')
-          .map(q => q.trim())
-          .filter(q => q.length > 0);
+      // Step 1: Fan-out queries with AI
+      setStep('fanout');
+      addLog('info', 'Starting query fan-out with OpenAI...');
+      const fanoutResponse = await fetch('/api/fanout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetQuery: input.targetQuery,
+          openaiApiKey: input.openaiApiKey,
+          mockMode: input.mockMode,
+        }),
+      });
 
-        // Create SubQuery objects with default intent
-        subQueryObjects = queries.map(q => ({
-          q,
-          intent: 'info' as const,
-          rationale: 'Custom query provided by user'
-        }));
-
-        // Add target query at the beginning if not already included
-        if (!queries.includes(input.targetQuery)) {
-          subQueryObjects.unshift(targetQueryObject);
-          queries.unshift(input.targetQuery);
-        }
-
-        setSubQueries(subQueryObjects);
-        addLog('info', `Using ${queries.length} queries (including target keyword)`);
-      } else {
-        // Step 1: Fan-out queries with AI
-        setStep('fanout');
-        addLog('info', 'Starting query fan-out with OpenAI...');
-        const fanoutResponse = await fetch('/api/fanout', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            targetQuery: input.targetQuery,
-            openaiApiKey: input.openaiApiKey,
-            mockMode: input.mockMode,
-          }),
-        });
-
-        if (!fanoutResponse.ok) {
-          const error = await fanoutResponse.json();
-          throw new Error(error.error || 'Fan-out failed');
-        }
-
-        const fanoutData = await fanoutResponse.json();
-        subQueryObjects = fanoutData.subQueries;
-        queries = subQueryObjects.map((sq: SubQuery) => sq.q);
-
-        // Add target query at the beginning if not already included
-        if (!queries.includes(input.targetQuery)) {
-          subQueryObjects.unshift(targetQueryObject);
-          queries.unshift(input.targetQuery);
-        }
-
-        setSubQueries(subQueryObjects);
-        addLog('info', `Generated ${subQueryObjects.length} queries (including target keyword)`);
+      if (!fanoutResponse.ok) {
+        const error = await fanoutResponse.json();
+        throw new Error(error.error || 'Fan-out failed');
       }
+
+      const fanoutData = await fanoutResponse.json();
+      let subQueryObjects = fanoutData.subQueries;
+      let queries = subQueryObjects.map((sq: SubQuery) => sq.q);
+
+      // Add target query at the beginning if not already included
+      if (!queries.includes(input.targetQuery)) {
+        subQueryObjects.unshift(targetQueryObject);
+        queries.unshift(input.targetQuery);
+      }
+
+      setSubQueries(subQueryObjects);
+      addLog('info', `Generated ${subQueryObjects.length} queries (including target keyword)`)
 
       // Wait for user confirmation before proceeding
       setStep('awaiting_confirmation');
