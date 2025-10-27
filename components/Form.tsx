@@ -129,6 +129,9 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="login@example.com"
           />
+          <p className="mt-1 text-xs text-gray-500">
+            Used to fetch SERP data from Google for each query.
+          </p>
         </div>
 
         <div>
