@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Form from '@/components/Form';
 import Results from '@/components/Results';
 import Diagnostics from '@/components/Diagnostics';
@@ -9,6 +9,21 @@ import { ThemeProvider } from '@/components/ThemeProvider';
 import { AppInput, SubQuery, SerpResult, Cluster, ClusterRecommendation, DiagnosticLog } from '@/lib/types';
 
 type Step = 'idle' | 'fanout' | 'awaiting_confirmation' | 'serp' | 'cluster' | 'complete';
+
+type SavedState = {
+  step: Step;
+  subQueries: SubQuery[];
+  serpResults: SerpResult[];
+  clusters: Cluster[];
+  recommendations: ClusterRecommendation[];
+  logs: DiagnosticLog[];
+  targetQuery: string;
+  pendingInput: AppInput | null;
+  timestamp: number;
+};
+
+const STORAGE_KEY = 'serp-analysis-state';
+const MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 export default function Home() {
   const [step, setStep] = useState<Step>('idle');
@@ -19,6 +34,81 @@ export default function Home() {
   const [logs, setLogs] = useState<DiagnosticLog[]>([]);
   const [targetQuery, setTargetQuery] = useState<string>('');
   const [pendingInput, setPendingInput] = useState<AppInput | null>(null);
+  const [savedStateAvailable, setSavedStateAvailable] = useState(false);
+
+  // Check for saved state on mount
+  useEffect(() => {
+    try {
+      const savedData = localStorage.getItem(STORAGE_KEY);
+      if (savedData) {
+        const parsed: SavedState = JSON.parse(savedData);
+        const age = Date.now() - parsed.timestamp;
+
+        // Only restore if less than 24 hours old and not completed
+        if (age < MAX_AGE_MS && parsed.step !== 'idle' && parsed.step !== 'complete') {
+          setSavedStateAvailable(true);
+        } else if (age >= MAX_AGE_MS) {
+          // Clean up old state
+          localStorage.removeItem(STORAGE_KEY);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load saved state:', error);
+    }
+  }, []);
+
+  // Save state whenever it changes (except when idle)
+  useEffect(() => {
+    if (step !== 'idle') {
+      try {
+        const state: SavedState = {
+          step,
+          subQueries,
+          serpResults,
+          clusters,
+          recommendations,
+          logs,
+          targetQuery,
+          pendingInput,
+          timestamp: Date.now(),
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch (error) {
+        console.error('Failed to save state:', error);
+      }
+    }
+  }, [step, subQueries, serpResults, clusters, recommendations, logs, targetQuery, pendingInput]);
+
+  const restoreSavedState = () => {
+    try {
+      const savedData = localStorage.getItem(STORAGE_KEY);
+      if (savedData) {
+        const parsed: SavedState = JSON.parse(savedData);
+        setStep(parsed.step);
+        setSubQueries(parsed.subQueries);
+        setSerpResults(parsed.serpResults);
+        setClusters(parsed.clusters);
+        setRecommendations(parsed.recommendations);
+        setLogs(parsed.logs);
+        setTargetQuery(parsed.targetQuery);
+        setPendingInput(parsed.pendingInput);
+        setSavedStateAvailable(false);
+        addLog('info', 'Restored previous analysis from ' + new Date(parsed.timestamp).toLocaleString());
+      }
+    } catch (error) {
+      console.error('Failed to restore state:', error);
+      addLog('error', 'Failed to restore saved analysis');
+    }
+  };
+
+  const clearSavedState = () => {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      setSavedStateAvailable(false);
+    } catch (error) {
+      console.error('Failed to clear saved state:', error);
+    }
+  };
 
   const addLog = (level: DiagnosticLog['level'], message: string, context?: Record<string, unknown>) => {
     setLogs((prev) => [
@@ -44,7 +134,8 @@ export default function Home() {
   };
 
   const handleSubmit = async (input: AppInput) => {
-    // Reset state
+    // Reset state and clear any saved progress
+    clearSavedState();
     setSubQueries([]);
     setSerpResults([]);
     setClusters([]);
@@ -226,8 +317,8 @@ export default function Home() {
       <ThemeToggle />
       <main className="min-h-screen bg-gray-100 dark:bg-gray-900 py-8 px-4 sm:px-6 lg:px-8 transition-colors">
         <div className="w-full mx-auto">
-        {/* Home Link */}
-        <div className="mb-6">
+        {/* Home Link and Resume Button */}
+        <div className="mb-6 flex items-center justify-between">
           <a
             href="/"
             className="inline-flex items-center text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
@@ -247,6 +338,49 @@ export default function Home() {
             </svg>
             <span className="font-medium">Back to Tools</span>
           </a>
+
+          {savedStateAvailable && (
+            <div className="flex gap-2">
+              <button
+                onClick={restoreSavedState}
+                className="inline-flex items-center px-4 py-2 bg-amber-500 text-white font-medium rounded-lg hover:bg-amber-600 transition-colors shadow-md"
+              >
+                <svg
+                  className="w-5 h-5 mr-2"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  />
+                </svg>
+                Resume Previous Analysis
+              </button>
+              <button
+                onClick={clearSavedState}
+                className="px-3 py-2 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 transition-colors"
+                title="Dismiss"
+              >
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="mb-8">

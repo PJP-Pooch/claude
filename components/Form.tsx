@@ -262,6 +262,28 @@ Leave empty to auto-generate queries using AI"
           </div>
         </div>
 
+        <div>
+          <label htmlFor="maxQueries" className="block text-sm font-medium text-gray-700 mb-1">
+            Max Queries to Analyze
+          </label>
+          <input
+            type="number"
+            id="maxQueries"
+            min="1"
+            max="50"
+            value={maxQueries}
+            onChange={(e) => setMaxQueries(parseInt(e.target.value) || 1)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <p className="mt-1 text-xs text-gray-600">
+            <span className="font-medium">Estimated cost:</span>{' '}
+            <span className="text-green-600 font-semibold">
+              ${(maxQueries * 0.03).toFixed(2)} - ${(maxQueries * 0.05).toFixed(2)}
+            </span>
+            {' '}(DataForSEO: ~$0.01/query, OpenAI: ~$0.02-0.04/query)
+          </p>
+        </div>
+
         <div className="md:col-span-2">
           <label className="flex items-center space-x-2">
             <input

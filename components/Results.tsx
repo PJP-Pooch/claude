@@ -39,6 +39,9 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
   // Track which action types are expanded
   const [expandedActionTypes, setExpandedActionTypes] = useState<Set<string>>(new Set());
 
+  // Filter state for search/filtering
+  const [filterText, setFilterText] = useState('');
+
   // Column widths for SERP table
   const [columnWidths, setColumnWidths] = useState({
     query: 200,
@@ -179,17 +182,73 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
     }
   };
 
+  // Apply filtering
+  const filteredSubQueries = subQueries?.filter(sq =>
+    sq.q.toLowerCase().includes(filterText.toLowerCase()) ||
+    sq.intent.toLowerCase().includes(filterText.toLowerCase()) ||
+    sq.rationale?.toLowerCase().includes(filterText.toLowerCase())
+  );
+
+  const filteredSerpResults = serpResults?.filter(sr =>
+    sr.q.toLowerCase().includes(filterText.toLowerCase()) ||
+    sr.firstMatch?.url.toLowerCase().includes(filterText.toLowerCase())
+  );
+
+  const filteredRecommendations = recommendations?.filter(rec =>
+    rec.exemplar.toLowerCase().includes(filterText.toLowerCase()) ||
+    rec.queries.some(q => q.toLowerCase().includes(filterText.toLowerCase())) ||
+    rec.actions.some(a => a.q.toLowerCase().includes(filterText.toLowerCase()))
+  );
+
   return (
     <div className="space-y-8">
+      {/* Global Search Bar */}
+      {(subQueries || serpResults || recommendations) && (
+        <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search across all results (queries, URLs, actions, clusters...)"
+              value={filterText}
+              onChange={(e) => setFilterText(e.target.value)}
+              className="w-full px-4 py-2 pl-10 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+            />
+            <svg
+              className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            {filterText && (
+              <button
+                onClick={() => setFilterText('')}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+          {filterText && (
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+              Found: {filteredSubQueries?.length || 0} queries, {filteredSerpResults?.length || 0} SERP results, {filteredRecommendations?.length || 0} clusters
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Sub-Queries Table */}
-      {subQueries && subQueries.length > 0 && (
-        <section className="bg-white p-6 rounded-lg shadow-md">
+      {filteredSubQueries && filteredSubQueries.length > 0 && (
+        <section className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
           <div className="flex justify-between items-center mb-4">
             <button
               onClick={() => toggleSection('subQueries')}
-              className="flex items-center space-x-2 text-xl font-bold text-gray-900 hover:text-blue-600 transition-colors"
+              className="flex items-center space-x-2 text-xl font-bold text-gray-900 dark:text-white hover:text-blue-600 transition-colors"
             >
-              <span>Sub-Queries ({subQueries.length})</span>
+              <span>Sub-Queries ({filteredSubQueries.length}{filterText && ` of ${subQueries?.length}`})</span>
               <svg
                 className={`w-5 h-5 transform transition-transform ${expandedSections.subQueries ? 'rotate-90' : ''}`}
                 fill="none"
@@ -200,7 +259,7 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
               </svg>
             </button>
             <button
-              onClick={() => downloadCSV(subQueries, 'sub-queries.csv')}
+              onClick={() => downloadCSV(filteredSubQueries, 'sub-queries.csv')}
               className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700"
             >
               Export CSV
@@ -231,7 +290,7 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                   </tr>
                 </thead>
                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                  {subQueries.map((sq, idx) => {
+                  {filteredSubQueries.map((sq, idx) => {
                     // Find which cluster this query belongs to
                     const cluster = clusters?.find(c => c.queries.includes(sq.q));
 
@@ -369,14 +428,14 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
       )}
 
       {/* SERP Results Table */}
-      {serpResults && serpResults.length > 0 && (
-        <section className="bg-white p-6 rounded-lg shadow-md">
+      {filteredSerpResults && filteredSerpResults.length > 0 && (
+        <section className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
           <div className="flex justify-between items-center mb-4">
             <button
               onClick={() => toggleSection('serpResults')}
-              className="flex items-center space-x-2 text-xl font-bold text-gray-900 hover:text-blue-600 transition-colors"
+              className="flex items-center space-x-2 text-xl font-bold text-gray-900 dark:text-white hover:text-blue-600 transition-colors"
             >
-              <span>SERP Results ({serpResults.length})</span>
+              <span>SERP Results ({filteredSerpResults.length}{filterText && ` of ${serpResults?.length}`})</span>
               <svg
                 className={`w-5 h-5 transform transition-transform ${expandedSections.serpResults ? 'rotate-90' : ''}`}
                 fill="none"
@@ -390,7 +449,7 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
               <button
                 onClick={() =>
                   downloadCSV(
-                    serpResults.map((sr) => ({
+                    filteredSerpResults.map((sr) => ({
                       query: sr.q,
                       aiOverview: sr.aiOverview,
                       targetPageOnPage1: sr.targetPageOnPage1,
@@ -484,8 +543,8 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {serpResults.map((sr, idx) => (
+                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                  {filteredSerpResults.map((sr, idx) => (
                     <>
                       <tr key={idx} className="hover:bg-gray-50 cursor-pointer" onClick={() => toggleRow(idx)}>
                         <td className="px-4 py-3 text-sm text-gray-900 overflow-hidden" style={{ width: `${columnWidths.query}px` }}>
@@ -561,7 +620,7 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                             };
 
                             // Get the target page URL
-                            const targetPageUrl = serpResults.find(s => s.q === targetQuery)?.firstMatch?.url;
+                            const targetPageUrl = serpResults?.find(s => s.q === targetQuery)?.firstMatch?.url;
                             if (!targetPageUrl) {
                               return <span className="text-gray-400">—</span>;
                             }
@@ -1236,14 +1295,14 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
       )}
 
       {/* Recommendations/Actions */}
-      {recommendations && recommendations.length > 0 && (
-        <section className="bg-white p-6 rounded-lg shadow-md">
+      {filteredRecommendations && filteredRecommendations.length > 0 && (
+        <section className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
           <div className="flex justify-between items-center mb-4">
             <button
               onClick={() => toggleSection('recommendations')}
-              className="flex items-center space-x-2 text-xl font-bold text-gray-900 hover:text-blue-600 transition-colors"
+              className="flex items-center space-x-2 text-xl font-bold text-gray-900 dark:text-white hover:text-blue-600 transition-colors"
             >
-              <span>Action Recommendations</span>
+              <span>Action Recommendations ({filteredRecommendations.length}{filterText && ` of ${recommendations?.length}`})</span>
               <svg
                 className={`w-5 h-5 transform transition-transform ${expandedSections.recommendations ? 'rotate-90' : ''}`}
                 fill="none"
@@ -1256,7 +1315,7 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
             <button
               onClick={() =>
                 downloadCSV(
-                  recommendations.flatMap((rec) =>
+                  (filteredRecommendations || []).flatMap((rec) =>
                     rec.actions.map((action) => ({
                       clusterId: rec.clusterId,
                       exemplar: rec.exemplar,
@@ -1286,8 +1345,8 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
               {(() => {
                 // Group all actions by type
                 const actionsByType: Record<string, Array<{ action: any; clusterId: string; exemplar: string }>> = {};
-                
-                recommendations.forEach((rec) => {
+
+                filteredRecommendations.forEach((rec) => {
                   rec.actions.forEach((action) => {
                     if (!actionsByType[action.type]) {
                       actionsByType[action.type] = [];
