@@ -546,8 +546,8 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                   {filteredSerpResults.map((sr, idx) => (
                     <>
-                      <tr key={idx} className="hover:bg-gray-50 cursor-pointer" onClick={() => toggleRow(idx)}>
-                        <td className="px-4 py-3 text-sm text-gray-900 overflow-hidden" style={{ width: `${columnWidths.query}px` }}>
+                      <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer" onClick={() => toggleRow(idx)}>
+                        <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 overflow-hidden" style={{ width: `${columnWidths.query}px` }}>
                           <div className="flex items-center space-x-2">
                             <svg
                               className={`w-4 h-4 transform transition-transform ${expandedRows.has(idx) ? 'rotate-90' : ''}`}
@@ -560,15 +560,15 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                             <div className="truncate" title={sr.q}>{sr.q}</div>
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-600 overflow-hidden" style={{ width: `${columnWidths.clientUrl}px` }}>
+                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300 overflow-hidden" style={{ width: `${columnWidths.clientUrl}px` }}>
                           {(() => {
-                            if (!sr.firstMatch) return <span className="text-gray-400">—</span>;
+                            if (!sr.firstMatch) return <span className="text-gray-400 dark:text-gray-500">—</span>;
                             return (
                               <a
                                 href={sr.firstMatch.url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-blue-600 hover:text-blue-800 hover:underline truncate block"
+                                className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline truncate block"
                                 title={sr.firstMatch.url}
                                 onClick={(e) => e.stopPropagation()}
                               >
@@ -577,17 +577,17 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                             );
                           })()}
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-600 overflow-hidden" style={{ width: `${columnWidths.firstMatch}px` }}>
+                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300 overflow-hidden" style={{ width: `${columnWidths.firstMatch}px` }}>
                           {sr.firstMatch ? `#${sr.firstMatch.position}` : '—'}
                         </td>
                         <td className="px-4 py-3 text-sm overflow-hidden" style={{ width: `${columnWidths.aiOverview}px` }}>
                           <span
                             className={`px-2 py-1 rounded-full text-xs font-medium ${
                               sr.aiOverview === 'present'
-                                ? 'bg-yellow-100 text-yellow-800'
+                                ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200'
                                 : sr.aiOverview === 'absent'
-                                ? 'bg-gray-100 text-gray-800'
-                                : 'bg-gray-50 text-gray-500'
+                                ? 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
+                                : 'bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400'
                             }`}
                           >
                             {sr.aiOverview}
@@ -596,7 +596,7 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                         <td className="px-4 py-3 text-sm overflow-hidden" style={{ width: `${columnWidths.aiCitation}px` }}>
                           {(() => {
                             if (!sr.aiOverviewData || !sr.aiOverviewData.urls || sr.aiOverviewData.urls.length === 0) {
-                              return <span className="text-gray-400">—</span>;
+                              return <span className="text-gray-400 dark:text-gray-500">—</span>;
                             }
 
                             // Helper function to strip hash fragments from URLs for comparison
@@ -622,7 +622,7 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                             // Get the target page URL
                             const targetPageUrl = serpResults?.find(s => s.q === targetQuery)?.firstMatch?.url;
                             if (!targetPageUrl) {
-                              return <span className="text-gray-400">—</span>;
+                              return <span className="text-gray-400 dark:text-gray-500">—</span>;
                             }
 
                             const targetUrlWithoutHash = stripHash(targetPageUrl);
@@ -664,12 +664,12 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                         </td>
                         <td className="px-4 py-3 text-sm overflow-hidden" style={{ width: `${columnWidths.targetPage}px` }}>
                           {sr.targetPageOnPage1 ? (
-                            <span className="text-green-600 font-medium">✓ Ranks</span>
+                            <span className="text-green-600 dark:text-green-400 font-medium">✓ Ranks</span>
                           ) : (
-                            <span className="text-gray-400">—</span>
+                            <span className="text-gray-400 dark:text-gray-500">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-600 overflow-hidden" style={{ width: `${columnWidths.otherUrl}px` }}>
+                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300 overflow-hidden" style={{ width: `${columnWidths.otherUrl}px` }}>
                           {(() => {
                             // Show URL if same domain ranks but it's NOT the target page
                             if (sr.sameDomainOnPage1 && !sr.targetPageOnPage1 && sr.firstMatch) {
@@ -678,7 +678,7 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                                   href={sr.firstMatch.url}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="text-blue-600 hover:text-blue-800 hover:underline truncate block"
+                                  className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline truncate block"
                                   title={sr.firstMatch.url}
                                   onClick={(e) => e.stopPropagation()}
                                 >
@@ -686,7 +686,7 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                                 </a>
                               );
                             }
-                            return <span className="text-gray-400">—</span>;
+                            return <span className="text-gray-400 dark:text-gray-500">—</span>;
                           })()}
                         </td>
                       </tr>
