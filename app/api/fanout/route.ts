@@ -7,6 +7,7 @@ import { filterNearDuplicates, deduplicateStrings } from '@/lib/normalize';
 const RequestSchema = z.object({
   targetQuery: z.string().min(1),
   openaiApiKey: z.string().min(1),
+  maxQueries: z.number().int().min(1).max(50).default(25),
   mockMode: z.boolean().optional(),
 });
 
@@ -17,7 +18,7 @@ const RequestSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { targetQuery, openaiApiKey, mockMode } = RequestSchema.parse(body);
+    const { targetQuery, openaiApiKey, maxQueries, mockMode } = RequestSchema.parse(body);
 
     // Mock mode for testing
     if (mockMode) {
@@ -50,11 +51,18 @@ export async function POST(request: NextRequest) {
     // Deduplicate and filter near-duplicates
     const dedupedQueries = filterNearDuplicates(result.subQueries, 0.9);
 
+    // Limit to maxQueries (excluding the target query which will be added by the frontend)
+    const limitedQueries = dedupedQueries.slice(0, maxQueries - 1);
+
     return NextResponse.json({
-      subQueries: dedupedQueries,
+      subQueries: limitedQueries,
       diagnostics: {
         ...result.diagnostics,
         timestamp: new Date().toISOString(),
+        requestedMax: maxQueries,
+        generatedCount: result.subQueries.length,
+        afterDedup: dedupedQueries.length,
+        returned: limitedQueries.length,
       },
     });
   } catch (error) {

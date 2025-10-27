@@ -161,6 +161,7 @@ export default function Home() {
         body: JSON.stringify({
           targetQuery: input.targetQuery,
           openaiApiKey: input.openaiApiKey,
+          maxQueries: input.maxQueries,
           mockMode: input.mockMode,
         }),
       });
