@@ -1,11 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { handleError } from '@/lib/errors';
-import * as cheerio from 'cheerio';
 
 // Force Node.js runtime for cheerio and fetch operations
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+// Dynamic import to avoid build-time issues
+let cheerio: any = null;
+async function loadCheerio() {
+  if (!cheerio) {
+    cheerio = await import('cheerio');
+  }
+  return cheerio;
+}
 
 const RequestSchema = z.object({
   query: z.string().min(1),
@@ -38,6 +46,9 @@ type PageContent = {
  */
 async function fetchPageContent(url: string, title: string): Promise<PageContent> {
   try {
+    // Load cheerio dynamically
+    const cheerioLib = await loadCheerio();
+
     // Fetch HTML with timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
@@ -63,15 +74,15 @@ async function fetchPageContent(url: string, title: string): Promise<PageContent
     }
 
     const html = await response.text();
-    const $ = cheerio.load(html);
+    const $ = cheerioLib.load(html);
 
     // Remove unwanted elements
     $('script, style, nav, header, footer, aside, iframe, noscript, .advertisement, .ad, .sidebar, .menu, .navigation').remove();
 
     // Extract headings
-    const h1s = $('h1').map((_, el) => $(el).text().trim()).get();
-    const h2s = $('h2').map((_, el) => $(el).text().trim()).get();
-    const h3s = $('h3').map((_, el) => $(el).text().trim()).get();
+    const h1s = $('h1').map((_: any, el: any) => $(el).text().trim()).get();
+    const h2s = $('h2').map((_: any, el: any) => $(el).text().trim()).get();
+    const h3s = $('h3').map((_: any, el: any) => $(el).text().trim()).get();
 
     // Extract main content - prioritize article, main, or body content
     let mainContent = '';
