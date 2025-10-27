@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { handleError } from '@/lib/errors';
+import * as cheerio from 'cheerio';
 
 const RequestSchema = z.object({
   query: z.string().min(1),
@@ -14,6 +15,99 @@ const RequestSchema = z.object({
   })),
   openaiApiKey: z.string().min(1),
 });
+
+type PageContent = {
+  url: string;
+  title: string;
+  wordCount: number;
+  headings: {
+    h1: string[];
+    h2: string[];
+    h3: string[];
+  };
+  mainContent: string;
+  error?: string;
+};
+
+/**
+ * Fetches and parses HTML content from a competitor page
+ */
+async function fetchPageContent(url: string, title: string): Promise<PageContent> {
+  try {
+    // Fetch HTML with timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      },
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      return {
+        url,
+        title,
+        wordCount: 0,
+        headings: { h1: [], h2: [], h3: [] },
+        mainContent: '',
+        error: `HTTP ${response.status}`,
+      };
+    }
+
+    const html = await response.text();
+    const $ = cheerio.load(html);
+
+    // Remove unwanted elements
+    $('script, style, nav, header, footer, aside, iframe, noscript, .advertisement, .ad, .sidebar, .menu, .navigation').remove();
+
+    // Extract headings
+    const h1s = $('h1').map((_, el) => $(el).text().trim()).get();
+    const h2s = $('h2').map((_, el) => $(el).text().trim()).get();
+    const h3s = $('h3').map((_, el) => $(el).text().trim()).get();
+
+    // Extract main content - prioritize article, main, or body content
+    let mainContent = '';
+    const contentSelectors = ['article', 'main', '[role="main"]', '.content', '.post-content', '.article-content', 'body'];
+
+    for (const selector of contentSelectors) {
+      const content = $(selector).first().text();
+      if (content && content.length > mainContent.length) {
+        mainContent = content;
+      }
+    }
+
+    // Clean up whitespace
+    mainContent = mainContent.replace(/\s+/g, ' ').trim();
+
+    // Calculate word count
+    const wordCount = mainContent.split(/\s+/).filter(word => word.length > 0).length;
+
+    return {
+      url,
+      title,
+      wordCount,
+      headings: {
+        h1: h1s.slice(0, 5), // Limit to first 5
+        h2: h2s.slice(0, 15), // Limit to first 15
+        h3: h3s.slice(0, 15), // Limit to first 15
+      },
+      mainContent: mainContent.slice(0, 3000), // First 3000 chars for context
+    };
+  } catch (error) {
+    return {
+      url,
+      title,
+      wordCount: 0,
+      headings: { h1: [], h2: [], h3: [] },
+      mainContent: '',
+      error: error instanceof Error ? error.message : 'Failed to fetch',
+    };
+  }
+}
 
 /**
  * Analyzes SERP results to determine recommended page type
@@ -142,9 +236,56 @@ async function generateContentBrief(
 ) {
   const pageTypeAnalysis = analyzePageType(topResults);
 
-  const competitorInfo = topResults.slice(0, 5).map(r =>
-    `${r.position}. ${r.title}\n   URL: ${r.url}\n   Snippet: ${r.snippet || 'N/A'}`
-  ).join('\n\n');
+  // Fetch actual page content from top 3 competitors
+  console.log('Fetching content from top 3 competitors...');
+  const top3 = topResults.slice(0, 3);
+  const pageContentPromises = top3.map(r => fetchPageContent(r.url, r.title));
+  const pageContents = await Promise.all(pageContentPromises);
+
+  // Build detailed competitor analysis
+  const competitorAnalysis = pageContents.map((page, idx) => {
+    const result = top3[idx];
+    if (!result) return '';
+
+    let analysis = `**Position ${result.position}: ${page.title}**\n`;
+    analysis += `URL: ${page.url}\n`;
+
+    if (page.error) {
+      analysis += `⚠️ Could not fetch content: ${page.error}\n`;
+      analysis += `Snippet: ${result.snippet || 'N/A'}\n`;
+    } else {
+      analysis += `Word Count: ${page.wordCount.toLocaleString()} words\n`;
+
+      if (page.headings.h1.length > 0) {
+        analysis += `\nH1: ${page.headings.h1[0]}\n`;
+      }
+
+      if (page.headings.h2.length > 0) {
+        analysis += `\nKey H2 Sections (${page.headings.h2.length} total):\n`;
+        page.headings.h2.slice(0, 8).forEach(h2 => {
+          analysis += `  - ${h2}\n`;
+        });
+        if (page.headings.h2.length > 8) {
+          analysis += `  ... and ${page.headings.h2.length - 8} more sections\n`;
+        }
+      }
+
+      if (page.headings.h3.length > 0) {
+        analysis += `\nSample H3 Subsections:\n`;
+        page.headings.h3.slice(0, 5).forEach(h3 => {
+          analysis += `  - ${h3}\n`;
+        });
+      }
+    }
+
+    return analysis;
+  }).join('\n---\n\n');
+
+  // Calculate average word count from successfully fetched pages
+  const validWordCounts = pageContents.filter(p => !p.error && p.wordCount > 0).map(p => p.wordCount);
+  const avgWordCount = validWordCounts.length > 0
+    ? Math.round(validWordCounts.reduce((sum, wc) => sum + wc, 0) / validWordCounts.length)
+    : 1500;
 
   const prompt = `You are an expert SEO content strategist. Create a detailed content brief for a new page targeting this query.
 
@@ -154,19 +295,21 @@ SERP Analysis:
 - Primary page type: ${pageTypeAnalysis.primaryType}
 - Confidence: ${(pageTypeAnalysis.confidence * 100).toFixed(0)}%
 - Common patterns: ${JSON.stringify(pageTypeAnalysis.patterns)}
+- Average word count of top 3 pages: ${avgWordCount.toLocaleString()} words
 
-Top 5 Ranking Pages:
-${competitorInfo}
+TOP 3 RANKING PAGES - DETAILED ANALYSIS:
+${competitorAnalysis}
 
-Create a comprehensive content brief with:
+Based on the actual content structure and sections from the top-ranking pages, create a comprehensive content brief with:
 
 1. **Recommended Page Type**: What format works best based on SERP analysis
-2. **Target Word Count**: Based on competitor analysis
+2. **Target Word Count**: Based on actual competitor word counts (${avgWordCount.toLocaleString()} avg)
 3. **Recommended Title**: SEO-optimized, matching SERP patterns
-4. **Required Sections** (5-8 main sections with brief descriptions)
-5. **Key Topics to Cover**: Specific angles that ranking pages address
-6. **Content Differentiation**: How to stand out from competitors
+4. **Required Sections**: Based on the H2/H3 structure you see in top-ranking pages, recommend 5-10 main sections with descriptions
+5. **Key Topics to Cover**: Specific topics based on competitor headings and content
+6. **Content Differentiation**: How to stand out from competitors while covering essential topics
 7. **Keyword Usage**: Primary and secondary keywords with suggested frequency
+8. **Content Depth**: How deep to go in each section based on what's ranking
 
 Format the output in clean markdown.`;
 
