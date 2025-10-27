@@ -10,11 +10,12 @@ type ResultsProps = {
   clusters?: Cluster[];
   recommendations?: ClusterRecommendation[];
   targetQuery?: string;
+  openaiApiKey?: string;
   onRemoveQuery?: (query: string) => void;
   onAddQuery?: (query: string, intent: 'info' | 'comm' | 'trans' | 'nav', rationale: string) => void;
 };
 
-export default function Results({ subQueries, serpResults, clusters, recommendations, targetQuery, onRemoveQuery, onAddQuery }: ResultsProps) {
+export default function Results({ subQueries, serpResults, clusters, recommendations, targetQuery, openaiApiKey: propsOpenaiApiKey, onRemoveQuery, onAddQuery }: ResultsProps) {
   const [expandedSections, setExpandedSections] = useState({
     subQueries: false,
     serpResults: false,
@@ -41,6 +42,10 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
 
   // Filter state for search/filtering
   const [filterText, setFilterText] = useState('');
+
+  // Track generated content for actions
+  const [generatedContent, setGeneratedContent] = useState<Record<string, { content: string; loading: boolean }>>({});
+  const [openaiApiKey, setOpenaiApiKey] = useState('');
 
   // Column widths for SERP table
   const [columnWidths, setColumnWidths] = useState({
@@ -150,6 +155,63 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
     link.href = URL.createObjectURL(blob);
     link.download = filename;
     link.click();
+  };
+
+  const generateContent = async (query: string, actionType: 'expand_target_page' | 'new_page') => {
+    const contentKey = `${query}-${actionType}`;
+
+    // Check if OpenAI API key is available
+    const apiKey = propsOpenaiApiKey || openaiApiKey;
+    if (!apiKey) {
+      alert('OpenAI API Key is required to generate content. Please ensure it was provided in the initial form.');
+      return;
+    }
+
+    // Find the SERP result for this query
+    const serpResult = serpResults?.find(sr => sr.q === query);
+    if (!serpResult) {
+      alert('Could not find SERP results for this query');
+      return;
+    }
+
+    // Set loading state
+    setGeneratedContent(prev => ({
+      ...prev,
+      [contentKey]: { content: '', loading: true }
+    }));
+
+    try {
+      const response = await fetch('/api/generate-content', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query,
+          actionType,
+          aiOverviewText: serpResult.aiOverviewData?.text,
+          topResults: serpResult.top10 || [],
+          openaiApiKey: apiKey,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to generate content');
+      }
+
+      const data = await response.json();
+
+      // Update with generated content
+      setGeneratedContent(prev => ({
+        ...prev,
+        [contentKey]: { content: data.content, loading: false }
+      }));
+    } catch (error) {
+      alert(`Error generating content: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setGeneratedContent(prev => ({
+        ...prev,
+        [contentKey]: { content: '', loading: false }
+      }));
+    }
   };
 
   const getActionIcon = (type: string) => {
@@ -1432,24 +1494,52 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
                                   <p>{item.action.recommendedFix}</p>
                                 )}
                                 {item.action.type === 'expand_target_page' && (
-                                  <details className="mt-2">
-                                    <summary className="cursor-pointer text-blue-600 hover:text-blue-800">
-                                      View content outline
-                                    </summary>
-                                    <pre className="mt-2 text-xs bg-white p-2 rounded border overflow-x-auto">
-                                      {item.action.outline}
-                                    </pre>
-                                  </details>
+                                  <>
+                                    <button
+                                      onClick={() => generateContent(item.action.q, 'expand_target_page')}
+                                      disabled={generatedContent[`${item.action.q}-expand_target_page`]?.loading}
+                                      className="mt-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                      {generatedContent[`${item.action.q}-expand_target_page`]?.loading
+                                        ? '⏳ Generating...'
+                                        : generatedContent[`${item.action.q}-expand_target_page`]?.content
+                                        ? '🔄 Regenerate Content'
+                                        : '✨ Generate Content from AI Overview'}
+                                    </button>
+                                    {generatedContent[`${item.action.q}-expand_target_page`]?.content && (
+                                      <div className="mt-3 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded">
+                                        <h5 className="text-sm font-semibold text-blue-900 dark:text-blue-200 mb-2">Generated Content:</h5>
+                                        <div className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap">
+                                          {generatedContent[`${item.action.q}-expand_target_page`]?.content}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </>
                                 )}
                                 {item.action.type === 'new_page' && (
-                                  <details className="mt-2">
-                                    <summary className="cursor-pointer text-blue-600 hover:text-blue-800">
-                                      View page brief
-                                    </summary>
-                                    <pre className="mt-2 text-xs bg-white p-2 rounded border overflow-x-auto">
-                                      {item.action.pageBrief}
-                                    </pre>
-                                  </details>
+                                  <>
+                                    <button
+                                      onClick={() => generateContent(item.action.q, 'new_page')}
+                                      disabled={generatedContent[`${item.action.q}-new_page`]?.loading}
+                                      className="mt-2 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                      {generatedContent[`${item.action.q}-new_page`]?.loading
+                                        ? '⏳ Generating...'
+                                        : generatedContent[`${item.action.q}-new_page`]?.content
+                                        ? '🔄 Regenerate Brief'
+                                        : '📝 Generate Content Brief'}
+                                    </button>
+                                    {generatedContent[`${item.action.q}-new_page`]?.content && (
+                                      <div className="mt-3 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded">
+                                        <h5 className="text-sm font-semibold text-green-900 dark:text-green-200 mb-2">Content Brief:</h5>
+                                        <div className="text-sm text-gray-800 dark:text-gray-200 prose prose-sm max-w-none">
+                                          <pre className="whitespace-pre-wrap font-sans">
+                                            {generatedContent[`${item.action.q}-new_page`]?.content}
+                                          </pre>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </>
                                 )}
                               </div>
                             </div>

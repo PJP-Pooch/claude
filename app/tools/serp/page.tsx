@@ -409,6 +409,7 @@ export default function Home() {
                   clusters={clusters.length > 0 ? clusters : undefined}
                   recommendations={recommendations.length > 0 ? recommendations : undefined}
                   targetQuery={targetQuery || undefined}
+                  openaiApiKey={pendingInput?.openaiApiKey}
                   onRemoveQuery={step === 'awaiting_confirmation' ? handleRemoveQuery : undefined}
                   onAddQuery={step === 'awaiting_confirmation' ? handleAddQuery : undefined}
                 />
