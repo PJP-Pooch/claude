@@ -6,7 +6,7 @@ import { filterNearDuplicates, deduplicateStrings } from '@/lib/normalize';
 
 const RequestSchema = z.object({
   targetQuery: z.string().min(1),
-  openaiApiKey: z.string().min(1),
+  openaiApiKey: z.string().optional(),
   maxQueries: z.number().int().min(1).max(50).default(25),
   mockMode: z.boolean().optional(),
 });
@@ -43,6 +43,11 @@ export async function POST(request: NextRequest) {
           tokensUsed: 0,
         },
       });
+    }
+
+    // Validate OpenAI API key is provided for real API calls
+    if (!openaiApiKey) {
+      throw new Error('OpenAI API key is required when not in mock mode');
     }
 
     // Call OpenAI API

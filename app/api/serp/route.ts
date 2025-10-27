@@ -9,8 +9,8 @@ const RequestSchema = z.object({
   location: z.string(),
   language: z.string(),
   device: z.enum(['desktop', 'mobile']),
-  dataForSeoApiLogin: z.string().min(1),
-  dataForSeoApiPassword: z.string().min(1),
+  dataForSeoApiLogin: z.string().optional(),
+  dataForSeoApiPassword: z.string().optional(),
   mockMode: z.boolean().optional(),
 });
 
@@ -45,6 +45,11 @@ export async function POST(request: NextRequest) {
           errors: [],
         },
       });
+    }
+
+    // Validate credentials are provided for real API calls
+    if (!dataForSeoApiLogin || !dataForSeoApiPassword) {
+      throw new Error('DataForSEO credentials are required when not in mock mode');
     }
 
     // Fetch real SERP results

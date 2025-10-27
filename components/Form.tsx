@@ -118,7 +118,7 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
 
         <div>
           <label htmlFor="dataForSeoApiLogin" className="block text-sm font-medium text-gray-700 mb-1">
-            DataForSEO Login *
+            DataForSEO Login {!mockMode && '*'}
           </label>
           <input
             type="text"
@@ -126,17 +126,18 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
             value={dataForSeoApiLogin}
             onChange={(e) => setDataForSeoApiLogin(e.target.value)}
             required={!mockMode}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="login@example.com"
+            disabled={mockMode}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
+            placeholder={mockMode ? "Not needed in mock mode" : "login@example.com"}
           />
           <p className="mt-1 text-xs text-gray-500">
-            Used to fetch SERP data from Google for each query.
+            {mockMode ? "Mock mode uses sample data - no API needed" : "Used to fetch SERP data from Google for each query."}
           </p>
         </div>
 
         <div>
           <label htmlFor="openaiApiKey" className="block text-sm font-medium text-gray-700 mb-1">
-            OpenAI API Key *
+            OpenAI API Key {!mockMode && '*'}
           </label>
           <input
             type="password"
@@ -144,17 +145,18 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
             value={openaiApiKey}
             onChange={(e) => setOpenaiApiKey(e.target.value)}
             required={!mockMode}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Enter your OpenAI API key"
+            disabled={mockMode}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
+            placeholder={mockMode ? "Not needed in mock mode" : "Enter your OpenAI API key"}
           />
           <p className="mt-1 text-xs text-gray-500">
-            Used to generate sub-queries and semantic analysis. You can add/remove queries after generation.
+            {mockMode ? "Mock mode uses sample data - no API needed" : "Used to generate sub-queries and semantic analysis. You can add/remove queries after generation."}
           </p>
         </div>
 
         <div>
           <label htmlFor="dataForSeoApiPassword" className="block text-sm font-medium text-gray-700 mb-1">
-            DataForSEO Password *
+            DataForSEO Password {!mockMode && '*'}
           </label>
           <input
             type="password"
@@ -162,8 +164,9 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
             value={dataForSeoApiPassword}
             onChange={(e) => setDataForSeoApiPassword(e.target.value)}
             required={!mockMode}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Enter your password"
+            disabled={mockMode}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
+            placeholder={mockMode ? "Not needed in mock mode" : "Enter your password"}
           />
         </div>
 
@@ -263,17 +266,24 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
         </div>
 
         <div className="md:col-span-2">
-          <label className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              checked={mockMode}
-              onChange={(e) => setMockMode(e.target.checked)}
-              className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-            />
-            <span className="text-sm font-medium text-gray-700">
-              Mock Mode (use sample data for testing)
-            </span>
-          </label>
+          <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+            <label className="flex items-start space-x-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={mockMode}
+                onChange={(e) => setMockMode(e.target.checked)}
+                className="w-5 h-5 mt-0.5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+              />
+              <div>
+                <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  🎭 Demo Mode - Test Without API Keys
+                </span>
+                <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                  Try the app with realistic sample data. No API credentials required. Perfect for demos and testing.
+                </p>
+              </div>
+            </label>
+          </div>
         </div>
       </div>
 
