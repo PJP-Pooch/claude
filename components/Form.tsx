@@ -117,6 +117,21 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
         </div>
 
         <div>
+          <label htmlFor="dataForSeoApiLogin" className="block text-sm font-medium text-gray-700 mb-1">
+            DataForSEO Login *
+          </label>
+          <input
+            type="text"
+            id="dataForSeoApiLogin"
+            value={dataForSeoApiLogin}
+            onChange={(e) => setDataForSeoApiLogin(e.target.value)}
+            required={!mockMode}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="login@example.com"
+          />
+        </div>
+
+        <div>
           <label htmlFor="openaiApiKey" className="block text-sm font-medium text-gray-700 mb-1">
             OpenAI API Key *
           </label>
@@ -135,21 +150,6 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
         </div>
 
         <div>
-          <label htmlFor="dataForSeoApiLogin" className="block text-sm font-medium text-gray-700 mb-1">
-            DataForSEO Login *
-          </label>
-          <input
-            type="text"
-            id="dataForSeoApiLogin"
-            value={dataForSeoApiLogin}
-            onChange={(e) => setDataForSeoApiLogin(e.target.value)}
-            required={!mockMode}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="login@example.com"
-          />
-        </div>
-
-        <div>
           <label htmlFor="dataForSeoApiPassword" className="block text-sm font-medium text-gray-700 mb-1">
             DataForSEO Password *
           </label>
@@ -163,6 +163,9 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
             placeholder="Enter your password"
           />
         </div>
+
+        {/* Empty div to keep DataForSEO fields grouped on the left */}
+        <div></div>
 
         <div>
           <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-1">
