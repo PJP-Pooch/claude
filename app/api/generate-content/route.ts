@@ -3,6 +3,10 @@ import { z } from 'zod';
 import { handleError } from '@/lib/errors';
 import * as cheerio from 'cheerio';
 
+// Force Node.js runtime for cheerio and fetch operations
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 const RequestSchema = z.object({
   query: z.string().min(1),
   actionType: z.enum(['expand_target_page', 'new_page']),
