@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
         login: dataForSeoApiLogin,
         password: dataForSeoApiPassword,
       },
-      15 // concurrency - increased from 5 for 3x faster fetching
+      25 // concurrency - optimized for maximum parallel performance
     );
 
     return NextResponse.json({

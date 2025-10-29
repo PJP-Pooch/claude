@@ -245,13 +245,13 @@ export async function fetchSerpResult(
 
 /**
  * Fetches SERP results for multiple queries with rate-limit aware batching
- * @param concurrency Number of parallel requests (default: 15 for optimal performance)
+ * @param concurrency Number of parallel requests (default: 25 for maximum performance)
  */
 export async function fetchBatchSerpResults(
   queries: string[],
   params: Omit<SerpApiParams, 'query'>,
   credentials: DataForSEOCredentials,
-  concurrency: number = 15
+  concurrency: number = 25
 ): Promise<{
   results: SerpResult[];
   errors: Array<{ query: string; error: string }>;
@@ -290,7 +290,7 @@ export async function fetchBatchSerpResults(
 
     // Add a small delay between batches to avoid rate limits
     if (i + concurrency < queries.length) {
-      await sleep(500);
+      await sleep(300);
     }
   }
 
