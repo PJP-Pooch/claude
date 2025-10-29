@@ -299,21 +299,77 @@ export async function fetchBatchSerpResults(
 
 /**
  * Mock SERP results for testing without API calls
+ * Creates realistic clustering by assigning similar URLs to related queries
  */
 export function getMockSerpResults(queries: string[], targetPageUrl: string): SerpResult[] {
   const targetDomain = extractDomain(targetPageUrl);
 
+  // Define SERP patterns for different clusters
+  // Pattern A: Target cluster (most queries should use this - 60%)
+  const patternA_urls = [
+    targetPageUrl,
+    `https://${targetDomain}/related-guide`,
+    'https://hubspot.com/marketing/content-strategy',
+    'https://contentmarketinginstitute.com/articles/strategy-guide',
+    'https://neil-patel.com/blog/content-marketing',
+    'https://moz.com/beginners-guide-to-content-marketing',
+    'https://semrush.com/blog/content-marketing-strategy',
+    'https://copyblogger.com/content-marketing-strategy',
+    'https://buffer.com/library/content-marketing-strategy',
+    'https://sproutsocial.com/insights/content-marketing-strategy',
+  ];
+
+  // Pattern B: Different cluster - SEO focused (20%)
+  const patternB_urls = [
+    'https://ahrefs.com/blog/seo-strategy',
+    'https://backlinko.com/seo-strategy',
+    'https://searchengineland.com/guide/what-is-seo',
+    'https://moz.com/learn/seo',
+    `https://${targetDomain}/seo-guide`,
+    'https://yoast.com/what-is-seo',
+    'https://semrush.com/blog/seo',
+    'https://neilpatel.com/what-is-seo',
+    'https://searchenginejournal.com/seo-guide',
+    'https://wordstream.com/seo',
+  ];
+
+  // Pattern C: Another cluster - Social media focused (20%)
+  const patternC_urls = [
+    'https://hootsuite.com/social-media-marketing',
+    'https://buffer.com/social-media-marketing',
+    'https://sproutsocial.com/insights/social-media-marketing',
+    'https://hubspot.com/marketing/social-media',
+    'https://later.com/blog/social-media-strategy',
+    'https://socialmediaexaminer.com/social-media-marketing',
+    'https://forbes.com/advisor/business/social-media-marketing',
+    'https://wordstream.com/social-media-marketing',
+    `https://${targetDomain}/social-media-tips`,
+    'https://business.instagram.com/getting-started',
+  ];
+
   return queries.map((q, index) => {
-    // Simulate varied results
-    const mockResults: OrganicResult[] = Array.from({ length: 10 }, (_, i) => ({
+    // First 60% of queries go to target cluster (Pattern A)
+    // This ensures the target cluster has the most keywords
+    let pattern: string[];
+    let clusterType: string;
+
+    if (index < Math.ceil(queries.length * 0.6)) {
+      pattern = patternA_urls;
+      clusterType = 'target';
+    } else if (index < Math.ceil(queries.length * 0.8)) {
+      pattern = patternB_urls;
+      clusterType = 'seo';
+    } else {
+      pattern = patternC_urls;
+      clusterType = 'social';
+    }
+
+    // Create top 10 results using the pattern URLs
+    const mockResults: OrganicResult[] = pattern.map((url, i) => ({
       position: i + 1,
-      url: i === 0 && index % 3 === 0
-        ? targetPageUrl
-        : i === 1 && index % 4 === 0
-        ? `https://${targetDomain}/other-page-${index}`
-        : `https://example${i}.com/page-${index}`,
-      title: `Result ${i + 1} for ${q}`,
-      snippet: `This is a mock snippet for result ${i + 1}`,
+      url: url,
+      title: `${q} - Complete Guide | ${new URL(url).hostname}`,
+      snippet: `Learn everything about ${q}. Expert tips, strategies, and best practices for success in ${new Date().getFullYear()}.`,
     }));
 
     const targetPageOnPage1 = mockResults.some(r => urlsMatch(r.url, targetPageUrl));
@@ -322,16 +378,23 @@ export function getMockSerpResults(queries: string[], targetPageUrl: string): Se
       urlsMatch(r.url, targetPageUrl) || sameDomain(r.url, targetPageUrl)
     );
 
+    // Add realistic AI Overview text based on cluster type
+    const aiOverviewTexts = {
+      target: `**${q}** involves creating and distributing valuable, relevant content to attract and engage a clearly defined audience. Key components include:\n\n• **Content Planning**: Develop a documented strategy aligned with business goals\n• **Audience Research**: Understand your target audience's needs and pain points\n• **Content Creation**: Produce high-quality, valuable content consistently\n• **Distribution**: Share content across appropriate channels\n• **Performance Measurement**: Track metrics and optimize based on data\n\nSuccessful content marketing builds trust, establishes authority, and drives profitable customer action over time.`,
+      seo: `**${q}** is the practice of optimizing your website to rank higher in search engine results. Essential elements include:\n\n• **Keyword Research**: Identify terms your audience searches for\n• **On-Page SEO**: Optimize titles, meta descriptions, and content\n• **Technical SEO**: Improve site speed, mobile-friendliness, and crawlability\n• **Link Building**: Earn high-quality backlinks from authoritative sites\n• **Content Quality**: Create valuable, comprehensive content\n\nEffective SEO increases organic visibility, drives targeted traffic, and improves user experience.`,
+      social: `**${q}** uses social platforms to connect with your audience, build your brand, and drive website traffic. Core strategies include:\n\n• **Platform Selection**: Choose networks where your audience is active\n• **Content Strategy**: Share engaging, valuable content consistently\n• **Community Engagement**: Respond to comments and messages promptly\n• **Paid Advertising**: Amplify reach with targeted ads\n• **Analytics**: Monitor performance and adjust strategy accordingly\n\nStrong social media presence builds brand awareness, fosters community, and supports business objectives.`
+    };
+
     return {
       q,
       top10: mockResults,
-      aiOverview: index % 2 === 0 ? 'present' : 'absent',
-      aiOverviewData: index % 2 === 0 ? {
-        text: `This is a mock AI Overview for "${q}". It provides a comprehensive answer based on multiple sources.`,
-        urls: [
-          { url: 'https://example1.com/article', title: 'Example Article 1' },
-          { url: 'https://example2.com/guide', title: 'Example Guide 2' },
-        ],
+      aiOverview: index % 3 === 0 ? 'present' : 'absent', // Show AI overviews for 1/3 of queries
+      aiOverviewData: index % 3 === 0 ? {
+        text: aiOverviewTexts[clusterType as keyof typeof aiOverviewTexts],
+        urls: pattern.slice(0, 4).map(url => ({
+          url: url,
+          title: `${new URL(url).hostname.replace('www.', '')} - Guide`,
+        })),
       } : undefined,
       targetPageOnPage1,
       sameDomainOnPage1,

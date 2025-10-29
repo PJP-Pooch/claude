@@ -45,9 +45,9 @@ const LANGUAGES = [
 ];
 
 export default function Form({ onSubmit, isLoading }: FormProps) {
-  const [mockMode, setMockMode] = useState<boolean>(true);
-  const [targetQuery, setTargetQuery] = useState('content marketing strategy');
-  const [targetPageUrl, setTargetPageUrl] = useState('https://www.example.com/blog/content-marketing-guide');
+  const [mockMode, setMockMode] = useState<boolean>(false);
+  const [targetQuery, setTargetQuery] = useState('');
+  const [targetPageUrl, setTargetPageUrl] = useState('');
   const [openaiApiKey, setOpenaiApiKey] = useState(process.env.NEXT_PUBLIC_OPENAI_API_KEY || '');
   const [dataForSeoApiLogin, setDataForSeoApiLogin] = useState(process.env.NEXT_PUBLIC_DATAFORSEO_LOGIN || '');
   const [dataForSeoApiPassword, setDataForSeoApiPassword] = useState(process.env.NEXT_PUBLIC_DATAFORSEO_PASSWORD || '');
@@ -99,10 +99,10 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
               🎭 Demo Mode - Try it Now!
             </span>
             <p className="mt-1 text-sm text-gray-700 dark:text-gray-300">
-              Experience the full analysis with realistic sample data. <strong>No API keys needed!</strong> Perfect for testing and demos.
+              Test with realistic sample data showing <strong>3 distinct clusters, AI overviews, and cannibalization scenarios</strong>. No API keys needed!
             </p>
             <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
-              💡 Tip: Click "Start Analysis" below to see results instantly
+              💡 Enable this, add a query + URL, then click "Start Analysis" to see instant results
             </p>
           </div>
         </label>
