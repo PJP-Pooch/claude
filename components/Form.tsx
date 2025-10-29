@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { AppInput } from '@/lib/types';
 
 type FormProps = {
@@ -44,7 +44,7 @@ const LANGUAGES = [
   'Hindi',
 ];
 
-export default function Form({ onSubmit, isLoading }: FormProps) {
+const Form = ({ onSubmit, isLoading }: FormProps) => {
   const [mockMode, setMockMode] = useState<boolean>(false);
   const [targetQuery, setTargetQuery] = useState('');
   const [targetPageUrl, setTargetPageUrl] = useState('');
@@ -298,4 +298,7 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
       </button>
     </form>
   );
-}
+};
+
+// Memoize Form to prevent unnecessary re-renders when parent state changes
+export default memo(Form);

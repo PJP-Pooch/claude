@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, memo } from 'react';
 import { SubQuery, SerpResult, Cluster, ClusterRecommendation } from '@/lib/types';
 import Papa from 'papaparse';
 
@@ -15,7 +15,7 @@ type ResultsProps = {
   onAddQuery?: (query: string, intent: 'info' | 'comm' | 'trans' | 'nav', rationale: string) => void;
 };
 
-export default function Results({ subQueries, serpResults, clusters, recommendations, targetQuery, openaiApiKey: propsOpenaiApiKey, onRemoveQuery, onAddQuery }: ResultsProps) {
+const Results = ({ subQueries, serpResults, clusters, recommendations, targetQuery, openaiApiKey: propsOpenaiApiKey, onRemoveQuery, onAddQuery }: ResultsProps) => {
   const [expandedSections, setExpandedSections] = useState({
     subQueries: false,
     serpResults: false,
@@ -1557,4 +1557,8 @@ export default function Results({ subQueries, serpResults, clusters, recommendat
       )}
     </div>
   );
-}
+};
+
+// Memoize Results to prevent unnecessary re-renders
+// Only re-render when props actually change (subQueries, serpResults, clusters, recommendations)
+export default memo(Results);
