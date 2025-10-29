@@ -63,11 +63,6 @@ export async function fetchSerpResult(
   const { query, location, language, device, targetPageUrl } = params;
   const locationCode = getLocationCode(location);
   const languageCode = getLanguageCode(language);
-  
-  console.log(`🔍 Fetching SERP for query: "${query}"`);
-  console.log(`📍 Location: ${location} (code: ${locationCode})`);
-  console.log(`🌐 Language: ${language} (code: ${languageCode})`);
-  console.log(`📱 Device: ${device}`);
 
   const requestBody = [
     {
@@ -129,29 +124,14 @@ export async function fetchSerpResult(
     }
 
     const data = await response.json();
-    console.log(`📦 DataForSEO API Response Status:`, response.status);
-    console.log(`📊 Response data structure:`, {
-      tasks: data.tasks?.length || 0,
-      version: data.version,
-      status_code: data.status_code,
-      status_message: data.status_message
-    });
 
     if (!data.tasks || data.tasks.length === 0) {
-      console.error(`❌ No tasks in DataForSEO response for query "${query}"`);
       throw new DataForSEOAPIError('No tasks in DataForSEO response', { data, query });
     }
 
     const task = data.tasks[0];
-    console.log(`📋 Task info:`, {
-      id: task.id,
-      status_code: task.status_code,
-      status_message: task.status_message,
-      result_count: task.result?.length || 0
-    });
 
     if (!task.result || task.result.length === 0) {
-      console.warn(`⚠️ No results in task for query "${query}"`);
       // No results found - return empty result
       return {
         q: query,
@@ -164,21 +144,9 @@ export async function fetchSerpResult(
 
     const result = task.result[0];
     const items = result.items || [];
-    console.log(`🔍 Found ${items.length} total items in SERP result`);
-    
-    // Log first few items to understand structure
-    if (items.length > 0) {
-      console.log(`📝 First item structure:`, {
-        type: items[0].type,
-        rank_absolute: items[0].rank_absolute,
-        url: items[0].url,
-        title: items[0].title?.substring(0, 50) + '...'
-      });
-    }
 
     // Extract organic results
     const organicItems = items.filter((item: { type: string }) => item.type === 'organic');
-    console.log(`🌱 Found ${organicItems.length} organic items`);
 
     const organicResults: OrganicResult[] = organicItems
       .slice(0, 10)
@@ -188,8 +156,6 @@ export async function fetchSerpResult(
         title: item.title,
         snippet: item.description,
       }));
-      
-    console.log(`✅ Processed ${organicResults.length} organic results`);
 
     // Extract AI Overview data
     const aiOverviewItem = items.find((item: { type: string }) => item.type === 'ai_overview');
@@ -227,8 +193,6 @@ export async function fetchSerpResult(
         text: text,
         urls: uniqueUrls,
       };
-
-      console.log(`🤖 AI Overview found with ${uniqueUrls.length} unique URLs`);
     }
 
     // Check if target page or same domain ranks on page 1
@@ -266,15 +230,7 @@ export async function fetchSerpResult(
       sameDomainOnPage1,
       firstMatch,
     };
-    
-    console.log(`🎯 Final result for "${query}":`, {
-      top10_count: finalResult.top10.length,
-      aiOverview: finalResult.aiOverview,
-      targetPageOnPage1: finalResult.targetPageOnPage1,
-      sameDomainOnPage1: finalResult.sameDomainOnPage1,
-      firstMatch: finalResult.firstMatch ? `Position ${finalResult.firstMatch.position}` : 'None'
-    });
-    
+
     return finalResult;
   } catch (error) {
     if (error instanceof DataForSEOAPIError || error instanceof RateLimitError) {

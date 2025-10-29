@@ -11,7 +11,8 @@ export async function determineAction(
   targetQuery: string,
   targetPageUrl: string,
   clusters: Cluster[],
-  openaiApiKey: string
+  openaiApiKey: string,
+  mockMode?: boolean
 ): Promise<Action | null> {
   // Case A1: Target page ranks on page 1 - no action needed
   if (serpResult.targetPageOnPage1) {
@@ -27,7 +28,9 @@ export async function determineAction(
     // Check if the ranking page is in a different cluster
     if (queryCluster !== targetQueryCluster) {
       // Generate improvement suggestions for the ranking page
-      const suggestions = await generateImprovementSuggestions(query, otherUrl, openaiApiKey);
+      const suggestions = mockMode
+        ? `Mock suggestions for improving ${otherUrl} to target "${query}":\n1. Add more content about ${query}\n2. Optimize title and meta tags\n3. Improve internal linking\n4. Focus on user intent`
+        : await generateImprovementSuggestions(query, otherUrl, openaiApiKey);
 
       return {
         type: 'ok_other_page_diff_cluster',
@@ -51,7 +54,9 @@ export async function determineAction(
   const queryClusterId = getClusterForQuery(query, clusters);
   const isInTargetCluster = queryClusterId === 'target';
 
-  const similarity = await computeSemanticSimilarity(query, targetPageUrl, openaiApiKey, true);
+  const similarity = mockMode
+    ? (isInTargetCluster ? 0.85 : 0.6) // Mock similarity based on cluster
+    : await computeSemanticSimilarity(query, targetPageUrl, openaiApiKey, true);
 
   if (similarity >= 0.75 || isInTargetCluster) {
     // High similarity or in target cluster - expand target page
@@ -79,7 +84,8 @@ export async function generateClusterRecommendations(
   clusters: Cluster[],
   targetQuery: string,
   targetPageUrl: string,
-  openaiApiKey: string
+  openaiApiKey: string,
+  mockMode?: boolean
 ): Promise<ClusterRecommendation[]> {
   // Process all clusters in parallel
   const recommendations = await Promise.all(
@@ -97,7 +103,8 @@ export async function generateClusterRecommendations(
             targetQuery,
             targetPageUrl,
             clusters,
-            openaiApiKey
+            openaiApiKey,
+            mockMode
           );
         }
         return null;

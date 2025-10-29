@@ -246,6 +246,7 @@ export default function Home() {
           targetPageUrl: pendingInput.targetPageUrl,
           clusteringOverlapThreshold: pendingInput.clusteringOverlapThreshold,
           openaiApiKey: pendingInput.openaiApiKey,
+          mockMode: pendingInput.mockMode,
         }),
       });
 
