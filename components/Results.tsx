@@ -1483,7 +1483,7 @@ const Results = ({ subQueries, serpResults, clusters, recommendations, targetQue
                                         <summary className="cursor-pointer text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300">
                                           View improvement suggestions
                                         </summary>
-                                        <div className="mt-2 text-xs bg-white dark:bg-gray-700 p-3 rounded border border-gray-200 dark:border-gray-600 whitespace-pre-wrap">
+                                        <div className="mt-2 text-xs bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 p-3 rounded border border-gray-200 dark:border-gray-600 whitespace-pre-wrap">
                                           {item.action.suggestions}
                                         </div>
                                       </details>
@@ -1533,7 +1533,7 @@ const Results = ({ subQueries, serpResults, clusters, recommendations, targetQue
                                       <div className="mt-3 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded">
                                         <h5 className="text-sm font-semibold text-green-900 dark:text-green-200 mb-2">Content Brief:</h5>
                                         <div className="text-sm text-gray-800 dark:text-gray-200 prose prose-sm max-w-none">
-                                          <pre className="whitespace-pre-wrap font-sans">
+                                          <pre className="whitespace-pre-wrap font-sans text-gray-800 dark:text-gray-200">
                                             {generatedContent[`${item.action.q}-new_page`]?.content}
                                           </pre>
                                         </div>
