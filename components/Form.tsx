@@ -77,17 +77,17 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 bg-white p-6 rounded-lg shadow-md">
+    <form onSubmit={handleSubmit} className="space-y-6 bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md transition-colors">
       <div className="space-y-4">
-        <h2 className="text-2xl font-bold text-gray-900">SERP Query Clustering</h2>
-        <p className="text-sm text-gray-600">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">SERP Query Clustering</h2>
+        <p className="text-sm text-gray-600 dark:text-gray-300">
           Analyze SERP results to discover content opportunities and identify cannibalization issues.
         </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="md:col-span-2">
-          <label htmlFor="targetQuery" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="targetQuery" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Target Query *
           </label>
           <input
@@ -96,13 +96,13 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
             value={targetQuery}
             onChange={(e) => setTargetQuery(e.target.value)}
             required
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
             placeholder="e.g., content marketing strategy"
           />
         </div>
 
         <div className="md:col-span-2">
-          <label htmlFor="targetPageUrl" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="targetPageUrl" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Target Page URL *
           </label>
           <input
@@ -111,13 +111,13 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
             value={targetPageUrl}
             onChange={(e) => setTargetPageUrl(e.target.value)}
             required
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
             placeholder="https://example.com/your-page"
           />
         </div>
 
         <div>
-          <label htmlFor="dataForSeoApiLogin" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="dataForSeoApiLogin" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             DataForSEO Login {!mockMode && '*'}
           </label>
           <input
@@ -127,16 +127,16 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
             onChange={(e) => setDataForSeoApiLogin(e.target.value)}
             required={!mockMode}
             disabled={mockMode}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:text-gray-500 dark:disabled:text-gray-500 transition-colors"
             placeholder={mockMode ? "Not needed in mock mode" : "login@example.com"}
           />
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
             {mockMode ? "Mock mode uses sample data - no API needed" : "Used to fetch SERP data from Google for each query."}
           </p>
         </div>
 
         <div>
-          <label htmlFor="openaiApiKey" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="openaiApiKey" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             OpenAI API Key {!mockMode && '*'}
           </label>
           <input
@@ -146,16 +146,16 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
             onChange={(e) => setOpenaiApiKey(e.target.value)}
             required={!mockMode}
             disabled={mockMode}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:text-gray-500 dark:disabled:text-gray-500 transition-colors"
             placeholder={mockMode ? "Not needed in mock mode" : "Enter your OpenAI API key"}
           />
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
             {mockMode ? "Mock mode uses sample data - no API needed" : "Used to generate sub-queries and semantic analysis. You can add/remove queries after generation."}
           </p>
         </div>
 
         <div>
-          <label htmlFor="dataForSeoApiPassword" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="dataForSeoApiPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             DataForSEO Password {!mockMode && '*'}
           </label>
           <input
@@ -165,7 +165,7 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
             onChange={(e) => setDataForSeoApiPassword(e.target.value)}
             required={!mockMode}
             disabled={mockMode}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:text-gray-500 dark:disabled:text-gray-500 transition-colors"
             placeholder={mockMode ? "Not needed in mock mode" : "Enter your password"}
           />
         </div>
@@ -174,14 +174,14 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
         <div></div>
 
         <div>
-          <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="location" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Location
           </label>
           <select
             id="location"
             value={location}
             onChange={(e) => setLocation(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
           >
             {LOCATIONS.map((loc) => (
               <option key={loc} value={loc}>
@@ -192,14 +192,14 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
         </div>
 
         <div>
-          <label htmlFor="language" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="language" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Language
           </label>
           <select
             id="language"
             value={language}
             onChange={(e) => setLanguage(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
           >
             {LANGUAGES.map((lang) => (
               <option key={lang} value={lang}>
@@ -210,14 +210,14 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
         </div>
 
         <div>
-          <label htmlFor="device" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="device" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Device
           </label>
           <select
             id="device"
             value={device}
             onChange={(e) => setDevice(e.target.value as 'desktop' | 'mobile')}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
           >
             <option value="desktop">Desktop</option>
             <option value="mobile">Mobile</option>
@@ -225,7 +225,7 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
         </div>
 
         <div>
-          <label htmlFor="threshold" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="threshold" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Clustering Overlap Threshold: {clusteringOverlapThreshold}
           </label>
           <input
@@ -237,14 +237,14 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
             onChange={(e) => setClusteringOverlapThreshold(parseInt(e.target.value))}
             className="w-full"
           />
-          <div className="flex justify-between text-xs text-gray-500 mt-1">
+          <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
             <span>1 (Loose)</span>
             <span>10 (Strict)</span>
           </div>
         </div>
 
         <div>
-          <label htmlFor="maxQueries" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="maxQueries" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Max Queries to Analyze
           </label>
           <input
@@ -254,11 +254,11 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
             max="50"
             value={maxQueries}
             onChange={(e) => setMaxQueries(parseInt(e.target.value) || 1)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
           />
-          <p className="mt-1 text-xs text-gray-600">
+          <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
             <span className="font-medium">Estimated cost:</span>{' '}
-            <span className="text-green-600 font-semibold">
+            <span className="text-green-600 dark:text-green-400 font-semibold">
               ${(maxQueries * 0.03).toFixed(2)} - ${(maxQueries * 0.05).toFixed(2)}
             </span>
             {' '}(DataForSEO: ~$0.01/query, OpenAI: ~$0.02-0.04/query)
@@ -266,7 +266,7 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
         </div>
 
         <div className="md:col-span-2">
-          <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+          <div className="p-4 bg-blue-50 dark:bg-gray-700/50 border border-blue-200 dark:border-gray-600 rounded-lg transition-colors">
             <label className="flex items-start space-x-3 cursor-pointer">
               <input
                 type="checkbox"
@@ -275,10 +275,10 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
                 className="w-5 h-5 mt-0.5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
               />
               <div>
-                <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                <span className="text-sm font-semibold text-gray-900 dark:text-white">
                   🎭 Demo Mode - Test Without API Keys
                 </span>
-                <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                <p className="mt-1 text-xs text-gray-600 dark:text-gray-300">
                   Try the app with realistic sample data. No API credentials required. Perfect for demos and testing.
                 </p>
               </div>
