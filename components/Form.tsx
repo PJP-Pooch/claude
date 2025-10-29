@@ -45,8 +45,9 @@ const LANGUAGES = [
 ];
 
 export default function Form({ onSubmit, isLoading }: FormProps) {
-  const [targetQuery, setTargetQuery] = useState('');
-  const [targetPageUrl, setTargetPageUrl] = useState('');
+  const [mockMode, setMockMode] = useState(process.env.NEXT_PUBLIC_MOCK_MODE === 'true' || true);
+  const [targetQuery, setTargetQuery] = useState('content marketing strategy');
+  const [targetPageUrl, setTargetPageUrl] = useState('https://www.example.com/blog/content-marketing-guide');
   const [openaiApiKey, setOpenaiApiKey] = useState(process.env.NEXT_PUBLIC_OPENAI_API_KEY || '');
   const [dataForSeoApiLogin, setDataForSeoApiLogin] = useState(process.env.NEXT_PUBLIC_DATAFORSEO_LOGIN || '');
   const [dataForSeoApiPassword, setDataForSeoApiPassword] = useState(process.env.NEXT_PUBLIC_DATAFORSEO_PASSWORD || '');
@@ -55,7 +56,6 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
   const [device, setDevice] = useState<'desktop' | 'mobile'>((process.env.NEXT_PUBLIC_DEFAULT_DEVICE as 'desktop' | 'mobile') || 'desktop');
   const [clusteringOverlapThreshold, setClusteringOverlapThreshold] = useState(parseInt(process.env.NEXT_PUBLIC_DEFAULT_CLUSTERING_OVERLAP || '4'));
   const [maxQueries, setMaxQueries] = useState(parseInt(process.env.NEXT_PUBLIC_MAX_QUERIES || '25'));
-  const [mockMode, setMockMode] = useState(process.env.NEXT_PUBLIC_MOCK_MODE === 'true');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,6 +83,29 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
         <p className="text-sm text-gray-600 dark:text-gray-300">
           Analyze SERP results to discover content opportunities and identify cannibalization issues.
         </p>
+      </div>
+
+      {/* Demo Mode Section - Moved to Top */}
+      <div className="p-4 bg-blue-50 dark:bg-gray-700/50 border-2 border-blue-300 dark:border-blue-500 rounded-lg transition-colors">
+        <label className="flex items-start space-x-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={mockMode}
+            onChange={(e) => setMockMode(e.target.checked)}
+            className="w-5 h-5 mt-0.5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+          />
+          <div>
+            <span className="text-base font-bold text-gray-900 dark:text-white">
+              🎭 Demo Mode - Try it Now!
+            </span>
+            <p className="mt-1 text-sm text-gray-700 dark:text-gray-300">
+              Experience the full analysis with realistic sample data. <strong>No API keys needed!</strong> Perfect for testing and demos.
+            </p>
+            <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
+              💡 Tip: Click "Start Analysis" below to see results instantly
+            </p>
+          </div>
+        </label>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -263,27 +286,6 @@ export default function Form({ onSubmit, isLoading }: FormProps) {
             </span>
             {' '}(DataForSEO: ~$0.01/query, OpenAI: ~$0.02-0.04/query)
           </p>
-        </div>
-
-        <div className="md:col-span-2">
-          <div className="p-4 bg-blue-50 dark:bg-gray-700/50 border border-blue-200 dark:border-gray-600 rounded-lg transition-colors">
-            <label className="flex items-start space-x-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={mockMode}
-                onChange={(e) => setMockMode(e.target.checked)}
-                className="w-5 h-5 mt-0.5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-              />
-              <div>
-                <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                  🎭 Demo Mode - Test Without API Keys
-                </span>
-                <p className="mt-1 text-xs text-gray-600 dark:text-gray-300">
-                  Try the app with realistic sample data. No API credentials required. Perfect for demos and testing.
-                </p>
-              </div>
-            </label>
-          </div>
         </div>
       </div>
 
