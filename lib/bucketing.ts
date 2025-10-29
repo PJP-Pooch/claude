@@ -53,7 +53,7 @@ export async function determineAction(
 
   // Case B: Domain doesn't rank - check semantic similarity and cluster
   const queryClusterId = getClusterForQuery(query, clusters);
-  const isInTargetCluster = queryClusterId === 'target';
+  const isInTargetCluster = queryClusterId === targetQuery;
 
   let similarity: number;
   if (mockMode) {

@@ -195,8 +195,8 @@ export function clusterBySerpSimilarity(
         componentIndices.map(j => overlapMatrix[i]?.[j] || 0)
       );
 
-      // Name the cluster containing the target query as "target"
-      const clusterId = idx === targetClusterIndex ? 'target' : `cluster-${idx + 1}`;
+      // Name the cluster containing the target query with the actual target query text
+      const clusterId = idx === targetClusterIndex ? targetQuery : `cluster-${idx + 1}`;
 
       return {
         id: clusterId,
