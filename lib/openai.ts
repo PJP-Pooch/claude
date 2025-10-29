@@ -119,6 +119,90 @@ export async function computeSemanticSimilarity(
 }
 
 /**
+ * Computes semantic similarity using pre-computed embeddings (from cache)
+ * Falls back to TF-IDF if embeddings not found in cache
+ */
+export function computeSemanticSimilarityFromCache(
+  text1: string,
+  text2: string,
+  embeddingCache: Map<string, number[]>,
+  useFallback: boolean = true
+): number {
+  const embedding1 = embeddingCache.get(text1);
+  const embedding2 = embeddingCache.get(text2);
+
+  if (embedding1 && embedding2) {
+    return cosineSimilarityVector(embedding1, embedding2);
+  }
+
+  if (useFallback) {
+    // Fallback to TF-IDF cosine similarity
+    return cosineSimilarity(text1, text2);
+  }
+
+  throw new Error(`Embeddings not found in cache for texts: "${text1.substring(0, 50)}" and "${text2.substring(0, 50)}"`);
+}
+
+/**
+ * Gets embeddings for multiple texts in a single API call (batched for performance)
+ * OpenAI API supports up to 2048 inputs per request
+ */
+export async function batchGetEmbeddings(
+  texts: string[],
+  apiKey: string
+): Promise<Map<string, number[]>> {
+  if (texts.length === 0) {
+    return new Map();
+  }
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/embeddings', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'text-embedding-3-small',
+        input: texts,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new GeminiAPIError(`OpenAI batch embedding API request failed: ${response.status} ${errorText}`, {
+        status: response.status,
+      });
+    }
+
+    const data = await response.json();
+
+    if (!data.data || data.data.length === 0) {
+      throw new GeminiAPIError('No embedding data in OpenAI response', { data });
+    }
+
+    // Create a map of text -> embedding
+    const embeddingMap = new Map<string, number[]>();
+    for (let i = 0; i < texts.length; i++) {
+      const text = texts[i];
+      const embeddingData = data.data[i];
+      if (text && embeddingData?.embedding) {
+        embeddingMap.set(text, embeddingData.embedding);
+      }
+    }
+
+    return embeddingMap;
+  } catch (error) {
+    if (error instanceof GeminiAPIError) {
+      throw error;
+    }
+    throw new GeminiAPIError(`Failed to get batch embeddings from OpenAI: ${String(error)}`, {
+      originalError: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+/**
  * Gets embedding vector for a text using OpenAI API
  */
 async function getEmbedding(text: string, apiKey: string): Promise<number[]> {
