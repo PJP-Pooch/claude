@@ -45,7 +45,7 @@ const LANGUAGES = [
 ];
 
 export default function Form({ onSubmit, isLoading }: FormProps) {
-  const [mockMode, setMockMode] = useState(process.env.NEXT_PUBLIC_MOCK_MODE === 'true' || true);
+  const [mockMode, setMockMode] = useState<boolean>(true);
   const [targetQuery, setTargetQuery] = useState('content marketing strategy');
   const [targetPageUrl, setTargetPageUrl] = useState('https://www.example.com/blog/content-marketing-guide');
   const [openaiApiKey, setOpenaiApiKey] = useState(process.env.NEXT_PUBLIC_OPENAI_API_KEY || '');
