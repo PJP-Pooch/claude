@@ -118,7 +118,7 @@ export async function generateClusterRecommendations(
       }
     } catch (error) {
       // If batch embedding fails, continue without cache (will use fallback)
-      console.error('Failed to batch fetch embeddings:', error);
+      // Silently continue to maintain performance
     }
   }
 
