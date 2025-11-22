@@ -196,7 +196,7 @@ export function clusterBySerpSimilarity(
       );
 
       // Name the cluster containing the target query with the actual target query text
-      const clusterId = idx === targetClusterIndex ? targetQuery : `cluster-${idx + 1}`;
+      const clusterId = (idx === targetClusterIndex && targetQuery) ? targetQuery : `cluster-${idx + 1}`;
 
       return {
         id: clusterId,
