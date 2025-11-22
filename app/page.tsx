@@ -25,6 +25,25 @@ export default function Home() {
         'AI Overview tracking',
       ],
     },
+    {
+      id: 'seasonality',
+      title: 'Seasonal Search Volume Explorer',
+      description: 'Analyze historical search trends, forecast future demand, and plan your content calendar with seasonality insights.',
+      icon: (
+        <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+        </svg>
+      ),
+      href: '/seasonality',
+      color: 'from-green-500 to-teal-600',
+      features: [
+        'Historical search volume trends',
+        '12-month demand forecasting',
+        'Seasonality type classification',
+        'Content calendar planning',
+        'Actionability scoring',
+      ],
+    },
     // Placeholder for future tools
     {
       id: 'coming-soon-1',
@@ -69,11 +88,10 @@ export default function Home() {
                 className={`block group ${tool.disabled ? 'pointer-events-none' : ''}`}
               >
                 <div
-                  className={`h-full bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden transition-all duration-300 ${
-                    tool.disabled
+                  className={`h-full bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden transition-all duration-300 ${tool.disabled
                       ? 'opacity-60'
                       : 'hover:shadow-2xl hover:-translate-y-2'
-                  }`}
+                    }`}
                 >
                   {/* Card Header */}
                   <div className={`bg-gradient-to-r ${tool.color} p-6 text-white`}>

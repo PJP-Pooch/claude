@@ -273,3 +273,58 @@ export type DiagnosticState = {
     reset: string;
   };
 };
+
+// ============================================================================
+// Seasonality Types
+// ============================================================================
+
+export interface MonthlySV {
+  year: number;
+  month: number; // 1-12
+  searchVolume: number;
+  isForecast?: boolean;
+}
+
+export type SeasonalityType = 'Sharp Seasonal' | 'Steady' | 'Growing' | 'Declining' | 'Mixed';
+
+export type ContentStage = 'Pre-peak' | 'Near-peak' | 'Post-peak' | 'Off-season';
+
+export interface KeywordSeasonality {
+  keyword: string;
+  monthly: MonthlySV[];
+  forecastMonthly: MonthlySV[];
+
+  // Metrics
+  average: number;
+  peakMonth: string; // e.g. "March"
+  peakMonthIndex: number; // 1-12
+  peakVolume: number;
+  difference: number;
+  percentDifference: number;
+
+  // Planning
+  leadTimeDays: number;
+  startOptimizingDate: string; // ISO date
+  priorityScore: number;
+  seasonalityType: SeasonalityType;
+  contentStage: ContentStage;
+  contentSuggestion: string;
+
+  // Grouping
+  category?: string;
+}
+
+export interface SeasonalityResponse {
+  keywords: KeywordSeasonality[];
+  categories: Record<string, {
+    average: number;
+    peakMonth: string;
+    keywords: string[];
+  }>;
+  diagnostics: {
+    timestamp: string;
+    totalKeywords: number;
+    successCount: number;
+    errors: Array<{ keyword: string; error: string }>;
+  };
+}

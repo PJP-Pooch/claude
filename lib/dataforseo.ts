@@ -197,7 +197,7 @@ export async function fetchSerpResult(
 
     // Check if target page or same domain ranks on page 1
     const targetDomain = extractDomain(targetPageUrl);
-    
+
     let targetPageOnPage1 = false;
     let sameDomainOnPage1 = false;
     let firstMatch: { position: number; url: string } | undefined;
@@ -206,7 +206,7 @@ export async function fetchSerpResult(
       if (orgResult.position <= 10) {
         const urlMatches = urlsMatch(orgResult.url, targetPageUrl);
         const domainMatches = sameDomain(orgResult.url, targetPageUrl);
-        
+
         if (urlMatches) {
           targetPageOnPage1 = true;
           if (!firstMatch) {
@@ -238,6 +238,70 @@ export async function fetchSerpResult(
     }
     throw new DataForSEOAPIError(`Failed to fetch SERP result: ${String(error)}`, {
       query,
+      originalError: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+/**
+ * Fetches historical search volume for a list of keywords
+ */
+export async function fetchHistoricalSearchVolume(
+  keywords: string[],
+  locationName: string,
+  languageName: string,
+  credentials: DataForSEOCredentials
+): Promise<any[]> {
+  const requestBody = [
+    {
+      location_name: locationName,
+      language_name: languageName,
+      keywords: keywords,
+      include_serp_info: true
+    }
+  ];
+
+  try {
+    const authString = Buffer.from(`${credentials.login}:${credentials.password}`).toString('base64');
+
+    const response = await fetch(`${DATAFORSEO_API_BASE}/dataforseo_labs/historical_search_volume/live`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${authString}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new DataForSEOAPIError(`DataForSEO API request failed: ${response.status} ${errorText}`, {
+        status: response.status,
+        statusText: response.statusText,
+      });
+    }
+
+    const data = await response.json();
+
+    if (!data.tasks || data.tasks.length === 0) {
+      throw new DataForSEOAPIError('No tasks in DataForSEO response', { data });
+    }
+
+    const task = data.tasks[0];
+
+    if (task.status_code !== 20000) {
+      throw new DataForSEOAPIError(`DataForSEO task failed: ${task.status_message}`, {
+        status: task.status_code,
+        message: task.status_message
+      });
+    }
+
+    return task.result || [];
+  } catch (error) {
+    if (error instanceof DataForSEOAPIError) {
+      throw error;
+    }
+    throw new DataForSEOAPIError(`Failed to fetch historical search volume: ${String(error)}`, {
       originalError: error instanceof Error ? error.message : String(error),
     });
   }
