@@ -12,16 +12,31 @@ interface SeasonalityInputProps {
         apiPassword?: string;
     }) => void;
     isLoading: boolean;
+    initialValues?: {
+        keywords: string[];
+        location: string;
+        language: string;
+        leadTimeDays: number;
+        categoryMap: Record<string, string>;
+        apiLogin?: string;
+        apiPassword?: string;
+    };
 }
 
-export default function SeasonalityInput({ onSubmit, isLoading }: SeasonalityInputProps) {
-    const [input, setInput] = useState('');
-    const [location, setLocation] = useState('United Kingdom');
-    const [language, setLanguage] = useState('English');
-    const [leadTime, setLeadTime] = useState(90);
-    const [apiLogin, setApiLogin] = useState('');
-    const [apiPassword, setApiPassword] = useState('');
-    const [showApiCreds, setShowApiCreds] = useState(false);
+export default function SeasonalityInput({ onSubmit, isLoading, initialValues }: SeasonalityInputProps) {
+    const [input, setInput] = useState(() => {
+        if (!initialValues) return '';
+        return initialValues.keywords.map(k => {
+            const cat = initialValues.categoryMap[k];
+            return cat ? `${k} | ${cat}` : k;
+        }).join('\n');
+    });
+    const [location, setLocation] = useState(initialValues?.location || 'United Kingdom');
+    const [language, setLanguage] = useState(initialValues?.language || 'English');
+    const [leadTime, setLeadTime] = useState(initialValues?.leadTimeDays || 90);
+    const [apiLogin, setApiLogin] = useState(initialValues?.apiLogin || '');
+    const [apiPassword, setApiPassword] = useState(initialValues?.apiPassword || '');
+    const [showApiCreds, setShowApiCreds] = useState(!!initialValues?.apiLogin);
     const [error, setError] = useState<string | null>(null);
 
     const handleSubmit = (e: React.FormEvent) => {
