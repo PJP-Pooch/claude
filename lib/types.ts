@@ -17,6 +17,8 @@ export const InputSchema = z.object({
   clusteringOverlapThreshold: z.number().int().min(1).max(10).default(4),
   maxQueries: z.number().int().min(1).max(50).default(25),
   mockMode: z.boolean().optional().default(false),
+  querySource: z.enum(['ai', 'manual']).default('ai'),
+  manualQueries: z.string().optional(),
 });
 
 export type AppInput = z.infer<typeof InputSchema>;

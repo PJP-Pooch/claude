@@ -152,6 +152,34 @@ export default function Home() {
         rationale: 'Target keyword'
       };
 
+      // Handle manual query entry
+      if (input.querySource === 'manual' && input.manualQueries) {
+        const manualList = input.manualQueries
+          .split('\n')
+          .map(q => q.trim())
+          .filter(q => q.length > 0);
+
+        const manualSubQueries: SubQuery[] = manualList.map(q => ({
+          q,
+          intent: 'info' as const,
+          rationale: 'Manual entry'
+        }));
+
+        // Add target query if not present (case-insensitive check)
+        const hasTarget = manualList.some(q => q.toLowerCase() === input.targetQuery.toLowerCase());
+        if (!hasTarget) {
+          manualSubQueries.unshift(targetQueryObject);
+        }
+
+        setSubQueries(manualSubQueries);
+        addLog('info', `Loaded ${manualSubQueries.length} manual queries`);
+
+        // Skip fan-out and go directly to confirmation
+        setStep('awaiting_confirmation');
+        addLog('info', 'Please review the queries and click "Confirm & Continue" to proceed');
+        return;
+      }
+
       // Step 1: Fan-out queries with AI
       setStep('fanout');
       addLog('info', 'Starting query fan-out with OpenAI...');
@@ -290,182 +318,182 @@ export default function Home() {
       <ThemeToggle />
       <main className="min-h-screen bg-gray-100 dark:bg-gray-900 py-8 px-4 sm:px-6 lg:px-8 transition-colors">
         <div className="w-full mx-auto">
-        {/* Home Link and Resume Button */}
-        <div className="mb-6 flex items-center justify-between pr-16">
-          <a
-            href="/"
-            className="inline-flex items-center text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
-          >
-            <svg
-              className="w-5 h-5 mr-2"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+          {/* Home Link and Resume Button */}
+          <div className="mb-6 flex items-center justify-between pr-16">
+            <a
+              href="/"
+              className="inline-flex items-center text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M10 19l-7-7m0 0l7-7m-7 7h18"
-              />
-            </svg>
-            <span className="font-medium">Back to Tools</span>
-          </a>
-
-          {savedStateAvailable && (
-            <div className="flex gap-2">
-              <button
-                onClick={restoreSavedState}
-                className="inline-flex items-center px-4 py-2 bg-amber-500 text-white font-medium rounded-lg hover:bg-amber-600 transition-colors shadow-md"
+              <svg
+                className="w-5 h-5 mr-2"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
               >
-                <svg
-                  className="w-5 h-5 mr-2"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                  />
-                </svg>
-                Resume Previous Analysis
-              </button>
-              <button
-                onClick={clearSavedState}
-                className="px-3 py-2 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 transition-colors"
-                title="Dismiss"
-              >
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">Query Fan Out Analysis</h1>
-          <p className="text-gray-600 dark:text-gray-300">
-            Analyze SERP results to discover content opportunities and identify cannibalization issues.
-          </p>
-        </div>
-
-        {/* Progress Indicator */}
-        {step !== 'idle' && (
-          <div className="mb-6 bg-white p-4 rounded-lg shadow-md">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-gray-700">Progress</span>
-              <span className="text-sm text-gray-600">{getStepLabel(step)}</span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div
-                className="bg-blue-600 h-2 rounded-full transition-all duration-500"
-                style={{
-                  width:
-                    step === 'fanout'
-                      ? '25%'
-                      : step === 'awaiting_confirmation'
-                      ? '33%'
-                      : step === 'serp'
-                      ? '66%'
-                      : step === 'cluster'
-                      ? '90%'
-                      : '100%',
-                }}
-              />
-            </div>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-1">
-            <Form onSubmit={handleSubmit} isLoading={step !== 'idle' && step !== 'complete' && step !== 'awaiting_confirmation'} />
-
-            {logs.length > 0 && (
-              <div className="mt-6">
-                <Diagnostics logs={logs} currentStep={step !== 'idle' ? getStepLabel(step) : undefined} />
-              </div>
-            )}
-          </div>
-
-          <div className="lg:col-span-2">
-            {(subQueries.length > 0 || serpResults.length > 0 || clusters.length > 0 || recommendations.length > 0) && (
-              <>
-                <Results
-                  subQueries={subQueries.length > 0 ? subQueries : undefined}
-                  serpResults={serpResults.length > 0 ? serpResults : undefined}
-                  clusters={clusters.length > 0 ? clusters : undefined}
-                  recommendations={recommendations.length > 0 ? recommendations : undefined}
-                  targetQuery={targetQuery || undefined}
-                  openaiApiKey={pendingInput?.openaiApiKey}
-                  onRemoveQuery={step === 'awaiting_confirmation' ? handleRemoveQuery : undefined}
-                  onAddQuery={step === 'awaiting_confirmation' ? handleAddQuery : undefined}
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M10 19l-7-7m0 0l7-7m-7 7h18"
                 />
+              </svg>
+              <span className="font-medium">Back to Tools</span>
+            </a>
 
-                {/* Confirmation Button */}
-                {step === 'awaiting_confirmation' && (
-                  <div className="mt-6 bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                          Ready to Continue?
-                        </h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-300">
-                          Review the sub-queries above. You can add or remove queries before proceeding.
-                        </p>
-                      </div>
-                      <button
-                        onClick={handleConfirm}
-                        className="px-6 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors shadow-md hover:shadow-lg"
-                      >
-                        Confirm & Continue
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-
-            {step === 'idle' && subQueries.length === 0 && (
-              <div className="bg-white p-12 rounded-lg shadow-md text-center">
-                <div className="text-gray-400 mb-4">
+            {savedStateAvailable && (
+              <div className="flex gap-2">
+                <button
+                  onClick={restoreSavedState}
+                  className="inline-flex items-center px-4 py-2 bg-amber-500 text-white font-medium rounded-lg hover:bg-amber-600 transition-colors shadow-md"
+                >
                   <svg
-                    className="mx-auto h-24 w-24"
+                    className="w-5 h-5 mr-2"
                     fill="none"
-                    viewBox="0 0 24 24"
                     stroke="currentColor"
+                    viewBox="0 0 24 24"
                   >
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
-                      strokeWidth={1}
-                      d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                      strokeWidth={2}
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
                     />
                   </svg>
-                </div>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Ready to Analyze</h3>
-                <p className="text-gray-600">
-                  Fill in the form and click &quot;Start Analysis&quot; to begin.
-                </p>
+                  Resume Previous Analysis
+                </button>
+                <button
+                  onClick={clearSavedState}
+                  className="px-3 py-2 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 transition-colors"
+                  title="Dismiss"
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
               </div>
             )}
           </div>
+
+          <div className="mb-8">
+            <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">Query Fan Out Analysis</h1>
+            <p className="text-gray-600 dark:text-gray-300">
+              Analyze SERP results to discover content opportunities and identify cannibalization issues.
+            </p>
+          </div>
+
+          {/* Progress Indicator */}
+          {step !== 'idle' && (
+            <div className="mb-6 bg-white p-4 rounded-lg shadow-md">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-gray-700">Progress</span>
+                <span className="text-sm text-gray-600">{getStepLabel(step)}</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-500"
+                  style={{
+                    width:
+                      step === 'fanout'
+                        ? '25%'
+                        : step === 'awaiting_confirmation'
+                          ? '33%'
+                          : step === 'serp'
+                            ? '66%'
+                            : step === 'cluster'
+                              ? '90%'
+                              : '100%',
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-1">
+              <Form onSubmit={handleSubmit} isLoading={step !== 'idle' && step !== 'complete' && step !== 'awaiting_confirmation'} />
+
+              {logs.length > 0 && (
+                <div className="mt-6">
+                  <Diagnostics logs={logs} currentStep={step !== 'idle' ? getStepLabel(step) : undefined} />
+                </div>
+              )}
+            </div>
+
+            <div className="lg:col-span-2">
+              {(subQueries.length > 0 || serpResults.length > 0 || clusters.length > 0 || recommendations.length > 0) && (
+                <>
+                  <Results
+                    subQueries={subQueries.length > 0 ? subQueries : undefined}
+                    serpResults={serpResults.length > 0 ? serpResults : undefined}
+                    clusters={clusters.length > 0 ? clusters : undefined}
+                    recommendations={recommendations.length > 0 ? recommendations : undefined}
+                    targetQuery={targetQuery || undefined}
+                    openaiApiKey={pendingInput?.openaiApiKey}
+                    onRemoveQuery={step === 'awaiting_confirmation' ? handleRemoveQuery : undefined}
+                    onAddQuery={step === 'awaiting_confirmation' ? handleAddQuery : undefined}
+                  />
+
+                  {/* Confirmation Button */}
+                  {step === 'awaiting_confirmation' && (
+                    <div className="mt-6 bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                            Ready to Continue?
+                          </h3>
+                          <p className="text-sm text-gray-600 dark:text-gray-300">
+                            Review the sub-queries above. You can add or remove queries before proceeding.
+                          </p>
+                        </div>
+                        <button
+                          onClick={handleConfirm}
+                          className="px-6 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors shadow-md hover:shadow-lg"
+                        >
+                          Confirm & Continue
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {step === 'idle' && subQueries.length === 0 && (
+                <div className="bg-white p-12 rounded-lg shadow-md text-center">
+                  <div className="text-gray-400 mb-4">
+                    <svg
+                      className="mx-auto h-24 w-24"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={1}
+                        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                      />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">Ready to Analyze</h3>
+                  <p className="text-gray-600">
+                    Fill in the form and click &quot;Start Analysis&quot; to begin.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
-    </main>
+      </main>
     </ThemeProvider>
   );
 }

@@ -55,7 +55,10 @@ const Form = ({ onSubmit, isLoading }: FormProps) => {
   const [language, setLanguage] = useState(process.env.NEXT_PUBLIC_DEFAULT_LANGUAGE || 'English');
   const [device, setDevice] = useState<'desktop' | 'mobile'>((process.env.NEXT_PUBLIC_DEFAULT_DEVICE as 'desktop' | 'mobile') || 'desktop');
   const [clusteringOverlapThreshold, setClusteringOverlapThreshold] = useState(parseInt(process.env.NEXT_PUBLIC_DEFAULT_CLUSTERING_OVERLAP || '4'));
+
   const [maxQueries, setMaxQueries] = useState(parseInt(process.env.NEXT_PUBLIC_MAX_QUERIES || '25'));
+  const [querySource, setQuerySource] = useState<'ai' | 'manual'>('ai');
+  const [manualQueries, setManualQueries] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,6 +76,8 @@ const Form = ({ onSubmit, isLoading }: FormProps) => {
       clusteringOverlapThreshold,
       maxQueries,
       mockMode,
+      querySource,
+      manualQueries: querySource === 'manual' ? manualQueries : undefined,
     });
   };
 
@@ -106,6 +111,32 @@ const Form = ({ onSubmit, isLoading }: FormProps) => {
             </p>
           </div>
         </label>
+      </div>
+
+
+
+      {/* Query Source Selection */}
+      <div className="flex p-1 bg-gray-100 dark:bg-gray-700 rounded-lg">
+        <button
+          type="button"
+          onClick={() => setQuerySource('ai')}
+          className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${querySource === 'ai'
+            ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm'
+            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+            }`}
+        >
+          ✨ AI Generation
+        </button>
+        <button
+          type="button"
+          onClick={() => setQuerySource('manual')}
+          className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${querySource === 'manual'
+            ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm'
+            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+            }`}
+        >
+          📝 Manual Entry
+        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -173,9 +204,29 @@ const Form = ({ onSubmit, isLoading }: FormProps) => {
             placeholder={mockMode ? "Not needed in mock mode" : "Enter your OpenAI API key"}
           />
           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            {mockMode ? "Mock mode uses sample data - no API needed" : "Used to generate sub-queries and semantic analysis. You can add/remove queries after generation."}
+            {mockMode ? "Mock mode uses sample data - no API needed" : "Used for semantic analysis and recommendations (required)."}
           </p>
         </div>
+
+        {querySource === 'manual' && (
+          <div className="md:col-span-2">
+            <label htmlFor="manualQueries" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Manual Queries (One per line) *
+            </label>
+            <textarea
+              id="manualQueries"
+              value={manualQueries}
+              onChange={(e) => setManualQueries(e.target.value)}
+              required
+              rows={5}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors font-mono text-sm"
+              placeholder="best seo tools&#10;seo software comparison&#10;free keyword research tools"
+            />
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Enter each query on a new line. These will be analyzed directly without AI expansion.
+            </p>
+          </div>
+        )}
 
         <div>
           <label htmlFor="dataForSeoApiPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -266,27 +317,29 @@ const Form = ({ onSubmit, isLoading }: FormProps) => {
           </div>
         </div>
 
-        <div>
-          <label htmlFor="maxQueries" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Max Queries to Analyze
-          </label>
-          <input
-            type="number"
-            id="maxQueries"
-            min="1"
-            max="50"
-            value={maxQueries}
-            onChange={(e) => setMaxQueries(parseInt(e.target.value) || 1)}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-          />
-          <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
-            <span className="font-medium">Estimated cost:</span>{' '}
-            <span className="text-green-600 dark:text-green-400 font-semibold">
-              ${(maxQueries * 0.03).toFixed(2)} - ${(maxQueries * 0.05).toFixed(2)}
-            </span>
-            {' '}(DataForSEO: ~$0.01/query, OpenAI: ~$0.02-0.04/query)
-          </p>
-        </div>
+        {querySource === 'ai' && (
+          <div>
+            <label htmlFor="maxQueries" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Max Queries to Analyze
+            </label>
+            <input
+              type="number"
+              id="maxQueries"
+              min="1"
+              max="50"
+              value={maxQueries}
+              onChange={(e) => setMaxQueries(parseInt(e.target.value) || 1)}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+            />
+            <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+              <span className="font-medium">Estimated cost:</span>{' '}
+              <span className="text-green-600 dark:text-green-400 font-semibold">
+                ${(maxQueries * 0.03).toFixed(2)} - ${(maxQueries * 0.05).toFixed(2)}
+              </span>
+              {' '}(DataForSEO: ~$0.01/query, OpenAI: ~$0.02-0.04/query)
+            </p>
+          </div>
+        )}
       </div>
 
       <button
@@ -296,7 +349,7 @@ const Form = ({ onSubmit, isLoading }: FormProps) => {
       >
         {isLoading ? 'Analyzing...' : 'Start Analysis'}
       </button>
-    </form>
+    </form >
   );
 };
 
