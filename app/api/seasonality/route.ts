@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { fetchHistoricalSearchVolume } from '@/lib/dataforseo';
+import { fetchHistoricalSearchVolume, fetchSerpEnrichment } from '@/lib/dataforseo';
 import { analyzeSeasonality, aggregateByCategory } from '@/lib/seasonality';
 import { SeasonalityResponse, MonthlySV } from '@/lib/types';
 
@@ -13,12 +13,13 @@ const RequestSchema = z.object({
     categoryMap: z.record(z.string()).optional(), // keyword -> category
     apiLogin: z.string().optional(),
     apiPassword: z.string().optional(),
+    enableSerpEnrichment: z.boolean().default(false), // Toggle SERP data fetching
 });
 
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
-        const { keywords, location, language, leadTimeDays, categoryMap, apiLogin, apiPassword } = RequestSchema.parse(body);
+        const { keywords, location, language, leadTimeDays, categoryMap, apiLogin, apiPassword, enableSerpEnrichment } = RequestSchema.parse(body);
 
         const login = apiLogin || process.env.DATAFORSEO_LOGIN;
         const password = apiPassword || process.env.DATAFORSEO_PASSWORD;
@@ -30,7 +31,7 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // Call DataForSEO API
+        // Call DataForSEO API for historical data
         const rawResults = await fetchHistoricalSearchVolume(
             keywords,
             location,
@@ -63,6 +64,20 @@ export async function POST(req: NextRequest) {
                     // Analyze
                     const category = categoryMap ? categoryMap[keyword] : undefined;
                     const analysis = analyzeSeasonality(keyword, history, leadTimeDays, category);
+
+                    // Fetch SERP enrichment data if enabled
+                    if (enableSerpEnrichment) {
+                        const serpData = await fetchSerpEnrichment(
+                            keyword,
+                            location,
+                            language,
+                            { login, password }
+                        );
+
+                        if (serpData) {
+                            analysis.serpData = serpData;
+                        }
+                    }
 
                     analyzedKeywords.push(analysis);
                 } catch (err) {

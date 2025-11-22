@@ -466,3 +466,162 @@ export function getMockSerpResults(queries: string[], targetPageUrl: string): Se
     };
   });
 }
+
+// ============================================================================
+// SERP Enrichment for Seasonality
+// ============================================================================
+
+export type SerpEnrichmentData = {
+  topUrls: Array<{
+    position: number;
+    url: string;
+    title: string;
+  }>;
+  serpFeatures: string[];
+  intent: 'Informational' | 'Commercial' | 'Transactional' | 'Navigational' | 'Mixed';
+  difficulty?: number;
+  cpc?: number;
+  competition?: 'Low' | 'Medium' | 'High';
+};
+
+/**
+ * Fetches SERP enrichment data for a keyword (top URLs, SERP features, intent, difficulty)
+ */
+export async function fetchSerpEnrichment(
+  keyword: string,
+  location: string,
+  language: string,
+  credentials: DataForSEOCredentials,
+  retryCount: number = 0
+): Promise<SerpEnrichmentData | null> {
+  const locationCode = getLocationCode(location);
+  const languageCode = getLanguageCode(language);
+
+  const requestBody = [
+    {
+      keyword,
+      location_code: locationCode,
+      language_code: languageCode,
+      device: 'desktop',
+    },
+  ];
+
+  try {
+    const authString = Buffer.from(`${credentials.login}:${credentials.password}`).toString('base64');
+
+    const response = await fetch(`${DATAFORSEO_API_BASE}/serp/google/organic/live/advanced`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${authString}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    // Handle rate limiting
+    if (response.status === 429) {
+      if (retryCount >= MAX_RETRIES) {
+        console.error(`Max retries exceeded for SERP enrichment: ${keyword}`);
+        return null;
+      }
+
+      const backoffTime = INITIAL_BACKOFF * Math.pow(2, retryCount);
+      await sleep(backoffTime);
+      return fetchSerpEnrichment(keyword, location, language, credentials, retryCount + 1);
+    }
+
+    // Handle server errors with retry
+    if (response.status >= 500) {
+      if (retryCount >= MAX_RETRIES) {
+        console.error(`Server error after ${MAX_RETRIES} retries for: ${keyword}`);
+        return null;
+      }
+
+      const backoffTime = INITIAL_BACKOFF * Math.pow(2, retryCount);
+      await sleep(backoffTime);
+      return fetchSerpEnrichment(keyword, location, language, credentials, retryCount + 1);
+    }
+
+    if (!response.ok) {
+      console.error(`SERP enrichment failed for ${keyword}: ${response.status}`);
+      return null;
+    }
+
+    const data = await response.json();
+
+    if (!data.tasks || data.tasks.length === 0 || !data.tasks[0].result || data.tasks[0].result.length === 0) {
+      return null;
+    }
+
+    const result = data.tasks[0].result[0];
+    const items = result.items || [];
+
+    // Extract top URLs (top 3 organic results)
+    const organicItems = items.filter((item: any) => item.type === 'organic');
+    const topUrls = organicItems
+      .slice(0, 3)
+      .map((item: any) => ({
+        position: item.rank_absolute,
+        url: item.url,
+        title: item.title,
+      }));
+
+    // Extract SERP features
+    const serpFeatures: string[] = [];
+    const featureTypes = items.map((item: any) => item.type);
+
+    if (featureTypes.includes('featured_snippet')) serpFeatures.push('Featured Snippet');
+    if (featureTypes.includes('people_also_ask')) serpFeatures.push('People Also Ask');
+    if (featureTypes.includes('video')) serpFeatures.push('Video');
+    if (featureTypes.includes('images')) serpFeatures.push('Images');
+    if (featureTypes.includes('local_pack')) serpFeatures.push('Local Pack');
+    if (featureTypes.includes('knowledge_graph')) serpFeatures.push('Knowledge Graph');
+    if (featureTypes.includes('shopping')) serpFeatures.push('Shopping');
+    if (featureTypes.includes('top_stories')) serpFeatures.push('Top Stories');
+
+    // Determine search intent based on SERP features and content
+    let intent: 'Informational' | 'Commercial' | 'Transactional' | 'Navigational' | 'Mixed' = 'Informational';
+
+    if (serpFeatures.includes('Shopping') || keyword.toLowerCase().includes('buy') || keyword.toLowerCase().includes('price')) {
+      intent = 'Transactional';
+    } else if (serpFeatures.includes('Local Pack') || keyword.toLowerCase().includes('near me')) {
+      intent = 'Transactional';
+    } else if (keyword.toLowerCase().includes('best') || keyword.toLowerCase().includes('review') || keyword.toLowerCase().includes('vs')) {
+      intent = 'Commercial';
+    } else if (serpFeatures.includes('Knowledge Graph')) {
+      intent = 'Navigational';
+    } else if (serpFeatures.length > 2) {
+      intent = 'Mixed';
+    }
+
+    // Get keyword difficulty and CPC if available from keyword_properties
+    let difficulty: number | undefined;
+    let cpc: number | undefined;
+    let competition: 'Low' | 'Medium' | 'High' | undefined;
+
+    if (result.keyword_properties) {
+      difficulty = result.keyword_properties.keyword_difficulty;
+      cpc = result.keyword_properties.cpc;
+
+      // Map competition level
+      const compLevel = result.keyword_properties.competition;
+      if (compLevel !== undefined) {
+        if (compLevel < 0.33) competition = 'Low';
+        else if (compLevel < 0.67) competition = 'Medium';
+        else competition = 'High';
+      }
+    }
+
+    return {
+      topUrls,
+      serpFeatures,
+      intent,
+      difficulty,
+      cpc,
+      competition,
+    };
+  } catch (error) {
+    console.error(`Error fetching SERP enrichment for ${keyword}:`, error);
+    return null;
+  }
+}

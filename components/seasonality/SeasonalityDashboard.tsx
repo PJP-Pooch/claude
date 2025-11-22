@@ -163,6 +163,12 @@ export default function SeasonalityDashboard({ data, onSelectKeyword, selectedKe
                             <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                                 Type
                             </th>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                Intent
+                            </th>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                Difficulty
+                            </th>
                         </tr>
                     </thead>
                     <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
@@ -188,8 +194,8 @@ export default function SeasonalityDashboard({ data, onSelectKeyword, selectedKe
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                     <span className={`font-medium ${k.percentDifference > 75 ? 'text-green-600 dark:text-green-400' :
-                                            k.percentDifference > 25 ? 'text-yellow-600 dark:text-yellow-400' :
-                                                'text-gray-500'
+                                        k.percentDifference > 25 ? 'text-yellow-600 dark:text-yellow-400' :
+                                            'text-gray-500'
                                         }`}>
                                         +{k.percentDifference.toFixed(0)}%
                                     </span>
@@ -210,11 +216,42 @@ export default function SeasonalityDashboard({ data, onSelectKeyword, selectedKe
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${k.seasonalityType === 'Sharp Seasonal' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
-                                            k.seasonalityType === 'Growing' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
-                                                'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
+                                        k.seasonalityType === 'Growing' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                                            'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
                                         }`}>
                                         {k.seasonalityType}
                                     </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                    {k.serpData?.intent ? (
+                                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${k.serpData.intent === 'Transactional' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                                                k.serpData.intent === 'Commercial' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
+                                                    k.serpData.intent === 'Informational' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
+                                                        'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
+                                            }`}>
+                                            {k.serpData.intent}
+                                        </span>
+                                    ) : (
+                                        <span className="text-gray-400">-</span>
+                                    )}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                    {k.serpData?.difficulty !== undefined ? (
+                                        <div className="flex items-center">
+                                            <div className="w-12 bg-gray-200 rounded-full h-2 mr-2 dark:bg-gray-700">
+                                                <div
+                                                    className={`h-2 rounded-full ${k.serpData.difficulty > 70 ? 'bg-red-600' :
+                                                            k.serpData.difficulty > 40 ? 'bg-yellow-600' :
+                                                                'bg-green-600'
+                                                        }`}
+                                                    style={{ width: `${k.serpData.difficulty}%` }}
+                                                ></div>
+                                            </div>
+                                            <span className="text-xs">{k.serpData.difficulty}</span>
+                                        </div>
+                                    ) : (
+                                        <span className="text-gray-400">-</span>
+                                    )}
                                 </td>
                             </tr>
                         ))}

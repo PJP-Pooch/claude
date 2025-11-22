@@ -10,6 +10,7 @@ interface SeasonalityInputProps {
         categoryMap: Record<string, string>;
         apiLogin?: string;
         apiPassword?: string;
+        enableSerpEnrichment?: boolean;
     }) => void;
     isLoading: boolean;
     initialValues?: {
@@ -37,6 +38,7 @@ export default function SeasonalityInput({ onSubmit, isLoading, initialValues }:
     const [apiLogin, setApiLogin] = useState(initialValues?.apiLogin || '');
     const [apiPassword, setApiPassword] = useState(initialValues?.apiPassword || '');
     const [showApiCreds, setShowApiCreds] = useState(!!initialValues?.apiLogin);
+    const [enableSerpEnrichment, setEnableSerpEnrichment] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -77,6 +79,7 @@ export default function SeasonalityInput({ onSubmit, isLoading, initialValues }:
             categoryMap,
             apiLogin: apiLogin || undefined,
             apiPassword: apiPassword || undefined,
+            enableSerpEnrichment,
         });
     };
 
@@ -182,48 +185,60 @@ export default function SeasonalityInput({ onSubmit, isLoading, initialValues }:
                 </div>
 
                 <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-                    <button
-                        type="button"
-                        onClick={() => setShowApiCreds(!showApiCreds)}
-                        className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 flex items-center"
-                    >
-                        <span className="mr-1">{showApiCreds ? '▼' : '▶'}</span>
-                        API Settings (Optional)
-                    </button>
+                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                        DataForSEO API Credentials
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Login
+                            </label>
+                            <input
+                                type="text"
+                                value={apiLogin}
+                                onChange={(e) => setApiLogin(e.target.value)}
+                                className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                placeholder="email@example.com"
+                                disabled={isLoading}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Password
+                            </label>
+                            <input
+                                type="password"
+                                value={apiPassword}
+                                onChange={(e) => setApiPassword(e.target.value)}
+                                className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                placeholder="API Password"
+                                disabled={isLoading}
+                            />
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 md:col-span-2">
+                            Leave blank to use server-side environment variables.
+                        </p>
+                    </div>
+                </div>
 
-                    {showApiCreds && (
-                        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-md">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    DataForSEO Login
-                                </label>
-                                <input
-                                    type="text"
-                                    value={apiLogin}
-                                    onChange={(e) => setApiLogin(e.target.value)}
-                                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                    placeholder="email@example.com"
-                                    disabled={isLoading}
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    DataForSEO Password
-                                </label>
-                                <input
-                                    type="password"
-                                    value={apiPassword}
-                                    onChange={(e) => setApiPassword(e.target.value)}
-                                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                    placeholder="API Password"
-                                    disabled={isLoading}
-                                />
-                            </div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 md:col-span-2">
-                                Leave blank to use server-side environment variables.
+                <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                    <label className="flex items-center space-x-3 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={enableSerpEnrichment}
+                            onChange={(e) => setEnableSerpEnrichment(e.target.checked)}
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                            disabled={isLoading}
+                        />
+                        <div>
+                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Enable SERP Enrichment
+                            </span>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                Fetch top URLs, SERP features, intent, and keyword difficulty (uses additional API credits)
                             </p>
                         </div>
-                    )}
+                    </label>
                 </div>
 
                 <div className="flex justify-end">

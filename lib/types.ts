@@ -312,6 +312,20 @@ export interface KeywordSeasonality {
 
   // Grouping
   category?: string;
+
+  // SERP Data (enrichment)
+  serpData?: {
+    topUrls: Array<{
+      position: number;
+      url: string;
+      title: string;
+    }>;
+    serpFeatures: string[]; // e.g. ['Featured Snippet', 'People Also Ask', 'Video']
+    intent: 'Informational' | 'Commercial' | 'Transactional' | 'Navigational' | 'Mixed';
+    difficulty?: number; // 0-100 keyword difficulty score
+    cpc?: number; // Cost per click in USD
+    competition?: 'Low' | 'Medium' | 'High';
+  };
 }
 
 export interface SeasonalityResponse {
