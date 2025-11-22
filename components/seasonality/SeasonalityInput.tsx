@@ -8,6 +8,8 @@ interface SeasonalityInputProps {
         language: string;
         leadTimeDays: number;
         categoryMap: Record<string, string>;
+        apiLogin?: string;
+        apiPassword?: string;
     }) => void;
     isLoading: boolean;
 }
@@ -17,6 +19,9 @@ export default function SeasonalityInput({ onSubmit, isLoading }: SeasonalityInp
     const [location, setLocation] = useState('United Kingdom');
     const [language, setLanguage] = useState('English');
     const [leadTime, setLeadTime] = useState(90);
+    const [apiLogin, setApiLogin] = useState('');
+    const [apiPassword, setApiPassword] = useState('');
+    const [showApiCreds, setShowApiCreds] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -54,7 +59,9 @@ export default function SeasonalityInput({ onSubmit, isLoading }: SeasonalityInp
             location,
             language,
             leadTimeDays: leadTime,
-            categoryMap
+            categoryMap,
+            apiLogin: apiLogin || undefined,
+            apiPassword: apiPassword || undefined,
         });
     };
 
@@ -62,6 +69,11 @@ export default function SeasonalityInput({ onSubmit, isLoading }: SeasonalityInp
         setInput(
             "winter coats | Clothing\nsummer dresses | Clothing\nchristmas gifts | Seasonal\nsunscreen | Health\nflu vaccine | Health\nback to school supplies | Events\nhalloween costumes | Events\nvalentines day gifts | Events"
         );
+    };
+
+    const clearInput = () => {
+        setInput('');
+        setError(null);
     };
 
     return (
@@ -72,13 +84,22 @@ export default function SeasonalityInput({ onSubmit, isLoading }: SeasonalityInp
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                             Keywords (one per line)
                         </label>
-                        <button
-                            type="button"
-                            onClick={loadExample}
-                            className="text-sm text-blue-600 hover:text-blue-500 dark:text-blue-400"
-                        >
-                            Paste Example
-                        </button>
+                        <div className="space-x-4">
+                            <button
+                                type="button"
+                                onClick={clearInput}
+                                className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                            >
+                                Clear
+                            </button>
+                            <button
+                                type="button"
+                                onClick={loadExample}
+                                className="text-sm text-blue-600 hover:text-blue-500 dark:text-blue-400"
+                            >
+                                Paste Example
+                            </button>
+                        </div>
                     </div>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
                         Optional: Add category with pipe, e.g. "keyword | category"
@@ -145,13 +166,58 @@ export default function SeasonalityInput({ onSubmit, isLoading }: SeasonalityInp
                     </div>
                 </div>
 
+                <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                    <button
+                        type="button"
+                        onClick={() => setShowApiCreds(!showApiCreds)}
+                        className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 flex items-center"
+                    >
+                        <span className="mr-1">{showApiCreds ? '▼' : '▶'}</span>
+                        API Settings (Optional)
+                    </button>
+
+                    {showApiCreds && (
+                        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-md">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    DataForSEO Login
+                                </label>
+                                <input
+                                    type="text"
+                                    value={apiLogin}
+                                    onChange={(e) => setApiLogin(e.target.value)}
+                                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                    placeholder="email@example.com"
+                                    disabled={isLoading}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    DataForSEO Password
+                                </label>
+                                <input
+                                    type="password"
+                                    value={apiPassword}
+                                    onChange={(e) => setApiPassword(e.target.value)}
+                                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                    placeholder="API Password"
+                                    disabled={isLoading}
+                                />
+                            </div>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 md:col-span-2">
+                                Leave blank to use server-side environment variables.
+                            </p>
+                        </div>
+                    )}
+                </div>
+
                 <div className="flex justify-end">
                     <button
                         type="submit"
                         disabled={isLoading}
                         className={`px-6 py-2 rounded-md text-white font-medium ${isLoading
-                                ? 'bg-blue-400 cursor-not-allowed'
-                                : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
+                            ? 'bg-blue-400 cursor-not-allowed'
+                            : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
                             }`}
                     >
                         {isLoading ? (

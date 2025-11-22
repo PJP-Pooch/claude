@@ -11,15 +11,17 @@ const RequestSchema = z.object({
     language: z.string().default('English'),
     leadTimeDays: z.number().default(90),
     categoryMap: z.record(z.string()).optional(), // keyword -> category
+    apiLogin: z.string().optional(),
+    apiPassword: z.string().optional(),
 });
 
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
-        const { keywords, location, language, leadTimeDays, categoryMap } = RequestSchema.parse(body);
+        const { keywords, location, language, leadTimeDays, categoryMap, apiLogin, apiPassword } = RequestSchema.parse(body);
 
-        const login = process.env.DATAFORSEO_LOGIN;
-        const password = process.env.DATAFORSEO_PASSWORD;
+        const login = apiLogin || process.env.DATAFORSEO_LOGIN;
+        const password = apiPassword || process.env.DATAFORSEO_PASSWORD;
 
         if (!login || !password) {
             return NextResponse.json(
@@ -29,8 +31,6 @@ export async function POST(req: NextRequest) {
         }
 
         // Call DataForSEO API
-        // Note: For large lists (> 700 keywords), we might need to batch. 
-        // The user limit is 500 in validation, so single call is fine for now.
         const rawResults = await fetchHistoricalSearchVolume(
             keywords,
             location,

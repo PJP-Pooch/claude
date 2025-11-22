@@ -7,8 +7,9 @@ import SeasonalityDashboard from '@/components/seasonality/SeasonalityDashboard'
 import SeasonalityChart from '@/components/seasonality/SeasonalityChart';
 import SeasonalityCalendar from '@/components/seasonality/SeasonalityCalendar';
 import { Calendar, LayoutDashboard, TrendingUp } from 'lucide-react';
+import ThemeToggle from '@/components/ThemeToggle';
 
-type ViewMode = 'dashboard' | 'calendar' | 'next90';
+type ViewMode = 'dashboard' | 'calendar';
 
 export default function SeasonalityPage() {
     const [data, setData] = useState<SeasonalityResponse | null>(null);
@@ -47,13 +48,16 @@ export default function SeasonalityPage() {
     return (
         <div className="min-h-screen bg-gray-100 dark:bg-gray-900 py-8 px-4 sm:px-6 lg:px-8">
             <div className="max-w-7xl mx-auto">
-                <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                        Seasonal Search Volume Explorer
-                    </h1>
-                    <p className="mt-2 text-gray-600 dark:text-gray-400">
-                        Analyze historical search trends, forecast future demand, and plan your content calendar.
-                    </p>
+                <div className="mb-8 flex justify-between items-start">
+                    <div>
+                        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+                            Seasonal Search Volume Explorer
+                        </h1>
+                        <p className="mt-2 text-gray-600 dark:text-gray-400">
+                            Analyze historical search trends, forecast future demand, and plan your content calendar.
+                        </p>
+                    </div>
+                    <ThemeToggle />
                 </div>
 
                 {!data && (
@@ -82,8 +86,8 @@ export default function SeasonalityPage() {
                             <button
                                 onClick={() => setViewMode('dashboard')}
                                 className={`flex items-center px-4 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === 'dashboard'
-                                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
-                                        : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
+                                    : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
                                     }`}
                             >
                                 <LayoutDashboard className="w-4 h-4 mr-2" />
@@ -92,8 +96,8 @@ export default function SeasonalityPage() {
                             <button
                                 onClick={() => setViewMode('calendar')}
                                 className={`flex items-center px-4 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === 'calendar'
-                                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
-                                        : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
+                                    : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
                                     }`}
                             >
                                 <Calendar className="w-4 h-4 mr-2" />
