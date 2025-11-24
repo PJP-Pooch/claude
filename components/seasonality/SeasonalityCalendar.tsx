@@ -1,6 +1,7 @@
 import React from 'react';
 import { KeywordSeasonality } from '@/lib/types';
 import { format, parseISO, addMonths } from 'date-fns';
+import SeasonalityChart from './SeasonalityChart';
 
 interface SeasonalityCalendarProps {
     keywords: KeywordSeasonality[];
@@ -101,32 +102,54 @@ export default function SeasonalityCalendar({ keywords, onSelectKeyword }: Seaso
                         </div>
                         <div className="divide-y divide-gray-200 dark:divide-gray-700">
                             {tasks.map(task => (
-                                <div
-                                    key={task.keyword}
-                                    onClick={() => onSelectKeyword(task)}
-                                    className="p-4 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer transition-colors flex items-center justify-between"
-                                >
-                                    <div>
-                                        <h4 className="text-sm font-medium text-gray-900 dark:text-white">
-                                            {task.keyword}
-                                        </h4>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                            Peak in {task.peakMonth} • Priority: {task.priorityScore.toFixed(1)}
-                                        </p>
+                                <details key={task.keyword} className="group">
+                                    <summary className="p-4 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer transition-colors flex items-center justify-between list-none">
+                                        <div>
+                                            <h4 className="text-sm font-medium text-gray-900 dark:text-white">
+                                                {task.keyword}
+                                            </h4>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                                Peak in {task.peakMonth} • Priority: {task.priorityScore.toFixed(1)}
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center space-x-2">
+                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getActionType(task).color}`}>
+                                                {getActionType(task).type}
+                                            </span>
+                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${task.seasonalityType === 'Sharp Seasonal' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
+                                                }`}>
+                                                {task.seasonalityType}
+                                            </span>
+                                            <span className="text-sm text-gray-500 dark:text-gray-400">
+                                                {format(parseISO(task.startOptimizingDate), 'MMM d')}
+                                            </span>
+                                            <span className="transform group-open:rotate-180 transition-transform ml-2">
+                                                <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                </svg>
+                                            </span>
+                                        </div>
+                                    </summary>
+                                    <div className="px-4 pb-4 bg-gray-50 dark:bg-gray-900/50">
+                                        <div className="h-64 w-full mt-4">
+                                            <SeasonalityChart keywordData={task} />
+                                        </div>
+                                        <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
+                                            <div>
+                                                <span className="text-gray-500 dark:text-gray-400 block">Content Stage</span>
+                                                <span className="text-gray-900 dark:text-white font-medium">{task.contentStage}</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-gray-500 dark:text-gray-400 block">Lead Time</span>
+                                                <span className="text-gray-900 dark:text-white font-medium">{task.leadTimeDays} days</span>
+                                            </div>
+                                        </div>
+                                        <div className="mt-4">
+                                            <span className="text-gray-500 dark:text-gray-400 block text-sm mb-1">Suggestion</span>
+                                            <p className="text-sm text-gray-700 dark:text-gray-300">{task.contentSuggestion}</p>
+                                        </div>
                                     </div>
-                                    <div className="flex items-center space-x-2">
-                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getActionType(task).color}`}>
-                                            {getActionType(task).type}
-                                        </span>
-                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${task.seasonalityType === 'Sharp Seasonal' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
-                                            }`}>
-                                            {task.seasonalityType}
-                                        </span>
-                                        <span className="text-sm text-gray-500 dark:text-gray-400">
-                                            {format(parseISO(task.startOptimizingDate), 'MMM d')}
-                                        </span>
-                                    </div>
-                                </div>
+                                </details>
                             ))}
                         </div>
                     </div>
