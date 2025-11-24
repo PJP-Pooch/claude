@@ -18,7 +18,7 @@ export default function SeasonalityCalendar({ keywords, onSelectKeyword }: Seaso
         }
 
         if (rank <= 20) {
-            return { type: 'Upcycle', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' };
+            return { type: 'Upcycle', color: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200' };
         }
 
         // rank 21-100
@@ -130,11 +130,11 @@ export default function SeasonalityCalendar({ keywords, onSelectKeyword }: Seaso
                                             </span>
                                         </div>
                                     </summary>
-                                    <div className="p-6 bg-gray-50 dark:bg-gray-900/50 space-y-6">
+                                    <div className="p-6 bg-gray-50 dark:bg-gray-900/50 space-y-4">
                                         {/* Chart */}
                                         <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
                                             <h5 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Historical & Forecast</h5>
-                                            <div className="h-64 w-full">
+                                            <div className="h-48 w-full">
                                                 <SeasonalityChart keywordData={task} />
                                             </div>
                                         </div>
@@ -170,9 +170,9 @@ export default function SeasonalityCalendar({ keywords, onSelectKeyword }: Seaso
                                                     <div>
                                                         <span className="text-xs text-gray-500 dark:text-gray-400 block mb-1">Search Intent</span>
                                                         <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${task.serpData.intent === 'Transactional' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
-                                                                task.serpData.intent === 'Commercial' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
-                                                                    task.serpData.intent === 'Informational' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
-                                                                        'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
+                                                            task.serpData.intent === 'Commercial' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
+                                                                task.serpData.intent === 'Informational' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
+                                                                    'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
                                                             }`}>
                                                             {task.serpData.intent}
                                                         </span>
@@ -192,7 +192,7 @@ export default function SeasonalityCalendar({ keywords, onSelectKeyword }: Seaso
                                                 </div>
 
                                                 {/* SERP Features */}
-                                                {task.serpData.serpFeatures.length > 0 && (
+                                                {task.serpData.serpFeatures && task.serpData.serpFeatures.length > 0 && (
                                                     <div className="mb-4">
                                                         <span className="text-xs text-gray-500 dark:text-gray-400 block mb-2">SERP Features</span>
                                                         <div className="flex flex-wrap gap-1">
@@ -206,7 +206,7 @@ export default function SeasonalityCalendar({ keywords, onSelectKeyword }: Seaso
                                                 )}
 
                                                 {/* Top URLs */}
-                                                {task.serpData.topUrls.length > 0 && (
+                                                {task.serpData.topUrls && task.serpData.topUrls.length > 0 && (
                                                     <div>
                                                         <span className="text-xs text-gray-500 dark:text-gray-400 block mb-2">Top Ranking URLs</span>
                                                         <div className="space-y-2">

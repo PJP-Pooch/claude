@@ -84,7 +84,7 @@ export default function SeasonalityPage() {
 
                     <div className="mb-8">
                         <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
-                            Seasonal Search Volume Explorer
+                            Seasonal Content Planner
                         </h1>
                         <p className="text-gray-600 dark:text-gray-300">
                             Analyze historical search trends, forecast future demand, and plan your content calendar.

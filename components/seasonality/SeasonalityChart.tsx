@@ -65,8 +65,8 @@ export default function SeasonalityChart({ keywordData }: SeasonalityChartProps)
                 </div>
                 <div className="text-right">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${keywordData.seasonalityType === 'Sharp Seasonal' ? 'bg-red-100 text-red-800' :
-                            keywordData.seasonalityType === 'Growing' ? 'bg-green-100 text-green-800' :
-                                'bg-blue-100 text-blue-800'
+                        keywordData.seasonalityType === 'Growing' ? 'bg-green-100 text-green-800' :
+                            'bg-blue-100 text-blue-800'
                         }`}>
                         {keywordData.seasonalityType}
                     </span>
@@ -103,7 +103,20 @@ export default function SeasonalityChart({ keywordData }: SeasonalityChartProps)
                         formatter={(value: number) => [value.toLocaleString(), undefined]}
                     />
                     <Legend />
-                    <ReferenceLine x={keywordData.startOptimizingDate.substring(0, 7)} stroke="red" label="Start" strokeDasharray="3 3" />
+                    <ReferenceLine
+                        x={keywordData.startOptimizingDate.substring(0, 7)}
+                        stroke="#EF4444"
+                        strokeWidth={2}
+                        label={{
+                            value: 'Start',
+                            position: 'top',
+                            fill: '#EF4444',
+                            fontSize: 14,
+                            fontWeight: 'bold',
+                            offset: 10
+                        }}
+                        strokeDasharray="5 5"
+                    />
                     <Area
                         type="monotone"
                         dataKey="volume"
