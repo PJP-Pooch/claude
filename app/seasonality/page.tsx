@@ -168,8 +168,8 @@ export default function SeasonalityPage() {
                                         />
                                     )}
 
-                                    {/* Chart Below Table - Full Width */}
-                                    {selectedKeyword && (
+                                    {/* Chart Below Table - Full Width - Only in Dashboard View */}
+                                    {viewMode === 'dashboard' && selectedKeyword && (
                                         <div className="space-y-6">
                                             {/* Chart Container - Collapsible */}
                                             <div className="bg-white dark:bg-gray-800 rounded-lg shadow">

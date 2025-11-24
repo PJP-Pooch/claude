@@ -100,9 +100,9 @@ export default function SeasonalityCalendar({ keywords, onSelectKeyword }: Seaso
                                 {format(month, 'MMMM yyyy')}
                             </h3>
                         </div>
-                        <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                        <div>
                             {tasks.map(task => (
-                                <details key={task.keyword} className="group">
+                                <details key={task.keyword} className="group border-b border-gray-200 dark:border-gray-700 last:border-b-0">
                                     <summary className="p-4 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer transition-colors flex items-center justify-between list-none">
                                         <div>
                                             <h4 className="text-sm font-medium text-gray-900 dark:text-white">
@@ -130,24 +130,104 @@ export default function SeasonalityCalendar({ keywords, onSelectKeyword }: Seaso
                                             </span>
                                         </div>
                                     </summary>
-                                    <div className="px-4 pb-4 bg-gray-50 dark:bg-gray-900/50">
-                                        <div className="h-64 w-full mt-4">
-                                            <SeasonalityChart keywordData={task} />
-                                        </div>
-                                        <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
-                                            <div>
-                                                <span className="text-gray-500 dark:text-gray-400 block">Content Stage</span>
-                                                <span className="text-gray-900 dark:text-white font-medium">{task.contentStage}</span>
-                                            </div>
-                                            <div>
-                                                <span className="text-gray-500 dark:text-gray-400 block">Lead Time</span>
-                                                <span className="text-gray-900 dark:text-white font-medium">{task.leadTimeDays} days</span>
+                                    <div className="p-6 bg-gray-50 dark:bg-gray-900/50 space-y-6">
+                                        {/* Chart */}
+                                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                                            <h5 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Historical & Forecast</h5>
+                                            <div className="h-64 w-full">
+                                                <SeasonalityChart keywordData={task} />
                                             </div>
                                         </div>
-                                        <div className="mt-4">
-                                            <span className="text-gray-500 dark:text-gray-400 block text-sm mb-1">Suggestion</span>
-                                            <p className="text-sm text-gray-700 dark:text-gray-300">{task.contentSuggestion}</p>
+
+                                        {/* Planning Insights */}
+                                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                                            <h5 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Planning Insights</h5>
+                                            <div className="grid grid-cols-3 gap-4 mb-4">
+                                                <div>
+                                                    <span className="text-xs text-gray-500 dark:text-gray-400 block">Content Stage</span>
+                                                    <span className="text-sm text-gray-900 dark:text-white font-medium">{task.contentStage}</span>
+                                                </div>
+                                                <div>
+                                                    <span className="text-xs text-gray-500 dark:text-gray-400 block">Lead Time</span>
+                                                    <span className="text-sm text-gray-900 dark:text-white font-medium">{task.leadTimeDays} days</span>
+                                                </div>
+                                                <div>
+                                                    <span className="text-xs text-gray-500 dark:text-gray-400 block">Start Date</span>
+                                                    <span className="text-sm text-blue-600 dark:text-blue-400 font-medium">{task.startOptimizingDate}</span>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <span className="text-xs text-gray-500 dark:text-gray-400 block mb-1">Suggestion</span>
+                                                <p className="text-sm text-gray-700 dark:text-gray-300">{task.contentSuggestion}</p>
+                                            </div>
                                         </div>
+
+                                        {/* SERP Intelligence */}
+                                        {task.serpData && (
+                                            <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                                                <h5 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">SERP Intelligence</h5>
+                                                <div className="grid grid-cols-3 gap-4 mb-4">
+                                                    <div>
+                                                        <span className="text-xs text-gray-500 dark:text-gray-400 block mb-1">Search Intent</span>
+                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${task.serpData.intent === 'Transactional' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                                                                task.serpData.intent === 'Commercial' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
+                                                                    task.serpData.intent === 'Informational' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
+                                                                        'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
+                                                            }`}>
+                                                            {task.serpData.intent}
+                                                        </span>
+                                                    </div>
+                                                    {task.serpData.difficulty !== undefined && (
+                                                        <div>
+                                                            <span className="text-xs text-gray-500 dark:text-gray-400 block mb-1">Difficulty</span>
+                                                            <span className="text-sm text-gray-900 dark:text-white font-medium">{task.serpData.difficulty}/100</span>
+                                                        </div>
+                                                    )}
+                                                    {task.serpData.cpc !== undefined && (
+                                                        <div>
+                                                            <span className="text-xs text-gray-500 dark:text-gray-400 block mb-1">CPC</span>
+                                                            <span className="text-sm text-gray-900 dark:text-white font-medium">${task.serpData.cpc.toFixed(2)}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* SERP Features */}
+                                                {task.serpData.serpFeatures.length > 0 && (
+                                                    <div className="mb-4">
+                                                        <span className="text-xs text-gray-500 dark:text-gray-400 block mb-2">SERP Features</span>
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {task.serpData.serpFeatures.map((feature, idx) => (
+                                                                <span key={idx} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                                                                    {feature}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Top URLs */}
+                                                {task.serpData.topUrls.length > 0 && (
+                                                    <div>
+                                                        <span className="text-xs text-gray-500 dark:text-gray-400 block mb-2">Top Ranking URLs</span>
+                                                        <div className="space-y-2">
+                                                            {task.serpData.topUrls.map((urlData, idx) => (
+                                                                <div key={idx} className="flex items-start space-x-2 text-xs">
+                                                                    <span className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 font-medium">
+                                                                        {urlData.position}
+                                                                    </span>
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <p className="text-gray-900 dark:text-white font-medium truncate">{urlData.title}</p>
+                                                                        <a href={urlData.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline truncate block">
+                                                                            {urlData.url}
+                                                                        </a>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                 </details>
                             ))}
