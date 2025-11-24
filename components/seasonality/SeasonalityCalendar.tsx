@@ -1,6 +1,6 @@
 import React from 'react';
 import { KeywordSeasonality } from '@/lib/types';
-import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths } from 'date-fns';
+import { format, parseISO, addMonths } from 'date-fns';
 
 interface SeasonalityCalendarProps {
     keywords: KeywordSeasonality[];
@@ -51,7 +51,7 @@ export default function SeasonalityCalendar({ keywords, onSelectKeyword }: Seaso
             monthTasks.forEach(task => {
                 const action = getActionType(task);
                 rows.push([
-                    `Start optimizing: ${task.keyword}`,
+                    task.keyword,
                     task.startOptimizingDate,
                     `Peak in ${task.peakMonth}. ${task.contentSuggestion}`,
                     task.priorityScore.toFixed(1),
@@ -108,7 +108,7 @@ export default function SeasonalityCalendar({ keywords, onSelectKeyword }: Seaso
                                 >
                                     <div>
                                         <h4 className="text-sm font-medium text-gray-900 dark:text-white">
-                                            Start optimizing: {task.keyword}
+                                            {task.keyword}
                                         </h4>
                                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                                             Peak in {task.peakMonth} • Priority: {task.priorityScore.toFixed(1)}

@@ -171,14 +171,25 @@ export default function SeasonalityPage() {
                                     {/* Chart Below Table - Full Width */}
                                     {selectedKeyword && (
                                         <div className="space-y-6">
-                                            {/* Chart Container - Bigger */}
-                                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                                                    {selectedKeyword.keyword} - Historical & Forecast
-                                                </h3>
-                                                <div className="h-96 w-full">
-                                                    <SeasonalityChart keywordData={selectedKeyword} />
-                                                </div>
+                                            {/* Chart Container - Collapsible */}
+                                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+                                                <details className="group" open>
+                                                    <summary className="flex items-center justify-between p-6 cursor-pointer list-none">
+                                                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                                            Historical & Forecast
+                                                        </h3>
+                                                        <span className="transform group-open:rotate-180 transition-transform">
+                                                            <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                            </svg>
+                                                        </span>
+                                                    </summary>
+                                                    <div className="px-6 pb-6 border-t border-gray-200 dark:border-gray-700 pt-4">
+                                                        <div className="h-96 w-full">
+                                                            <SeasonalityChart keywordData={selectedKeyword} />
+                                                        </div>
+                                                    </div>
+                                                </details>
                                             </div>
 
                                             {/* Planning Insights */}
