@@ -484,6 +484,7 @@ export type SerpEnrichmentData = {
   competition?: 'Low' | 'Medium' | 'High';
   currentRank?: number;
   currentUrl?: string;
+  inAiOverview?: boolean;
 };
 
 /**
@@ -514,6 +515,8 @@ export async function fetchSerpEnrichmentBatch(
       location_code: locationCode,
       language_code: languageCode,
       device: 'desktop',
+      depth: 100, // Ensure we get top 100 results
+      load_async_ai_overview: true, // Request AI Overview
     }));
 
     try {
@@ -569,8 +572,10 @@ export async function fetchSerpEnrichmentBatch(
         // Check for target domain ranking
         let currentRank: number | undefined;
         let currentUrl: string | undefined;
+        let inAiOverview: boolean | undefined;
 
         if (targetDomain) {
+          // Check organic rankings (top 100)
           const domainMatch = organicItems.find((item: any) => {
             try {
               return item.url && (item.url.includes(targetDomain) || new URL(item.url).hostname.includes(targetDomain));
@@ -582,6 +587,29 @@ export async function fetchSerpEnrichmentBatch(
           if (domainMatch) {
             currentRank = domainMatch.rank_absolute;
             currentUrl = domainMatch.url;
+          }
+
+          // Check AI Overview
+          const aiOverviewItem = items.find((item: any) => item.type === 'ai_overview');
+          if (aiOverviewItem) {
+            inAiOverview = false;
+            if (aiOverviewItem.items && Array.isArray(aiOverviewItem.items)) {
+              for (const subItem of aiOverviewItem.items) {
+                if (subItem.references && Array.isArray(subItem.references)) {
+                  for (const ref of subItem.references) {
+                    try {
+                      if (ref.url && (ref.url.includes(targetDomain) || new URL(ref.url).hostname.includes(targetDomain))) {
+                        inAiOverview = true;
+                        break;
+                      }
+                    } catch (e) {
+                      // Ignore URL parsing errors
+                    }
+                  }
+                }
+                if (inAiOverview) break;
+              }
+            }
           }
         }
 
@@ -597,6 +625,7 @@ export async function fetchSerpEnrichmentBatch(
         if (featureTypes.includes('knowledge_graph')) serpFeatures.push('Knowledge Graph');
         if (featureTypes.includes('shopping')) serpFeatures.push('Shopping');
         if (featureTypes.includes('top_stories')) serpFeatures.push('Top Stories');
+        if (featureTypes.includes('ai_overview')) serpFeatures.push('AI Overview');
 
         // Determine search intent based on SERP features and content
         let intent: 'Informational' | 'Commercial' | 'Transactional' | 'Navigational' | 'Mixed' = 'Informational';
@@ -639,7 +668,8 @@ export async function fetchSerpEnrichmentBatch(
           cpc,
           competition,
           currentRank,
-          currentUrl
+          currentUrl,
+          inAiOverview
         };
       });
 

@@ -62,7 +62,7 @@ export default function SeasonalityDashboard({ data, onSelectKeyword, selectedKe
     const downloadCSV = () => {
         const headers = [
             'Keyword', 'Category', 'Average SV', 'Peak Month', 'Peak Vol',
-            '% Diff', 'YoY Growth', 'Priority', 'Start Date', 'Type', 'Content Stage', 'Intent', 'Current Rank', 'Target URL'
+            '% Diff', 'YoY Growth', 'Priority', 'Start Date', 'Type', 'Content Stage', 'Intent', 'Current Rank', 'Target URL', 'In AI Overview'
         ];
 
         const rows = sortedKeywords.map(k => [
@@ -79,7 +79,8 @@ export default function SeasonalityDashboard({ data, onSelectKeyword, selectedKe
             k.contentStage,
             k.serpData?.intent || '-',
             k.serpData?.currentRank || '-',
-            k.serpData?.currentUrl || '-'
+            k.serpData?.currentUrl || '-',
+            k.serpData?.inAiOverview ? 'Yes' : 'No'
         ]);
 
         const csvContent = [
@@ -238,12 +239,26 @@ export default function SeasonalityDashboard({ data, onSelectKeyword, selectedKe
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                     {k.serpData?.currentRank ? (
                                         <div className="flex flex-col">
-                                            <span className="font-medium text-gray-900 dark:text-white">#{k.serpData.currentRank}</span>
+                                            <div className="flex items-center space-x-2">
+                                                <span className="font-medium text-gray-900 dark:text-white">#{k.serpData.currentRank}</span>
+                                                {k.serpData.inAiOverview && (
+                                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200" title="Cited in AI Overview">
+                                                        AIO
+                                                    </span>
+                                                )}
+                                            </div>
                                             {k.serpData.currentUrl && (
                                                 <a href={k.serpData.currentUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline truncate max-w-[150px]" onClick={(e) => e.stopPropagation()}>
                                                     View URL
                                                 </a>
                                             )}
+                                        </div>
+                                    ) : k.serpData?.inAiOverview ? (
+                                        <div className="flex flex-col">
+                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200 w-fit" title="Cited in AI Overview">
+                                                In AIO
+                                            </span>
+                                            <span className="text-xs text-gray-400 mt-1">Not in Top 100</span>
                                         </div>
                                     ) : (
                                         <span className="text-gray-400">-</span>

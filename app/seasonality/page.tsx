@@ -182,107 +182,129 @@ export default function SeasonalityPage() {
                                             </div>
 
                                             {/* Planning Insights */}
-                                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                                                    Planning Insights
-                                                </h3>
-                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                                    <div>
-                                                        <span className="text-sm text-gray-500 dark:text-gray-400 block">Content Stage</span>
-                                                        <span className="font-medium text-gray-900 dark:text-white text-lg">{selectedKeyword.contentStage}</span>
+                                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+                                                <details className="group">
+                                                    <summary className="flex items-center justify-between p-6 cursor-pointer list-none">
+                                                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                                            Planning Insights
+                                                        </h3>
+                                                        <span className="transform group-open:rotate-180 transition-transform">
+                                                            <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                            </svg>
+                                                        </span>
+                                                    </summary>
+                                                    <div className="px-6 pb-6 border-t border-gray-200 dark:border-gray-700 pt-4">
+                                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                                            <div>
+                                                                <span className="text-sm text-gray-500 dark:text-gray-400 block">Content Stage</span>
+                                                                <span className="font-medium text-gray-900 dark:text-white text-lg">{selectedKeyword.contentStage}</span>
+                                                            </div>
+                                                            <div>
+                                                                <span className="text-sm text-gray-500 dark:text-gray-400 block">Lead Time</span>
+                                                                <span className="font-medium text-gray-900 dark:text-white text-lg">{selectedKeyword.leadTimeDays} days</span>
+                                                            </div>
+                                                            <div>
+                                                                <span className="text-sm text-gray-500 dark:text-gray-400 block">Start Date</span>
+                                                                <span className="font-medium text-blue-600 dark:text-blue-400 text-lg">{selectedKeyword.startOptimizingDate}</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                                                            <span className="text-sm text-gray-500 dark:text-gray-400 block mb-2">Suggestion</span>
+                                                            <p className="text-sm text-gray-700 dark:text-gray-300">
+                                                                {selectedKeyword.contentSuggestion}
+                                                            </p>
+                                                        </div>
                                                     </div>
-                                                    <div>
-                                                        <span className="text-sm text-gray-500 dark:text-gray-400 block">Lead Time</span>
-                                                        <span className="font-medium text-gray-900 dark:text-white text-lg">{selectedKeyword.leadTimeDays} days</span>
-                                                    </div>
-                                                    <div>
-                                                        <span className="text-sm text-gray-500 dark:text-gray-400 block">Start Date</span>
-                                                        <span className="font-medium text-blue-600 dark:text-blue-400 text-lg">{selectedKeyword.startOptimizingDate}</span>
-                                                    </div>
-                                                </div>
-                                                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                                                    <span className="text-sm text-gray-500 dark:text-gray-400 block mb-2">Suggestion</span>
-                                                    <p className="text-sm text-gray-700 dark:text-gray-300">
-                                                        {selectedKeyword.contentSuggestion}
-                                                    </p>
-                                                </div>
+                                                </details>
                                             </div>
 
                                             {/* SERP Data */}
                                             {selectedKeyword.serpData && (
-                                                <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                                                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                                                        SERP Intelligence
-                                                    </h3>
-                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                                                        <div>
-                                                            <span className="text-sm text-gray-500 dark:text-gray-400 block">Search Intent</span>
-                                                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium mt-1 ${selectedKeyword.serpData.intent === 'Transactional' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
-                                                                    selectedKeyword.serpData.intent === 'Commercial' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
-                                                                        selectedKeyword.serpData.intent === 'Informational' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
-                                                                            'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
-                                                                }`}>
-                                                                {selectedKeyword.serpData.intent}
+                                                <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+                                                    <details className="group">
+                                                        <summary className="flex items-center justify-between p-6 cursor-pointer list-none">
+                                                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                                                SERP Intelligence
+                                                            </h3>
+                                                            <span className="transform group-open:rotate-180 transition-transform">
+                                                                <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                                </svg>
                                                             </span>
-                                                        </div>
-                                                        {selectedKeyword.serpData.difficulty !== undefined && (
-                                                            <div>
-                                                                <span className="text-sm text-gray-500 dark:text-gray-400 block">Keyword Difficulty</span>
-                                                                <div className="flex items-center mt-2">
-                                                                    <div className="w-full bg-gray-200 rounded-full h-3 mr-3 dark:bg-gray-700">
-                                                                        <div
-                                                                            className={`h-3 rounded-full ${selectedKeyword.serpData.difficulty > 70 ? 'bg-red-600' :
-                                                                                    selectedKeyword.serpData.difficulty > 40 ? 'bg-yellow-600' :
-                                                                                        'bg-green-600'
-                                                                                }`}
-                                                                            style={{ width: `${selectedKeyword.serpData.difficulty}%` }}
-                                                                        ></div>
-                                                                    </div>
-                                                                    <span className="font-medium text-gray-900 dark:text-white">{selectedKeyword.serpData.difficulty}/100</span>
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                        {selectedKeyword.serpData.cpc !== undefined && (
-                                                            <div>
-                                                                <span className="text-sm text-gray-500 dark:text-gray-400 block">CPC</span>
-                                                                <span className="font-medium text-gray-900 dark:text-white text-lg">${selectedKeyword.serpData.cpc.toFixed(2)}</span>
-                                                            </div>
-                                                        )}
-                                                    </div>
-
-                                                    {selectedKeyword.serpData.serpFeatures.length > 0 && (
-                                                        <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-                                                            <span className="text-sm text-gray-500 dark:text-gray-400 block mb-2">SERP Features</span>
-                                                            <div className="flex flex-wrap gap-2">
-                                                                {selectedKeyword.serpData.serpFeatures.map((feature, idx) => (
-                                                                    <span key={idx} className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
-                                                                        {feature}
+                                                        </summary>
+                                                        <div className="px-6 pb-6 border-t border-gray-200 dark:border-gray-700 pt-4">
+                                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                                                                <div>
+                                                                    <span className="text-sm text-gray-500 dark:text-gray-400 block">Search Intent</span>
+                                                                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium mt-1 ${selectedKeyword.serpData.intent === 'Transactional' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                                                                        selectedKeyword.serpData.intent === 'Commercial' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
+                                                                            selectedKeyword.serpData.intent === 'Informational' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
+                                                                                'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
+                                                                        }`}>
+                                                                        {selectedKeyword.serpData.intent}
                                                                     </span>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    {selectedKeyword.serpData.topUrls.length > 0 && (
-                                                        <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
-                                                            <span className="text-sm text-gray-500 dark:text-gray-400 block mb-3">Top Ranking URLs</span>
-                                                            <div className="space-y-2">
-                                                                {selectedKeyword.serpData.topUrls.map((urlData, idx) => (
-                                                                    <div key={idx} className="flex items-start space-x-3 text-sm">
-                                                                        <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 font-medium text-xs">
-                                                                            {urlData.position}
-                                                                        </span>
-                                                                        <div className="flex-1 min-w-0">
-                                                                            <p className="text-gray-900 dark:text-white font-medium truncate">{urlData.title}</p>
-                                                                            <a href={urlData.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline truncate block text-xs">
-                                                                                {urlData.url}
-                                                                            </a>
+                                                                </div>
+                                                                {selectedKeyword.serpData.difficulty !== undefined && (
+                                                                    <div>
+                                                                        <span className="text-sm text-gray-500 dark:text-gray-400 block">Keyword Difficulty</span>
+                                                                        <div className="flex items-center mt-2">
+                                                                            <div className="w-full bg-gray-200 rounded-full h-3 mr-3 dark:bg-gray-700">
+                                                                                <div
+                                                                                    className={`h-3 rounded-full ${selectedKeyword.serpData.difficulty > 70 ? 'bg-red-600' :
+                                                                                        selectedKeyword.serpData.difficulty > 40 ? 'bg-yellow-600' :
+                                                                                            'bg-green-600'
+                                                                                        }`}
+                                                                                    style={{ width: `${selectedKeyword.serpData.difficulty}%` }}
+                                                                                ></div>
+                                                                            </div>
+                                                                            <span className="font-medium text-gray-900 dark:text-white">{selectedKeyword.serpData.difficulty}/100</span>
                                                                         </div>
                                                                     </div>
-                                                                ))}
+                                                                )}
+                                                                {selectedKeyword.serpData.cpc !== undefined && (
+                                                                    <div>
+                                                                        <span className="text-sm text-gray-500 dark:text-gray-400 block">CPC</span>
+                                                                        <span className="font-medium text-gray-900 dark:text-white text-lg">${selectedKeyword.serpData.cpc.toFixed(2)}</span>
+                                                                    </div>
+                                                                )}
                                                             </div>
+
+                                                            {selectedKeyword.serpData.serpFeatures.length > 0 && (
+                                                                <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                                                                    <span className="text-sm text-gray-500 dark:text-gray-400 block mb-2">SERP Features</span>
+                                                                    <div className="flex flex-wrap gap-2">
+                                                                        {selectedKeyword.serpData.serpFeatures.map((feature, idx) => (
+                                                                            <span key={idx} className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                                                                                {feature}
+                                                                            </span>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
+                                                            {selectedKeyword.serpData.topUrls.length > 0 && (
+                                                                <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
+                                                                    <span className="text-sm text-gray-500 dark:text-gray-400 block mb-3">Top Ranking URLs</span>
+                                                                    <div className="space-y-2">
+                                                                        {selectedKeyword.serpData.topUrls.map((urlData, idx) => (
+                                                                            <div key={idx} className="flex items-start space-x-3 text-sm">
+                                                                                <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 font-medium text-xs">
+                                                                                    {urlData.position}
+                                                                                </span>
+                                                                                <div className="flex-1 min-w-0">
+                                                                                    <p className="text-gray-900 dark:text-white font-medium truncate">{urlData.title}</p>
+                                                                                    <a href={urlData.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline truncate block text-xs">
+                                                                                        {urlData.url}
+                                                                                    </a>
+                                                                                </div>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                    )}
+                                                    </details>
                                                 </div>
                                             )}
                                         </div>
