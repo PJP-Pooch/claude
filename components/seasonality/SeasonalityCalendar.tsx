@@ -8,6 +8,22 @@ interface SeasonalityCalendarProps {
 }
 
 export default function SeasonalityCalendar({ keywords, onSelectKeyword }: SeasonalityCalendarProps) {
+    // Determine action type based on current ranking
+    const getActionType = (keyword: KeywordSeasonality): { type: 'Upcycle' | 'Review' | 'New Content'; color: string } => {
+        const rank = keyword.serpData?.currentRank;
+
+        if (!rank) {
+            return { type: 'New Content', color: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' };
+        }
+
+        if (rank <= 20) {
+            return { type: 'Upcycle', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' };
+        }
+
+        // rank 21-100
+        return { type: 'Review', color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' };
+    };
+
     // Group tasks by month
     const tasksByMonth: Record<string, KeywordSeasonality[]> = {};
 
@@ -26,19 +42,21 @@ export default function SeasonalityCalendar({ keywords, onSelectKeyword }: Seaso
 
     const downloadCalendarCSV = () => {
         const headers = [
-            'Subject', 'Start Date', 'Description', 'Priority', 'Seasonality Type'
+            'Subject', 'Start Date', 'Description', 'Priority', 'Seasonality Type', 'Action'
         ];
 
         const rows: string[][] = [];
 
         Object.values(tasksByMonth).forEach(monthTasks => {
             monthTasks.forEach(task => {
+                const action = getActionType(task);
                 rows.push([
                     `Start optimizing: ${task.keyword}`,
                     task.startOptimizingDate,
                     `Peak in ${task.peakMonth}. ${task.contentSuggestion}`,
                     task.priorityScore.toFixed(1),
-                    task.seasonalityType
+                    task.seasonalityType,
+                    action.type
                 ]);
             });
         });
@@ -96,8 +114,11 @@ export default function SeasonalityCalendar({ keywords, onSelectKeyword }: Seaso
                                             Peak in {task.peakMonth} • Priority: {task.priorityScore.toFixed(1)}
                                         </p>
                                     </div>
-                                    <div className="flex items-center space-x-4">
-                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${task.seasonalityType === 'Sharp Seasonal' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
+                                    <div className="flex items-center space-x-2">
+                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getActionType(task).color}`}>
+                                            {getActionType(task).type}
+                                        </span>
+                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${task.seasonalityType === 'Sharp Seasonal' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
                                             }`}>
                                             {task.seasonalityType}
                                         </span>
