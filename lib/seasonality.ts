@@ -35,6 +35,21 @@ export function analyzeSeasonality(
     const difference = peakVolume - average;
     const percentDifference = average > 0 ? (difference / average) * 100 : 0;
 
+    // Calculate YoY Growth
+    let yoyGrowth = 0;
+    if (validHistory.length >= 13) {
+        const lastPoint = validHistory[validHistory.length - 1];
+        if (lastPoint) {
+            const previousYearPoint = validHistory.find(
+                h => h.year === lastPoint.year - 1 && h.month === lastPoint.month
+            );
+
+            if (previousYearPoint && previousYearPoint.searchVolume > 0) {
+                yoyGrowth = ((lastPoint.searchVolume - previousYearPoint.searchVolume) / previousYearPoint.searchVolume) * 100;
+            }
+        }
+    }
+
     // 2. Identify Peak Month (based on average of all years if multiple years exist)
     // Group by month index (1-12)
     const monthTotals = new Array(13).fill(0);
@@ -98,52 +113,42 @@ export function analyzeSeasonality(
         nextPeakDate.setFullYear(today.getFullYear() + 1);
     }
 
-    const startOptimizingDate = addDays(nextPeakDate, -leadTimeDays);
+    const startOptimizingDate = subMonths(nextPeakDate, Math.floor(leadTimeDays / 30));
 
-    // 5. Priority Score
-    // Log(Avg + 1) * (1 + Seasonality/100)
-    // Higher volume + higher seasonality = higher priority
-    const seasonalityScore = percentDifference / 100;
-    const priorityScore = Math.log10(average + 1) * (1 + seasonalityScore);
+    // Priority Score (0-10)
+    // Factors: Volume, Growth, Proximity to Start Date
+    const volumeScore = Math.min(average / 1000, 5); // Max 5 points for volume
+    const growthScore = Math.min(Math.max(percentDifference / 50, 0), 3); // Max 3 points for growth
 
-    // 6. Seasonality Type Classification
-    let seasonalityType: SeasonalityType = 'Steady';
-    if (percentDifference > 75) {
-        seasonalityType = 'Sharp Seasonal';
-    } else if (percentDifference > 25) {
-        seasonalityType = 'Mixed';
-    } else {
-        // Check trend
-        const firstHalf = volumes.slice(0, Math.floor(volumes.length / 2));
-        const secondHalf = volumes.slice(Math.floor(volumes.length / 2));
-        const avgFirst = firstHalf.reduce((a, b) => a + b, 0) / (firstHalf.length || 1);
-        const avgSecond = secondHalf.reduce((a, b) => a + b, 0) / (secondHalf.length || 1);
+    const daysToStart = differenceInDays(startOptimizingDate, today);
+    let urgencyScore = 0;
+    if (daysToStart < 0) urgencyScore = 2; // Overdue
+    else if (daysToStart < 30) urgencyScore = 2; // Urgent
+    else if (daysToStart < 60) urgencyScore = 1; // Upcoming
 
-        if (avgSecond > avgFirst * 1.2) seasonalityType = 'Growing';
-        else if (avgSecond < avgFirst * 0.8) seasonalityType = 'Declining';
-    }
+    const priorityScore = Math.min(volumeScore + growthScore + urgencyScore, 10);
 
-    // 7. Content Stage
-    // Determine where we are relative to the next peak
-    const daysToPeak = differenceInDays(nextPeakDate, today);
+    // Seasonality Type Classification
+    let seasonalityType: SeasonalityType = 'Mixed';
+    if (percentDifference > 50) seasonalityType = 'Sharp Seasonal';
+    else if (percentDifference > 20) seasonalityType = 'Growing';
+    else if (percentDifference < -20) seasonalityType = 'Declining';
+    else seasonalityType = 'Steady';
+
+    // Content Stage
     let contentStage: ContentStage = 'Off-season';
-    let contentSuggestion = '';
+    if (daysToStart < 0 && daysToStart > -30) contentStage = 'Pre-peak';
+    else if (daysToStart <= -30 && daysToStart > -90) contentStage = 'Near-peak';
+    else if (daysToStart <= -90) contentStage = 'Post-peak';
 
-    if (daysToPeak > 90 && daysToPeak <= 180) {
-        contentStage = 'Pre-peak';
-        contentSuggestion = 'Create/update long-form content, plan internal links.';
-    } else if (daysToPeak > 30 && daysToPeak <= 90) {
-        contentStage = 'Near-peak';
-        contentSuggestion = 'Push internal links, add promo modules, optimize for snippets.';
-    } else if (daysToPeak >= -30 && daysToPeak <= 30) {
-        contentStage = 'Near-peak'; // Active peak
-        contentSuggestion = 'Monitor performance, ensure technical stability.';
-    } else if (daysToPeak < -30 && daysToPeak > -90) {
-        contentStage = 'Post-peak';
-        contentSuggestion = 'Review performance, update notes, archive promos.';
+    // Content Suggestion
+    let contentSuggestion = '';
+    if (seasonalityType === 'Sharp Seasonal') {
+        contentSuggestion = `Prepare content ${leadTimeDays} days in advance. Focus on timely updates and social promotion during peak.`;
+    } else if (seasonalityType === 'Growing') {
+        contentSuggestion = 'Invest in evergreen content and link building to capture long-term growth.';
     } else {
-        contentStage = 'Off-season';
-        contentSuggestion = 'Maintain evergreen value, plan for next cycle.';
+        contentSuggestion = 'Maintain consistent content schedule. Focus on conversion optimization.';
     }
 
     return {
@@ -156,6 +161,7 @@ export function analyzeSeasonality(
         peakVolume,
         difference,
         percentDifference,
+        yoyGrowth,
         leadTimeDays,
         startOptimizingDate: format(startOptimizingDate, 'yyyy-MM-dd'),
         priorityScore,

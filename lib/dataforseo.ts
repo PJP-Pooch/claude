@@ -482,146 +482,174 @@ export type SerpEnrichmentData = {
   difficulty?: number;
   cpc?: number;
   competition?: 'Low' | 'Medium' | 'High';
+  currentRank?: number;
+  currentUrl?: string;
 };
 
 /**
- * Fetches SERP enrichment data for a keyword (top URLs, SERP features, intent, difficulty)
+ * Fetches SERP enrichment data for multiple keywords in batches
  */
-export async function fetchSerpEnrichment(
-  keyword: string,
+export async function fetchSerpEnrichmentBatch(
+  keywords: string[],
   location: string,
   language: string,
   credentials: DataForSEOCredentials,
+  targetDomain?: string,
   retryCount: number = 0
-): Promise<SerpEnrichmentData | null> {
+): Promise<Record<string, SerpEnrichmentData>> {
   const locationCode = getLocationCode(location);
   const languageCode = getLanguageCode(language);
+  const results: Record<string, SerpEnrichmentData> = {};
 
-  const requestBody = [
-    {
-      keyword,
+  // Chunk keywords into batches of 50 (DataForSEO allows up to 100)
+  const chunkSize = 50;
+  const chunks = [];
+  for (let i = 0; i < keywords.length; i += chunkSize) {
+    chunks.push(keywords.slice(i, i + chunkSize));
+  }
+
+  const processChunk = async (chunkKeywords: string[]) => {
+    const requestBody = chunkKeywords.map(k => ({
+      keyword: k,
       location_code: locationCode,
       language_code: languageCode,
       device: 'desktop',
-    },
-  ];
+    }));
 
-  try {
-    const authString = Buffer.from(`${credentials.login}:${credentials.password}`).toString('base64');
+    try {
+      const authString = Buffer.from(`${credentials.login}:${credentials.password}`).toString('base64');
 
-    const response = await fetch(`${DATAFORSEO_API_BASE}/serp/google/organic/live/advanced`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${authString}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestBody),
-    });
+      const response = await fetch(`${DATAFORSEO_API_BASE}/serp/google/organic/live/advanced`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${authString}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
 
-    // Handle rate limiting
-    if (response.status === 429) {
-      if (retryCount >= MAX_RETRIES) {
-        console.error(`Max retries exceeded for SERP enrichment: ${keyword}`);
-        return null;
+      // Handle rate limiting
+      if (response.status === 429) {
+        if (retryCount >= MAX_RETRIES) {
+          console.error(`Max retries exceeded for SERP enrichment batch`);
+          return;
+        }
+        const backoffTime = INITIAL_BACKOFF * Math.pow(2, retryCount);
+        await sleep(backoffTime);
+        console.error(`Rate limit hit for batch, skipping chunk of ${chunkKeywords.length} keywords`);
+        return;
       }
 
-      const backoffTime = INITIAL_BACKOFF * Math.pow(2, retryCount);
-      await sleep(backoffTime);
-      return fetchSerpEnrichment(keyword, location, language, credentials, retryCount + 1);
-    }
-
-    // Handle server errors with retry
-    if (response.status >= 500) {
-      if (retryCount >= MAX_RETRIES) {
-        console.error(`Server error after ${MAX_RETRIES} retries for: ${keyword}`);
-        return null;
+      if (!response.ok) {
+        console.error(`SERP enrichment failed for batch: ${response.status}`);
+        return;
       }
 
-      const backoffTime = INITIAL_BACKOFF * Math.pow(2, retryCount);
-      await sleep(backoffTime);
-      return fetchSerpEnrichment(keyword, location, language, credentials, retryCount + 1);
+      const data = await response.json();
+
+      if (!data.tasks) return;
+
+      data.tasks.forEach((task: any) => {
+        if (!task.result || task.result.length === 0) return;
+
+        const result = task.result[0];
+        const keyword = result.keyword;
+        const items = result.items || [];
+
+        // Extract top URLs (top 3 organic results)
+        const organicItems = items.filter((item: any) => item.type === 'organic');
+        const topUrls = organicItems
+          .slice(0, 3)
+          .map((item: any) => ({
+            position: item.rank_absolute,
+            url: item.url,
+            title: item.title,
+          }));
+
+        // Check for target domain ranking
+        let currentRank: number | undefined;
+        let currentUrl: string | undefined;
+
+        if (targetDomain) {
+          const domainMatch = organicItems.find((item: any) => {
+            try {
+              return item.url && (item.url.includes(targetDomain) || new URL(item.url).hostname.includes(targetDomain));
+            } catch (e) {
+              return false;
+            }
+          });
+
+          if (domainMatch) {
+            currentRank = domainMatch.rank_absolute;
+            currentUrl = domainMatch.url;
+          }
+        }
+
+        // Extract SERP features
+        const serpFeatures: string[] = [];
+        const featureTypes = items.map((item: any) => item.type);
+
+        if (featureTypes.includes('featured_snippet')) serpFeatures.push('Featured Snippet');
+        if (featureTypes.includes('people_also_ask')) serpFeatures.push('People Also Ask');
+        if (featureTypes.includes('video')) serpFeatures.push('Video');
+        if (featureTypes.includes('images')) serpFeatures.push('Images');
+        if (featureTypes.includes('local_pack')) serpFeatures.push('Local Pack');
+        if (featureTypes.includes('knowledge_graph')) serpFeatures.push('Knowledge Graph');
+        if (featureTypes.includes('shopping')) serpFeatures.push('Shopping');
+        if (featureTypes.includes('top_stories')) serpFeatures.push('Top Stories');
+
+        // Determine search intent based on SERP features and content
+        let intent: 'Informational' | 'Commercial' | 'Transactional' | 'Navigational' | 'Mixed' = 'Informational';
+
+        if (serpFeatures.includes('Shopping') || keyword.toLowerCase().includes('buy') || keyword.toLowerCase().includes('price')) {
+          intent = 'Transactional';
+        } else if (serpFeatures.includes('Local Pack') || keyword.toLowerCase().includes('near me')) {
+          intent = 'Transactional';
+        } else if (keyword.toLowerCase().includes('best') || keyword.toLowerCase().includes('review') || keyword.toLowerCase().includes('vs')) {
+          intent = 'Commercial';
+        } else if (serpFeatures.includes('Knowledge Graph')) {
+          intent = 'Navigational';
+        } else if (serpFeatures.length > 2) {
+          intent = 'Mixed';
+        }
+
+        // Get keyword difficulty and CPC if available from keyword_properties
+        let difficulty: number | undefined;
+        let cpc: number | undefined;
+        let competition: 'Low' | 'Medium' | 'High' | undefined;
+
+        if (result.keyword_properties) {
+          difficulty = result.keyword_properties.keyword_difficulty;
+          cpc = result.keyword_properties.cpc;
+
+          // Map competition level
+          const compLevel = result.keyword_properties.competition;
+          if (compLevel !== undefined) {
+            if (compLevel < 0.33) competition = 'Low';
+            else if (compLevel < 0.67) competition = 'Medium';
+            else competition = 'High';
+          }
+        }
+
+        results[keyword] = {
+          topUrls,
+          serpFeatures,
+          intent,
+          difficulty,
+          cpc,
+          competition,
+          currentRank,
+          currentUrl
+        };
+      });
+
+    } catch (error) {
+      console.error(`Error fetching SERP enrichment batch:`, error);
     }
+  };
 
-    if (!response.ok) {
-      console.error(`SERP enrichment failed for ${keyword}: ${response.status}`);
-      return null;
-    }
+  // Process chunks in parallel
+  await Promise.all(chunks.map(chunk => processChunk(chunk)));
 
-    const data = await response.json();
-
-    if (!data.tasks || data.tasks.length === 0 || !data.tasks[0].result || data.tasks[0].result.length === 0) {
-      return null;
-    }
-
-    const result = data.tasks[0].result[0];
-    const items = result.items || [];
-
-    // Extract top URLs (top 3 organic results)
-    const organicItems = items.filter((item: any) => item.type === 'organic');
-    const topUrls = organicItems
-      .slice(0, 3)
-      .map((item: any) => ({
-        position: item.rank_absolute,
-        url: item.url,
-        title: item.title,
-      }));
-
-    // Extract SERP features
-    const serpFeatures: string[] = [];
-    const featureTypes = items.map((item: any) => item.type);
-
-    if (featureTypes.includes('featured_snippet')) serpFeatures.push('Featured Snippet');
-    if (featureTypes.includes('people_also_ask')) serpFeatures.push('People Also Ask');
-    if (featureTypes.includes('video')) serpFeatures.push('Video');
-    if (featureTypes.includes('images')) serpFeatures.push('Images');
-    if (featureTypes.includes('local_pack')) serpFeatures.push('Local Pack');
-    if (featureTypes.includes('knowledge_graph')) serpFeatures.push('Knowledge Graph');
-    if (featureTypes.includes('shopping')) serpFeatures.push('Shopping');
-    if (featureTypes.includes('top_stories')) serpFeatures.push('Top Stories');
-
-    // Determine search intent based on SERP features and content
-    let intent: 'Informational' | 'Commercial' | 'Transactional' | 'Navigational' | 'Mixed' = 'Informational';
-
-    if (serpFeatures.includes('Shopping') || keyword.toLowerCase().includes('buy') || keyword.toLowerCase().includes('price')) {
-      intent = 'Transactional';
-    } else if (serpFeatures.includes('Local Pack') || keyword.toLowerCase().includes('near me')) {
-      intent = 'Transactional';
-    } else if (keyword.toLowerCase().includes('best') || keyword.toLowerCase().includes('review') || keyword.toLowerCase().includes('vs')) {
-      intent = 'Commercial';
-    } else if (serpFeatures.includes('Knowledge Graph')) {
-      intent = 'Navigational';
-    } else if (serpFeatures.length > 2) {
-      intent = 'Mixed';
-    }
-
-    // Get keyword difficulty and CPC if available from keyword_properties
-    let difficulty: number | undefined;
-    let cpc: number | undefined;
-    let competition: 'Low' | 'Medium' | 'High' | undefined;
-
-    if (result.keyword_properties) {
-      difficulty = result.keyword_properties.keyword_difficulty;
-      cpc = result.keyword_properties.cpc;
-
-      // Map competition level
-      const compLevel = result.keyword_properties.competition;
-      if (compLevel !== undefined) {
-        if (compLevel < 0.33) competition = 'Low';
-        else if (compLevel < 0.67) competition = 'Medium';
-        else competition = 'High';
-      }
-    }
-
-    return {
-      topUrls,
-      serpFeatures,
-      intent,
-      difficulty,
-      cpc,
-      competition,
-    };
-  } catch (error) {
-    console.error(`Error fetching SERP enrichment for ${keyword}:`, error);
-    return null;
-  }
+  return results;
 }

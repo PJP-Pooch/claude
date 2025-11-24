@@ -24,8 +24,50 @@ export default function SeasonalityCalendar({ keywords, onSelectKeyword }: Seaso
     const today = new Date();
     const months = Array.from({ length: 12 }, (_, i) => addMonths(today, i));
 
+    const downloadCalendarCSV = () => {
+        const headers = [
+            'Subject', 'Start Date', 'Description', 'Priority', 'Seasonality Type'
+        ];
+
+        const rows: string[][] = [];
+
+        Object.values(tasksByMonth).forEach(monthTasks => {
+            monthTasks.forEach(task => {
+                rows.push([
+                    `Start optimizing: ${task.keyword}`,
+                    task.startOptimizingDate,
+                    `Peak in ${task.peakMonth}. ${task.contentSuggestion}`,
+                    task.priorityScore.toFixed(1),
+                    task.seasonalityType
+                ]);
+            });
+        });
+
+        const csvContent = [
+            headers.join(','),
+            ...rows.map(row => row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(','))
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', 'seasonality_calendar.csv');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     return (
         <div className="space-y-8">
+            <div className="flex justify-end">
+                <button
+                    onClick={downloadCalendarCSV}
+                    className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                    Export Calendar
+                </button>
+            </div>
             {months.map(month => {
                 const monthKey = format(month, 'yyyy-MM');
                 const tasks = tasksByMonth[monthKey] || [];

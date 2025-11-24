@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { fetchHistoricalSearchVolume, fetchSerpEnrichment } from '@/lib/dataforseo';
+import { fetchHistoricalSearchVolume, fetchSerpEnrichmentBatch } from '@/lib/dataforseo';
 import { analyzeSeasonality, aggregateByCategory } from '@/lib/seasonality';
 import { SeasonalityResponse, MonthlySV } from '@/lib/types';
 
@@ -14,12 +14,13 @@ const RequestSchema = z.object({
     apiLogin: z.string().optional(),
     apiPassword: z.string().optional(),
     enableSerpEnrichment: z.boolean().default(false), // Toggle SERP data fetching
+    targetDomain: z.string().optional(), // Optional domain to check ranking for
 });
 
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
-        const { keywords, location, language, leadTimeDays, categoryMap, apiLogin, apiPassword, enableSerpEnrichment } = RequestSchema.parse(body);
+        const { keywords, location, language, leadTimeDays, categoryMap, apiLogin, apiPassword, enableSerpEnrichment, targetDomain } = RequestSchema.parse(body);
 
         const login = apiLogin || process.env.DATAFORSEO_LOGIN;
         const password = apiPassword || process.env.DATAFORSEO_PASSWORD;
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // Call DataForSEO API for historical data
+        // 1. Call DataForSEO API for historical data
         const rawResults = await fetchHistoricalSearchVolume(
             keywords,
             location,
@@ -39,10 +40,28 @@ export async function POST(req: NextRequest) {
             { login, password }
         );
 
+        // 2. Fetch SERP enrichment data in batch if enabled
+        let serpDataMap: Record<string, any> = {};
+        if (enableSerpEnrichment) {
+            try {
+                // We use the original keywords list for enrichment
+                serpDataMap = await fetchSerpEnrichmentBatch(
+                    keywords,
+                    location,
+                    language,
+                    { login, password },
+                    targetDomain
+                );
+            } catch (error) {
+                console.error('Failed to fetch SERP enrichment batch:', error);
+                // Continue without SERP data rather than failing the whole request
+            }
+        }
+
         const analyzedKeywords = [];
         const errors = [];
 
-        // Process results
+        // 3. Process results and combine data
         for (const resultItem of rawResults) {
             if (!resultItem.items) continue;
 
@@ -65,18 +84,9 @@ export async function POST(req: NextRequest) {
                     const category = categoryMap ? categoryMap[keyword] : undefined;
                     const analysis = analyzeSeasonality(keyword, history, leadTimeDays, category);
 
-                    // Fetch SERP enrichment data if enabled
-                    if (enableSerpEnrichment) {
-                        const serpData = await fetchSerpEnrichment(
-                            keyword,
-                            location,
-                            language,
-                            { login, password }
-                        );
-
-                        if (serpData) {
-                            analysis.serpData = serpData;
-                        }
+                    // Attach SERP data if available
+                    if (serpDataMap[keyword]) {
+                        analysis.serpData = serpDataMap[keyword];
                     }
 
                     analyzedKeywords.push(analysis);

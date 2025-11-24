@@ -8,7 +8,7 @@ interface SeasonalityDashboardProps {
     selectedKeyword: KeywordSeasonality | null;
 }
 
-type SortField = 'keyword' | 'average' | 'peakVolume' | 'percentDifference' | 'priorityScore' | 'startOptimizingDate';
+type SortField = 'keyword' | 'average' | 'peakVolume' | 'percentDifference' | 'priorityScore' | 'startOptimizingDate' | 'yoyGrowth';
 type SortDirection = 'asc' | 'desc';
 
 export default function SeasonalityDashboard({ data, onSelectKeyword, selectedKeyword }: SeasonalityDashboardProps) {
@@ -47,6 +47,10 @@ export default function SeasonalityDashboard({ data, onSelectKeyword, selectedKe
         let valA = a[sortField];
         let valB = b[sortField];
 
+        // Handle undefined values
+        if (valA === undefined) valA = -Infinity;
+        if (valB === undefined) valB = -Infinity;
+
         if (typeof valA === 'string') valA = valA.toLowerCase();
         if (typeof valB === 'string') valB = valB.toLowerCase();
 
@@ -58,7 +62,7 @@ export default function SeasonalityDashboard({ data, onSelectKeyword, selectedKe
     const downloadCSV = () => {
         const headers = [
             'Keyword', 'Category', 'Average SV', 'Peak Month', 'Peak Vol',
-            '% Diff', 'Priority', 'Start Date', 'Type', 'Content Stage'
+            '% Diff', 'YoY Growth', 'Priority', 'Start Date', 'Type', 'Content Stage', 'Intent', 'Current Rank', 'Target URL'
         ];
 
         const rows = sortedKeywords.map(k => [
@@ -68,10 +72,14 @@ export default function SeasonalityDashboard({ data, onSelectKeyword, selectedKe
             k.peakMonth,
             k.peakVolume,
             k.percentDifference.toFixed(1),
+            k.yoyGrowth ? `${k.yoyGrowth.toFixed(1)}%` : '-',
             k.priorityScore.toFixed(1),
             k.startOptimizingDate,
             k.seasonalityType,
-            k.contentStage
+            k.contentStage,
+            k.serpData?.intent || '-',
+            k.serpData?.currentRank || '-',
+            k.serpData?.currentUrl || '-'
         ]);
 
         const csvContent = [
@@ -145,6 +153,7 @@ export default function SeasonalityDashboard({ data, onSelectKeyword, selectedKe
                                 { id: 'average', label: 'Avg SV' },
                                 { id: 'peakVolume', label: 'Peak Vol' },
                                 { id: 'percentDifference', label: '% Diff' },
+                                { id: 'yoyGrowth', label: 'YoY Growth' },
                                 { id: 'startOptimizingDate', label: 'Start By' },
                                 { id: 'priorityScore', label: 'Priority' },
                             ].map((col) => (
@@ -161,13 +170,13 @@ export default function SeasonalityDashboard({ data, onSelectKeyword, selectedKe
                                 </th>
                             ))}
                             <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                Current Rank
+                            </th>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                                 Type
                             </th>
                             <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                                 Intent
-                            </th>
-                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                Difficulty
                             </th>
                         </tr>
                     </thead>
@@ -201,6 +210,18 @@ export default function SeasonalityDashboard({ data, onSelectKeyword, selectedKe
                                     </span>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                    {k.yoyGrowth !== undefined ? (
+                                        <span className={`font-medium ${k.yoyGrowth > 20 ? 'text-green-600 dark:text-green-400' :
+                                            k.yoyGrowth < -10 ? 'text-red-600 dark:text-red-400' :
+                                                'text-gray-500'
+                                            }`}>
+                                            {k.yoyGrowth > 0 ? '+' : ''}{k.yoyGrowth.toFixed(0)}%
+                                        </span>
+                                    ) : (
+                                        <span className="text-gray-400">-</span>
+                                    )}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                     {k.startOptimizingDate}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
@@ -215,6 +236,20 @@ export default function SeasonalityDashboard({ data, onSelectKeyword, selectedKe
                                     </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                    {k.serpData?.currentRank ? (
+                                        <div className="flex flex-col">
+                                            <span className="font-medium text-gray-900 dark:text-white">#{k.serpData.currentRank}</span>
+                                            {k.serpData.currentUrl && (
+                                                <a href={k.serpData.currentUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline truncate max-w-[150px]" onClick={(e) => e.stopPropagation()}>
+                                                    View URL
+                                                </a>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <span className="text-gray-400">-</span>
+                                    )}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${k.seasonalityType === 'Sharp Seasonal' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
                                         k.seasonalityType === 'Growing' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
                                             'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
@@ -225,30 +260,12 @@ export default function SeasonalityDashboard({ data, onSelectKeyword, selectedKe
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                     {k.serpData?.intent ? (
                                         <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${k.serpData.intent === 'Transactional' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
-                                                k.serpData.intent === 'Commercial' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
-                                                    k.serpData.intent === 'Informational' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
-                                                        'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
+                                            k.serpData.intent === 'Commercial' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
+                                                k.serpData.intent === 'Informational' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
+                                                    'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
                                             }`}>
                                             {k.serpData.intent}
                                         </span>
-                                    ) : (
-                                        <span className="text-gray-400">-</span>
-                                    )}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                    {k.serpData?.difficulty !== undefined ? (
-                                        <div className="flex items-center">
-                                            <div className="w-12 bg-gray-200 rounded-full h-2 mr-2 dark:bg-gray-700">
-                                                <div
-                                                    className={`h-2 rounded-full ${k.serpData.difficulty > 70 ? 'bg-red-600' :
-                                                            k.serpData.difficulty > 40 ? 'bg-yellow-600' :
-                                                                'bg-green-600'
-                                                        }`}
-                                                    style={{ width: `${k.serpData.difficulty}%` }}
-                                                ></div>
-                                            </div>
-                                            <span className="text-xs">{k.serpData.difficulty}</span>
-                                        </div>
                                     ) : (
                                         <span className="text-gray-400">-</span>
                                     )}

@@ -301,6 +301,7 @@ export interface KeywordSeasonality {
   peakVolume: number;
   difference: number;
   percentDifference: number;
+  yoyGrowth?: number; // Percentage growth vs same month last year
 
   // Planning
   leadTimeDays: number;
@@ -325,6 +326,8 @@ export interface KeywordSeasonality {
     difficulty?: number; // 0-100 keyword difficulty score
     cpc?: number; // Cost per click in USD
     competition?: 'Low' | 'Medium' | 'High';
+    currentRank?: number; // Rank of the target domain if found
+    currentUrl?: string; // URL of the target domain if found
   };
 }
 

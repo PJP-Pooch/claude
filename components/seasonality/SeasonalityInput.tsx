@@ -11,6 +11,7 @@ interface SeasonalityInputProps {
         apiLogin?: string;
         apiPassword?: string;
         enableSerpEnrichment?: boolean;
+        targetDomain?: string;
     }) => void;
     isLoading: boolean;
     initialValues?: {
@@ -39,6 +40,7 @@ export default function SeasonalityInput({ onSubmit, isLoading, initialValues }:
     const [apiPassword, setApiPassword] = useState(initialValues?.apiPassword || '');
     const [showApiCreds, setShowApiCreds] = useState(!!initialValues?.apiLogin);
     const [enableSerpEnrichment, setEnableSerpEnrichment] = useState(false);
+    const [targetDomain, setTargetDomain] = useState('');
     const [error, setError] = useState<string | null>(null);
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -80,6 +82,7 @@ export default function SeasonalityInput({ onSubmit, isLoading, initialValues }:
             apiLogin: apiLogin || undefined,
             apiPassword: apiPassword || undefined,
             enableSerpEnrichment,
+            targetDomain: targetDomain || undefined,
         });
     };
 
@@ -240,6 +243,25 @@ export default function SeasonalityInput({ onSubmit, isLoading, initialValues }:
                         </div>
                     </label>
                 </div>
+
+                {enableSerpEnrichment && (
+                    <div className="mt-4">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Target Domain (Optional)
+                        </label>
+                        <input
+                            type="text"
+                            value={targetDomain}
+                            onChange={(e) => setTargetDomain(e.target.value)}
+                            className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            placeholder="example.com"
+                            disabled={isLoading}
+                        />
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Enter your domain to check if you already rank for these keywords.
+                        </p>
+                    </div>
+                )}
 
                 <div className="flex justify-end">
                     <button
