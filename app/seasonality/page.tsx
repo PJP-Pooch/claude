@@ -192,43 +192,6 @@ export default function SeasonalityPage() {
                                                 </details>
                                             </div>
 
-                                            {/* Planning Insights */}
-                                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
-                                                <details className="group">
-                                                    <summary className="flex items-center justify-between p-6 cursor-pointer list-none">
-                                                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                                                            Planning Insights
-                                                        </h3>
-                                                        <span className="transform group-open:rotate-180 transition-transform">
-                                                            <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                                            </svg>
-                                                        </span>
-                                                    </summary>
-                                                    <div className="px-6 pb-6 border-t border-gray-200 dark:border-gray-700 pt-4">
-                                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                                            <div>
-                                                                <span className="text-sm text-gray-500 dark:text-gray-400 block">Content Stage</span>
-                                                                <span className="font-medium text-gray-900 dark:text-white text-lg">{selectedKeyword.contentStage}</span>
-                                                            </div>
-                                                            <div>
-                                                                <span className="text-sm text-gray-500 dark:text-gray-400 block">Lead Time</span>
-                                                                <span className="font-medium text-gray-900 dark:text-white text-lg">{selectedKeyword.leadTimeDays} days</span>
-                                                            </div>
-                                                            <div>
-                                                                <span className="text-sm text-gray-500 dark:text-gray-400 block">Start Date</span>
-                                                                <span className="font-medium text-blue-600 dark:text-blue-400 text-lg">{selectedKeyword.startOptimizingDate}</span>
-                                                            </div>
-                                                        </div>
-                                                        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                                                            <span className="text-sm text-gray-500 dark:text-gray-400 block mb-2">Suggestion</span>
-                                                            <p className="text-sm text-gray-700 dark:text-gray-300">
-                                                                {selectedKeyword.contentSuggestion}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                </details>
-                                            </div>
 
                                             {/* SERP Data */}
                                             {selectedKeyword.serpData && selectedKeyword.serpData.topUrls && selectedKeyword.serpData.topUrls.length > 0 && (
@@ -281,8 +244,59 @@ export default function SeasonalityPage() {
                                                                 )}
                                                             </div>
 
+                                                            {/* AI Overview & Target Domain Status */}
+                                                            <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
+                                                                <div className="grid grid-cols-2 gap-6">
+                                                                    <div>
+                                                                        <span className="text-sm text-gray-500 dark:text-gray-400 block mb-2">AI Overview</span>
+                                                                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${selectedKeyword.serpData.serpFeatures?.includes('AI Overview') ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'}`}>
+                                                                            {selectedKeyword.serpData.serpFeatures?.includes('AI Overview') ? '✓ Present' : '✗ Not Present'}
+                                                                        </span>
+                                                                    </div>
+                                                                    {selectedKeyword.serpData.inAiOverview !== undefined && (
+                                                                        <div>
+                                                                            <span className="text-sm text-gray-500 dark:text-gray-400 block mb-2">Your Domain in AI Overview</span>
+                                                                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${selectedKeyword.serpData.inAiOverview ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'}`}>
+                                                                                {selectedKeyword.serpData.inAiOverview ? '✓ Yes' : '✗ No'}
+                                                                            </span>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Target Domain Ranking */}
+                                                            {selectedKeyword.serpData.currentRank !== undefined && selectedKeyword.serpData.currentUrl && (
+                                                                <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
+                                                                    <span className="text-sm text-gray-500 dark:text-gray-400 block mb-3">Your Domain Ranking</span>
+                                                                    <div className="flex items-start space-x-3">
+                                                                        <span className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 font-bold text-sm">
+                                                                            #{selectedKeyword.serpData.currentRank}
+                                                                        </span>
+                                                                        <div className="flex-1 min-w-0">
+                                                                            <a href={selectedKeyword.serpData.currentUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline truncate block text-sm">
+                                                                                {selectedKeyword.serpData.currentUrl}
+                                                                            </a>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
+                                                            {/* AI Overview Content */}
+                                                            {selectedKeyword.serpData.aiOverviewText && (
+                                                                <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
+                                                                    <details>
+                                                                        <summary className="text-sm text-gray-500 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300 mb-3">
+                                                                            AI Overview Content (Click to expand)
+                                                                        </summary>
+                                                                        <div className="mt-2 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                                                                            {selectedKeyword.serpData.aiOverviewText}
+                                                                        </div>
+                                                                    </details>
+                                                                </div>
+                                                            )}
+
                                                             {selectedKeyword.serpData.serpFeatures.length > 0 && (
-                                                                <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                                                                <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
                                                                     <span className="text-sm text-gray-500 dark:text-gray-400 block mb-2">SERP Features</span>
                                                                     <div className="flex flex-wrap gap-2">
                                                                         {selectedKeyword.serpData.serpFeatures.map((feature, idx) => (

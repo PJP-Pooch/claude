@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { KeywordSeasonality } from '@/lib/types';
-import { format, parseISO, addMonths } from 'date-fns';
+import { format, parseISO, addMonths, subMonths } from 'date-fns';
 import SeasonalityChart from './SeasonalityChart';
 
 interface SeasonalityCalendarProps {
@@ -9,6 +9,26 @@ interface SeasonalityCalendarProps {
 }
 
 export default function SeasonalityCalendar({ keywords, onSelectKeyword }: SeasonalityCalendarProps) {
+    const [removedKeywords, setRemovedKeywords] = useState<Set<string>>(new Set());
+    const [movedKeywords, setMovedKeywords] = useState<Record<string, string>>({});
+
+    const handleRemove = (keyword: string) => {
+        const newRemoved = new Set(removedKeywords);
+        newRemoved.add(keyword);
+        setRemovedKeywords(newRemoved);
+    };
+
+    const handleMove = (keyword: string, currentMonth: string, direction: 'prev' | 'next') => {
+        const currentDate = parseISO(currentMonth + '-01');
+        const newDate = direction === 'next' ? addMonths(currentDate, 1) : subMonths(currentDate, 1);
+        const newDateStr = format(newDate, 'yyyy-MM-dd');
+
+        setMovedKeywords(prev => ({
+            ...prev,
+            [keyword]: newDateStr
+        }));
+    };
+
     // Determine action type based on current ranking
     const getActionType = (keyword: KeywordSeasonality): { type: 'Upcycle' | 'Review' | 'New Content'; color: string } => {
         const rank = keyword.serpData?.currentRank;
@@ -29,7 +49,10 @@ export default function SeasonalityCalendar({ keywords, onSelectKeyword }: Seaso
     const tasksByMonth: Record<string, KeywordSeasonality[]> = {};
 
     keywords.forEach(k => {
-        const date = k.startOptimizingDate;
+        if (removedKeywords.has(k.keyword)) return;
+
+        // Use moved date if available, otherwise original date
+        const date = movedKeywords[k.keyword] || k.startOptimizingDate;
         const monthKey = date.substring(0, 7); // YYYY-MM
         if (!tasksByMonth[monthKey]) {
             tasksByMonth[monthKey] = [];
@@ -119,9 +142,6 @@ export default function SeasonalityCalendar({ keywords, onSelectKeyword }: Seaso
                                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${task.seasonalityType === 'Sharp Seasonal' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
                                                 }`}>
                                                 {task.seasonalityType}
-                                            </span>
-                                            <span className="text-sm text-gray-500 dark:text-gray-400">
-                                                {format(parseISO(task.startOptimizingDate), 'MMM d')}
                                             </span>
                                             <span className="transform group-open:rotate-180 transition-transform ml-2">
                                                 <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -275,6 +295,30 @@ export default function SeasonalityCalendar({ keywords, onSelectKeyword }: Seaso
                                                 )}
                                             </div>
                                         )}
+
+                                        {/* Calendar Actions */}
+                                        <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                                            <div className="flex space-x-2">
+                                                <button
+                                                    onClick={() => handleMove(task.keyword, format(month, 'yyyy-MM'), 'prev')}
+                                                    className="px-3 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700"
+                                                >
+                                                    ← Move to Prev Month
+                                                </button>
+                                                <button
+                                                    onClick={() => handleMove(task.keyword, format(month, 'yyyy-MM'), 'next')}
+                                                    className="px-3 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700"
+                                                >
+                                                    Move to Next Month →
+                                                </button>
+                                            </div>
+                                            <button
+                                                onClick={() => handleRemove(task.keyword)}
+                                                className="px-3 py-1 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-md hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800 dark:hover:bg-red-900/40"
+                                            >
+                                                Remove from Calendar
+                                            </button>
+                                        </div>
                                     </div>
                                 </details>
                             ))}
