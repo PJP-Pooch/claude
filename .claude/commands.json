@@ -1,0 +1,10 @@
+{
+  "commands": [
+    {
+      "name": "kill-ports",
+      "description": "Kill processes on common localhost ports (3000-3010)",
+      "command": "npx kill-port 3000 3001 3002 3003 3004 3005 3006 3007 3008 3009 3010 || echo \"Finished cleaning ports\"",
+      "tags": ["dev", "ports", "kill", "localhost"]
+    }
+  ]
+}

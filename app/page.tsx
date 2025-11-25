@@ -1,47 +1,10 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
 import ThemeToggle from '@/components/ThemeToggle';
 import { ThemeProvider } from '@/components/ThemeProvider';
 
 export default function Home() {
-  const [feedbackType, setFeedbackType] = useState('Feedback');
-  const [feedbackMessage, setFeedbackMessage] = useState('');
-  const [feedbackEmail, setFeedbackEmail] = useState('');
-  const [feedbackStatus, setFeedbackStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
-
-  const handleSubmitFeedback = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setFeedbackStatus('submitting');
-
-    try {
-      const response = await fetch('/api/feedback', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          type: feedbackType,
-          message: feedbackMessage,
-          email: feedbackEmail,
-        }),
-      });
-
-      if (response.ok) {
-        setFeedbackStatus('success');
-        setFeedbackMessage('');
-        setFeedbackEmail('');
-        setTimeout(() => setFeedbackStatus('idle'), 3000);
-      } else {
-        setFeedbackStatus('error');
-      }
-    } catch (error) {
-      console.error('Error submitting feedback:', error);
-      setFeedbackStatus('error');
-    }
-  };
-
   const tools = [
     {
       id: 'serp',
@@ -85,7 +48,7 @@ export default function Home() {
     {
       id: 'coming-soon-1',
       title: 'More Tools Coming Soon',
-      description: 'We\'re working on additional SEO and content analysis tools to help you optimize your digital presence.',
+      description: "We're working on additional SEO and content analysis tools to help you optimize your digital presence.",
       icon: (
         <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -125,10 +88,7 @@ export default function Home() {
                 className={`block group ${tool.disabled ? 'pointer-events-none' : ''}`}
               >
                 <div
-                  className={`h-full bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden transition-all duration-300 ${tool.disabled
-                    ? 'opacity-60'
-                    : 'hover:shadow-2xl hover:-translate-y-2'
-                    }`}
+                  className={`h-full bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden transition-all duration-300 ${tool.disabled ? 'opacity-60' : 'hover:shadow-2xl hover:-translate-y-2'}`}
                 >
                   {/* Card Header */}
                   <div className={`bg-gradient-to-r ${tool.color} p-6 text-white`}>
@@ -212,101 +172,6 @@ export default function Home() {
             ))}
           </div>
 
-
-          {/* Feedback Form */}
-          <div className="mt-20 max-w-2xl mx-auto bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8">
-            <div className="text-center mb-8">
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-                Feedback & Bug Reports
-              </h2>
-              <p className="text-gray-600 dark:text-gray-300">
-                Help us improve! Let us know if you found a bug or have a suggestion.
-              </p>
-            </div>
-
-            <form onSubmit={handleSubmitFeedback} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label htmlFor="type" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Type
-                  </label>
-                  <select
-                    id="type"
-                    value={feedbackType}
-                    onChange={(e) => setFeedbackType(e.target.value)}
-                    className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                  >
-                    <option value="Feedback">General Feedback</option>
-                    <option value="Bug Report">Bug Report</option>
-                    <option value="Feature Request">Feature Request</option>
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Email (Optional)
-                  </label>
-                  <input
-                    type="email"
-                    id="email"
-                    value={feedbackEmail}
-                    onChange={(e) => setFeedbackEmail(e.target.value)}
-                    placeholder="your@email.com"
-                    className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="message" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Message
-                </label>
-                <textarea
-                  id="message"
-                  value={feedbackMessage}
-                  onChange={(e) => setFeedbackMessage(e.target.value)}
-                  required
-                  rows={4}
-                  placeholder="Tell us what you think or describe the issue..."
-                  className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                />
-              </div>
-
-              <div className="flex justify-end">
-                <button
-                  type="submit"
-                  disabled={feedbackStatus === 'submitting' || feedbackStatus === 'success'}
-                  className={`px-6 py-2 rounded-lg font-semibold text-white transition-all duration-200 ${feedbackStatus === 'success'
-                    ? 'bg-green-600 hover:bg-green-700'
-                    : feedbackStatus === 'error'
-                      ? 'bg-red-600 hover:bg-red-700'
-                      : 'bg-blue-600 hover:bg-blue-700'
-                    } disabled:opacity-70 disabled:cursor-not-allowed flex items-center`}
-                >
-                  {feedbackStatus === 'submitting' ? (
-                    <>
-                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                      </svg>
-                      Sending...
-                    </>
-                  ) : feedbackStatus === 'success' ? (
-                    <>
-                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      Sent Successfully!
-                    </>
-                  ) : feedbackStatus === 'error' ? (
-                    'Error - Try Again'
-                  ) : (
-                    'Send Feedback'
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-
           {/* Footer */}
           <div className="mt-16 text-center text-gray-600 dark:text-gray-400">
             <p className="text-sm mb-2">
@@ -318,6 +183,6 @@ export default function Home() {
           </div>
         </div>
       </main>
-    </ThemeProvider >
+    </ThemeProvider>
   );
 }

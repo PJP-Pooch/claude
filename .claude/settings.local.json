@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run dev:*)",
+      "WebSearch",
+      "Bash(npm run build:*)",
+      "Bash(taskkill:*)",
+      "Bash(if exist .next rmdir /s /q .next)",
+      "Bash(pkill:*)",
+      "Bash(npx tsc:*)",
+      "Bash(curl:*)",
+      "Bash(wmic:*)",
+      "Bash(node:*)",
+      "Bash(npx kill-port:*)",
+      "WebFetch(domain:docs.dataforseo.com)",
+      "Bash(npm run dev:build:*)",
+      "Bash(git push)",
+      "Bash(git push:*)",
+      "Bash(git commit:*)",
+      "Bash(git add:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(test:*)",
+      "Bash(git restore:*)",
+      "Bash(claude mcp:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(git pull:*)",
+      "Bash(npm audit fix:*)",
+      "Bash(npm audit:*)",
+      "Bash(npm test:*)",
+      "Bash(npm install:*)"
+    ],
+    "deny": [],
+    "ask": [],
+    "additionalDirectories": [
+      "C:\\"
+    ]
+  }
+}
