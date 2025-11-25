@@ -502,6 +502,10 @@ export async function fetchSerpEnrichmentBatch(
   const languageCode = getLanguageCode(language);
   const results: Record<string, SerpEnrichmentData> = {};
 
+  // Create a map of lowercased keywords to original keywords for reliable matching
+  const keywordMap = new Map<string, string>();
+  keywords.forEach(k => keywordMap.set(k.toLowerCase(), k));
+
   // Chunk keywords into batches of 50 (DataForSEO allows up to 100)
   const chunkSize = 50;
   const chunks = [];
@@ -557,6 +561,9 @@ export async function fetchSerpEnrichmentBatch(
 
         const result = task.result[0];
         const keyword = result.keyword;
+        // Use the original keyword from our map if possible, to ensure keys match what the caller expects
+        const originalKeyword = keywordMap.get(keyword.toLowerCase()) || keyword;
+
         const items = result.items || [];
 
         // Extract top URLs (top 3 organic results)
@@ -660,7 +667,7 @@ export async function fetchSerpEnrichmentBatch(
           }
         }
 
-        results[keyword] = {
+        results[originalKeyword] = {
           topUrls,
           serpFeatures,
           intent,

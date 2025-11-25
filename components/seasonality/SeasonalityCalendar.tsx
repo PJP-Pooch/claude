@@ -134,8 +134,8 @@ export default function SeasonalityCalendar({ keywords, onSelectKeyword }: Seaso
                                         {/* Chart */}
                                         <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
                                             <h5 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Historical & Forecast</h5>
-                                            <div className="h-48 w-full">
-                                                <SeasonalityChart keywordData={task} />
+                                            <div className="h-64 w-full">
+                                                <SeasonalityChart keywordData={task} minimal={true} />
                                             </div>
                                         </div>
 

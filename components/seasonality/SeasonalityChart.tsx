@@ -15,9 +15,10 @@ import { format, parseISO } from 'date-fns';
 
 interface SeasonalityChartProps {
     keywordData: KeywordSeasonality;
+    minimal?: boolean;
 }
 
-export default function SeasonalityChart({ keywordData }: SeasonalityChartProps) {
+export default function SeasonalityChart({ keywordData, minimal = false }: SeasonalityChartProps) {
     // Combine history and forecast for the chart
     const historyData = keywordData.monthly.map(m => ({
         date: `${m.year}-${String(m.month).padStart(2, '0')}`,
@@ -52,26 +53,28 @@ export default function SeasonalityChart({ keywordData }: SeasonalityChartProps)
     combinedData.sort((a, b) => a.date.localeCompare(b.date));
 
     return (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 h-96">
-            <div className="flex justify-between items-start mb-4">
-                <div>
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                        {keywordData.keyword}
-                    </h3>
-                    <div className="flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400 mt-1">
-                        <span>Peak: {keywordData.peakMonth} ({keywordData.peakVolume.toLocaleString()})</span>
-                        <span>Start Optimizing: {keywordData.startOptimizingDate}</span>
+        <div className={`bg-white dark:bg-gray-800 rounded-lg shadow p-4 h-full ${minimal ? '' : 'p-6'}`}>
+            {!minimal && (
+                <div className="flex justify-between items-start mb-4">
+                    <div>
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                            {keywordData.keyword}
+                        </h3>
+                        <div className="flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400 mt-1">
+                            <span>Peak: {keywordData.peakMonth} ({keywordData.peakVolume.toLocaleString()})</span>
+                            <span>Start Optimizing: {keywordData.startOptimizingDate}</span>
+                        </div>
+                    </div>
+                    <div className="text-right">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${keywordData.seasonalityType === 'Sharp Seasonal' ? 'bg-red-100 text-red-800' :
+                            keywordData.seasonalityType === 'Growing' ? 'bg-green-100 text-green-800' :
+                                'bg-blue-100 text-blue-800'
+                            }`}>
+                            {keywordData.seasonalityType}
+                        </span>
                     </div>
                 </div>
-                <div className="text-right">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${keywordData.seasonalityType === 'Sharp Seasonal' ? 'bg-red-100 text-red-800' :
-                        keywordData.seasonalityType === 'Growing' ? 'bg-green-100 text-green-800' :
-                            'bg-blue-100 text-blue-800'
-                        }`}>
-                        {keywordData.seasonalityType}
-                    </span>
-                </div>
-            </div>
+            )}
 
             <ResponsiveContainer width="100%" height="100%">
                 <AreaChart
