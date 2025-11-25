@@ -191,6 +191,41 @@ export default function SeasonalityCalendar({ keywords, onSelectKeyword }: Seaso
                                                     )}
                                                 </div>
 
+                                                {/* AI Overview & Target Domain Status */}
+                                                <div className="grid grid-cols-2 gap-4 mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
+                                                    <div>
+                                                        <span className="text-xs text-gray-500 dark:text-gray-400 block mb-1">AI Overview</span>
+                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${task.serpData.serpFeatures?.includes('AI Overview') ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'}`}>
+                                                            {task.serpData.serpFeatures?.includes('AI Overview') ? '✓ Present' : '✗ Not Present'}
+                                                        </span>
+                                                    </div>
+                                                    {task.serpData.inAiOverview !== undefined && (
+                                                        <div>
+                                                            <span className="text-xs text-gray-500 dark:text-gray-400 block mb-1">Your Domain in AI Overview</span>
+                                                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${task.serpData.inAiOverview ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'}`}>
+                                                                {task.serpData.inAiOverview ? '✓ Yes' : '✗ No'}
+                                                            </span>
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* Target Domain Ranking */}
+                                                {task.serpData.currentRank !== undefined && task.serpData.currentUrl && (
+                                                    <div className="mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
+                                                        <span className="text-xs text-gray-500 dark:text-gray-400 block mb-2">Your Domain Ranking</span>
+                                                        <div className="flex items-start space-x-2">
+                                                            <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 font-bold text-xs">
+                                                                #{task.serpData.currentRank}
+                                                            </span>
+                                                            <div className="flex-1 min-w-0">
+                                                                <a href={task.serpData.currentUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline truncate block text-xs">
+                                                                    {task.serpData.currentUrl}
+                                                                </a>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+
                                                 {/* SERP Features */}
                                                 {task.serpData.serpFeatures && task.serpData.serpFeatures.length > 0 && (
                                                     <div className="mb-4">
