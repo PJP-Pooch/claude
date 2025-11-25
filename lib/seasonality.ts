@@ -130,10 +130,11 @@ export function analyzeSeasonality(
 
     // Seasonality Type Classification
     let seasonalityType: SeasonalityType = 'Mixed';
-    if (percentDifference > 50) seasonalityType = 'Sharp Seasonal';
-    else if (percentDifference > 20) seasonalityType = 'Growing';
-    else if (percentDifference < -20) seasonalityType = 'Declining';
-    else seasonalityType = 'Steady';
+    if (percentDifference > 200) seasonalityType = 'Sharp Seasonal'; // Very strong seasonal pattern (e.g., harvest mites)
+    else if (percentDifference > 100) seasonalityType = 'Growing'; // Strong seasonal pattern
+    else if (percentDifference > 30) seasonalityType = 'Steady'; // Moderate variation
+    else if (percentDifference < -30) seasonalityType = 'Declining'; // Declining trend
+    else seasonalityType = 'Mixed'; // Relatively flat
 
     // Content Stage
     let contentStage: ContentStage = 'Off-season';

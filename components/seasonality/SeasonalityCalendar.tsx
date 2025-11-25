@@ -226,6 +226,18 @@ export default function SeasonalityCalendar({ keywords, onSelectKeyword }: Seaso
                                                     </div>
                                                 )}
 
+                                                {/* AI Overview Content */}
+                                                {task.serpData.aiOverviewText && (
+                                                    <details className="mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
+                                                        <summary className="text-xs text-gray-500 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300 mb-2">
+                                                            AI Overview Content (Click to expand)
+                                                        </summary>
+                                                        <div className="mt-2 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                                                            {task.serpData.aiOverviewText}
+                                                        </div>
+                                                    </details>
+                                                )}
+
                                                 {/* SERP Features */}
                                                 {task.serpData.serpFeatures && task.serpData.serpFeatures.length > 0 && (
                                                     <div className="mb-4">

@@ -485,6 +485,7 @@ export type SerpEnrichmentData = {
   currentRank?: number;
   currentUrl?: string;
   inAiOverview?: boolean;
+  aiOverviewText?: string;
 };
 
 /**
@@ -589,24 +590,16 @@ export async function fetchSerpEnrichmentBatch(
         let currentRank: number | undefined;
         let currentUrl: string | undefined;
         let inAiOverview: boolean | undefined;
+        let aiOverviewText: string | undefined;
 
-        if (targetDomain) {
-          const domainMatch = organicItems.find((item: any) => {
-            try {
-              return item.url && (item.url.includes(targetDomain) || new URL(item.url).hostname.includes(targetDomain));
-            } catch (e) {
-              return false;
-            }
-          });
+        // Extract AI Overview content
+        const aiOverviewItem = items.find((item: any) => item.type === 'ai_overview');
+        if (aiOverviewItem) {
+          // Extract the text content from AI Overview
+          aiOverviewText = aiOverviewItem.text || aiOverviewItem.markdown || '';
 
-          if (domainMatch) {
-            currentRank = domainMatch.rank_absolute;
-            currentUrl = domainMatch.url;
-          }
-
-          // Check AI Overview
-          const aiOverviewItem = items.find((item: any) => item.type === 'ai_overview');
-          if (aiOverviewItem) {
+          // Check if target domain is in AI Overview
+          if (targetDomain) {
             inAiOverview = false;
             if (aiOverviewItem.items && Array.isArray(aiOverviewItem.items)) {
               for (const subItem of aiOverviewItem.items) {
@@ -625,6 +618,21 @@ export async function fetchSerpEnrichmentBatch(
                 if (inAiOverview) break;
               }
             }
+          }
+        }
+
+        if (targetDomain) {
+          const domainMatch = organicItems.find((item: any) => {
+            try {
+              return item.url && (item.url.includes(targetDomain) || new URL(item.url).hostname.includes(targetDomain));
+            } catch (e) {
+              return false;
+            }
+          });
+
+          if (domainMatch) {
+            currentRank = domainMatch.rank_absolute;
+            currentUrl = domainMatch.url;
           }
         }
 
@@ -683,7 +691,8 @@ export async function fetchSerpEnrichmentBatch(
           competition,
           currentRank,
           currentUrl,
-          inAiOverview
+          inAiOverview,
+          aiOverviewText
         };
 
         console.log(`[SERP Enrichment] ✓ Stored SERP data for "${originalKeyword}" with ${topUrls.length} top URLs`);

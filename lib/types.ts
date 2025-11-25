@@ -329,6 +329,7 @@ export interface KeywordSeasonality {
     currentRank?: number; // Rank of the target domain if found
     currentUrl?: string; // URL of the target domain if found
     inAiOverview?: boolean; // Whether the target domain is cited in the AI Overview
+    aiOverviewText?: string; // The actual AI Overview content text
   };
 }
 
