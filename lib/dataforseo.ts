@@ -516,68 +516,62 @@ export async function fetchSerpEnrichmentBatch(
   const processChunk = async (chunkKeywords: string[]) => {
     console.log(`[SERP Enrichment] Processing chunk with ${chunkKeywords.length} keywords:`, chunkKeywords);
 
-    const requestBody = chunkKeywords.map(k => ({
-      keyword: k,
-      location_code: locationCode,
-      language_code: languageCode,
-      device: 'desktop',
-      depth: 100, // Ensure we get top 100 results
-      load_async_ai_overview: true, // Request AI Overview
-    }));
+    // Process keywords one at a time since the API only accepts one task per request
+    for (const keyword of chunkKeywords) {
+      try {
+        // Send one keyword per request as per DataForSEO documentation
+        const requestBody = [{
+          keyword: keyword,
+          location_code: locationCode,
+          language_code: languageCode,
+          device: 'desktop',
+          depth: 100,
+          load_async_ai_overview: true,
+        }];
 
-    try {
-      const authString = Buffer.from(`${credentials.login}:${credentials.password}`).toString('base64');
+        const authString = Buffer.from(`${credentials.login}:${credentials.password}`).toString('base64');
 
-      const response = await fetch(`${DATAFORSEO_API_BASE}/serp/google/organic/live/advanced`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Basic ${authString}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
+        const response = await fetch(`${DATAFORSEO_API_BASE}/serp/google/organic/live/advanced`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Basic ${authString}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody),
+        });
 
-      // Handle rate limiting
-      if (response.status === 429) {
-        if (retryCount >= MAX_RETRIES) {
-          console.error(`Max retries exceeded for SERP enrichment batch`);
-          return;
+        // Handle rate limiting
+        if (response.status === 429) {
+          console.error(`[SERP Enrichment] Rate limit hit for keyword: ${keyword}`);
+          const backoffTime = INITIAL_BACKOFF * Math.pow(2, retryCount);
+          await sleep(backoffTime);
+          continue;
         }
-        const backoffTime = INITIAL_BACKOFF * Math.pow(2, retryCount);
-        await sleep(backoffTime);
-        console.error(`Rate limit hit for batch, skipping chunk of ${chunkKeywords.length} keywords`);
-        return;
-      }
 
-      if (!response.ok) {
-        console.error(`SERP enrichment failed for batch: ${response.status}`);
-        return;
-      }
+        if (!response.ok) {
+          console.error(`[SERP Enrichment] Request failed for keyword "${keyword}": ${response.status}`);
+          continue;
+        }
 
-      const data = await response.json();
+        const data = await response.json();
 
-      if (!data.tasks) return;
+        if (!data.tasks || data.tasks.length === 0) {
+          console.log(`[SERP Enrichment] No tasks returned for keyword: ${keyword}`);
+          continue;
+        }
 
-      console.log(`[SERP Enrichment] Received ${data.tasks.length} task results for chunk of ${chunkKeywords.length} keywords`);
+        const task = data.tasks[0];
 
-      data.tasks.forEach((task: any, index: number) => {
         if (!task.result || task.result.length === 0) {
-          console.log(`[SERP Enrichment] Task ${index}: No results`);
-          console.log(`[SERP Enrichment] Task ${index} status:`, {
-            status_code: task.status_code,
-            status_message: task.status_message,
-            id: task.id,
-            result: task.result
-          });
-          return;
+          console.log(`[SERP Enrichment] Task for "${keyword}" has no results. Status: ${task.status_code} - ${task.status_message}`);
+          continue;
         }
 
         const result = task.result[0];
-        const keyword = result.keyword;
-        // Use the original keyword from our map if possible, to ensure keys match what the caller expects
-        const originalKeyword = keywordMap.get(keyword.toLowerCase()) || keyword;
+        const apiKeyword = result.keyword;
+        const originalKeyword = keywordMap.get(apiKeyword.toLowerCase()) || apiKeyword;
 
-        console.log(`[SERP Enrichment] Processing keyword: "${keyword}" → "${originalKeyword}"`);
+        console.log(`[SERP Enrichment] Processing keyword: "${apiKeyword}" → "${originalKeyword}"`);
 
         const items = result.items || [];
 
@@ -597,7 +591,6 @@ export async function fetchSerpEnrichmentBatch(
         let inAiOverview: boolean | undefined;
 
         if (targetDomain) {
-          // Check organic rankings (top 100)
           const domainMatch = organicItems.find((item: any) => {
             try {
               return item.url && (item.url.includes(targetDomain) || new URL(item.url).hostname.includes(targetDomain));
@@ -649,14 +642,14 @@ export async function fetchSerpEnrichmentBatch(
         if (featureTypes.includes('top_stories')) serpFeatures.push('Top Stories');
         if (featureTypes.includes('ai_overview')) serpFeatures.push('AI Overview');
 
-        // Determine search intent based on SERP features and content
+        // Determine search intent
         let intent: 'Informational' | 'Commercial' | 'Transactional' | 'Navigational' | 'Mixed' = 'Informational';
 
-        if (serpFeatures.includes('Shopping') || keyword.toLowerCase().includes('buy') || keyword.toLowerCase().includes('price')) {
+        if (serpFeatures.includes('Shopping') || apiKeyword.toLowerCase().includes('buy') || apiKeyword.toLowerCase().includes('price')) {
           intent = 'Transactional';
-        } else if (serpFeatures.includes('Local Pack') || keyword.toLowerCase().includes('near me')) {
+        } else if (serpFeatures.includes('Local Pack') || apiKeyword.toLowerCase().includes('near me')) {
           intent = 'Transactional';
-        } else if (keyword.toLowerCase().includes('best') || keyword.toLowerCase().includes('review') || keyword.toLowerCase().includes('vs')) {
+        } else if (apiKeyword.toLowerCase().includes('best') || apiKeyword.toLowerCase().includes('review') || apiKeyword.toLowerCase().includes('vs')) {
           intent = 'Commercial';
         } else if (serpFeatures.includes('Knowledge Graph')) {
           intent = 'Navigational';
@@ -664,7 +657,7 @@ export async function fetchSerpEnrichmentBatch(
           intent = 'Mixed';
         }
 
-        // Get keyword difficulty and CPC if available from keyword_properties
+        // Get keyword difficulty and CPC
         let difficulty: number | undefined;
         let cpc: number | undefined;
         let competition: 'Low' | 'Medium' | 'High' | undefined;
@@ -673,7 +666,6 @@ export async function fetchSerpEnrichmentBatch(
           difficulty = result.keyword_properties.keyword_difficulty;
           cpc = result.keyword_properties.cpc;
 
-          // Map competition level
           const compLevel = result.keyword_properties.competition;
           if (compLevel !== undefined) {
             if (compLevel < 0.33) competition = 'Low';
@@ -695,10 +687,13 @@ export async function fetchSerpEnrichmentBatch(
         };
 
         console.log(`[SERP Enrichment] ✓ Stored SERP data for "${originalKeyword}" with ${topUrls.length} top URLs`);
-      });
 
-    } catch (error) {
-      console.error(`Error fetching SERP enrichment batch:`, error);
+        // Add a small delay between requests to avoid rate limiting
+        await sleep(250);
+
+      } catch (error) {
+        console.error(`[SERP Enrichment] Error processing keyword "${keyword}":`, error);
+      }
     }
   };
 
