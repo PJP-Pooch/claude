@@ -563,6 +563,12 @@ export async function fetchSerpEnrichmentBatch(
       data.tasks.forEach((task: any, index: number) => {
         if (!task.result || task.result.length === 0) {
           console.log(`[SERP Enrichment] Task ${index}: No results`);
+          console.log(`[SERP Enrichment] Task ${index} status:`, {
+            status_code: task.status_code,
+            status_message: task.status_message,
+            id: task.id,
+            result: task.result
+          });
           return;
         }
 
