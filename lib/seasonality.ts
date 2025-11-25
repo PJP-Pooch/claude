@@ -116,9 +116,9 @@ export function analyzeSeasonality(
     const startOptimizingDate = subMonths(nextPeakDate, Math.floor(leadTimeDays / 30));
 
     // Priority Score (0-10)
-    // Factors: Volume, Growth, Proximity to Start Date
-    const volumeScore = Math.min(average / 1000, 5); // Max 5 points for volume
-    const growthScore = Math.min(Math.max(percentDifference / 50, 0), 3); // Max 3 points for growth
+    // Factors: Volume, Seasonal Growth, Urgency, YoY Trend
+    const volumeScore = Math.min(average / 1000, 4); // Max 4 points for volume (reduced to make room for other factors)
+    const growthScore = Math.min(Math.max(percentDifference / 50, 0), 3); // Max 3 points for seasonal growth
 
     const daysToStart = differenceInDays(startOptimizingDate, today);
     let urgencyScore = 0;
@@ -126,7 +126,13 @@ export function analyzeSeasonality(
     else if (daysToStart < 30) urgencyScore = 2; // Urgent
     else if (daysToStart < 60) urgencyScore = 1; // Upcoming
 
-    const priorityScore = Math.min(volumeScore + growthScore + urgencyScore, 10);
+    // YoY Growth Bonus (0-1 points) - Prioritize growing keywords
+    let yoyScore = 0;
+    if (yoyGrowth > 20) yoyScore = 1; // Strong growth
+    else if (yoyGrowth > 10) yoyScore = 0.5; // Moderate growth
+    else if (yoyGrowth < -10) yoyScore = -0.5; // Declining keywords get penalized
+
+    const priorityScore = Math.min(Math.max(volumeScore + growthScore + urgencyScore + yoyScore, 0), 10);
 
     // Seasonality Type Classification
     let seasonalityType: SeasonalityType = 'Mixed';

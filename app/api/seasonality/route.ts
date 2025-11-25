@@ -112,6 +112,30 @@ export async function POST(req: NextRequest) {
                         console.log(`Available keys in serpDataMap:`, Object.keys(serpDataMap));
                     }
 
+                    // Enhance priority score based on ranking opportunity
+                    if (analysis.serpData) {
+                        let rankingBonus = 0;
+
+                        // Big opportunity: Not ranking at all
+                        if (!analysis.serpData.currentRank) {
+                            rankingBonus = 1.5;
+                        }
+                        // Medium opportunity: Ranking but not in top 10
+                        else if (analysis.serpData.currentRank > 10) {
+                            rankingBonus = 1;
+                        }
+                        // Small opportunity: In top 10 but not top 3
+                        else if (analysis.serpData.currentRank > 3) {
+                            rankingBonus = 0.5;
+                        }
+                        // Already ranking well (top 3) - no bonus
+
+                        // Apply the bonus
+                        if (rankingBonus > 0) {
+                            analysis.priorityScore = Math.min(analysis.priorityScore + rankingBonus, 10);
+                        }
+                    }
+
                     analyzedKeywords.push(analysis);
                 } catch (err) {
                     errors.push({
