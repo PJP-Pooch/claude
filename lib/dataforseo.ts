@@ -514,6 +514,8 @@ export async function fetchSerpEnrichmentBatch(
   }
 
   const processChunk = async (chunkKeywords: string[]) => {
+    console.log(`[SERP Enrichment] Processing chunk with ${chunkKeywords.length} keywords:`, chunkKeywords);
+
     const requestBody = chunkKeywords.map(k => ({
       keyword: k,
       location_code: locationCode,
@@ -556,13 +558,20 @@ export async function fetchSerpEnrichmentBatch(
 
       if (!data.tasks) return;
 
-      data.tasks.forEach((task: any) => {
-        if (!task.result || task.result.length === 0) return;
+      console.log(`[SERP Enrichment] Received ${data.tasks.length} task results for chunk of ${chunkKeywords.length} keywords`);
+
+      data.tasks.forEach((task: any, index: number) => {
+        if (!task.result || task.result.length === 0) {
+          console.log(`[SERP Enrichment] Task ${index}: No results`);
+          return;
+        }
 
         const result = task.result[0];
         const keyword = result.keyword;
         // Use the original keyword from our map if possible, to ensure keys match what the caller expects
         const originalKeyword = keywordMap.get(keyword.toLowerCase()) || keyword;
+
+        console.log(`[SERP Enrichment] Processing keyword: "${keyword}" → "${originalKeyword}"`);
 
         const items = result.items || [];
 
@@ -678,6 +687,8 @@ export async function fetchSerpEnrichmentBatch(
           currentUrl,
           inAiOverview
         };
+
+        console.log(`[SERP Enrichment] ✓ Stored SERP data for "${originalKeyword}" with ${topUrls.length} top URLs`);
       });
 
     } catch (error) {
