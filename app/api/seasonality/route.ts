@@ -61,13 +61,20 @@ export async function POST(req: NextRequest) {
         const analyzedKeywords = [];
         const errors = [];
 
+        // Create a map for case-insensitive lookup of original keywords
+        const keywordMap = new Map<string, string>();
+        keywords.forEach(k => keywordMap.set(k.toLowerCase(), k));
+
         // 3. Process results and combine data
         for (const resultItem of rawResults) {
             if (!resultItem.items) continue;
 
             for (const item of resultItem.items) {
                 try {
-                    const keyword = item.keyword;
+                    const rawKeyword = item.keyword;
+                    // Try to map back to original keyword casing
+                    const keyword = keywordMap.get(rawKeyword.toLowerCase()) || rawKeyword;
+
                     const monthlySearches = item.keyword_info?.monthly_searches || [];
 
                     // Map to our MonthlySV format
@@ -81,12 +88,17 @@ export async function POST(req: NextRequest) {
                     });
 
                     // Analyze
-                    const category = categoryMap ? categoryMap[keyword] : undefined;
+                    // Use the original keyword for category lookup as well
+                    const category = categoryMap ? (categoryMap[keyword] || categoryMap[rawKeyword]) : undefined;
                     const analysis = analyzeSeasonality(keyword, history, leadTimeDays, category);
 
                     // Attach SERP data if available
+                    // serpDataMap is keyed by original keywords now
                     if (serpDataMap[keyword]) {
                         analysis.serpData = serpDataMap[keyword];
+                    } else if (serpDataMap[rawKeyword]) {
+                        // Fallback to raw keyword if map lookup failed
+                        analysis.serpData = serpDataMap[rawKeyword];
                     }
 
                     analyzedKeywords.push(analysis);
