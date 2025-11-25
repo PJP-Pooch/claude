@@ -516,8 +516,8 @@ export async function fetchSerpEnrichmentBatch(
   const processChunk = async (chunkKeywords: string[]) => {
     console.log(`[SERP Enrichment] Processing chunk with ${chunkKeywords.length} keywords:`, chunkKeywords);
 
-    // Process keywords one at a time since the API only accepts one task per request
-    for (const keyword of chunkKeywords) {
+    // Process all keywords in parallel for maximum speed
+    await Promise.all(chunkKeywords.map(async (keyword) => {
       try {
         // Send one keyword per request as per DataForSEO documentation
         const requestBody = [{
@@ -545,26 +545,26 @@ export async function fetchSerpEnrichmentBatch(
           console.error(`[SERP Enrichment] Rate limit hit for keyword: ${keyword}`);
           const backoffTime = INITIAL_BACKOFF * Math.pow(2, retryCount);
           await sleep(backoffTime);
-          continue;
+          return;
         }
 
         if (!response.ok) {
           console.error(`[SERP Enrichment] Request failed for keyword "${keyword}": ${response.status}`);
-          continue;
+          return;
         }
 
         const data = await response.json();
 
         if (!data.tasks || data.tasks.length === 0) {
           console.log(`[SERP Enrichment] No tasks returned for keyword: ${keyword}`);
-          continue;
+          return;
         }
 
         const task = data.tasks[0];
 
         if (!task.result || task.result.length === 0) {
           console.log(`[SERP Enrichment] Task for "${keyword}" has no results. Status: ${task.status_code} - ${task.status_message}`);
-          continue;
+          return;
         }
 
         const result = task.result[0];
@@ -688,13 +688,10 @@ export async function fetchSerpEnrichmentBatch(
 
         console.log(`[SERP Enrichment] ✓ Stored SERP data for "${originalKeyword}" with ${topUrls.length} top URLs`);
 
-        // Add a small delay between requests to avoid rate limiting
-        await sleep(250);
-
       } catch (error) {
         console.error(`[SERP Enrichment] Error processing keyword "${keyword}":`, error);
       }
-    }
+    }));
   };
 
   // Process chunks in parallel
