@@ -94,11 +94,16 @@ export async function POST(req: NextRequest) {
 
                     // Attach SERP data if available
                     // serpDataMap is keyed by original keywords now
+                    // Attach SERP data if available
+                    // serpDataMap is keyed by original keywords now
                     if (serpDataMap[keyword]) {
                         analysis.serpData = serpDataMap[keyword];
                     } else if (serpDataMap[rawKeyword]) {
                         // Fallback to raw keyword if map lookup failed
                         analysis.serpData = serpDataMap[rawKeyword];
+                    } else if (serpDataMap[keyword.toLowerCase()]) {
+                        // Fallback to lowercase keyword
+                        analysis.serpData = serpDataMap[keyword.toLowerCase()];
                     }
 
                     analyzedKeywords.push(analysis);
