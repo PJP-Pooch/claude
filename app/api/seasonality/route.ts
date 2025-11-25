@@ -98,12 +98,18 @@ export async function POST(req: NextRequest) {
                     // serpDataMap is keyed by original keywords now
                     if (serpDataMap[keyword]) {
                         analysis.serpData = serpDataMap[keyword];
+                        console.log(`✓ Attached SERP data for "${keyword}" (exact match)`);
                     } else if (serpDataMap[rawKeyword]) {
                         // Fallback to raw keyword if map lookup failed
                         analysis.serpData = serpDataMap[rawKeyword];
+                        console.log(`✓ Attached SERP data for "${keyword}" (raw keyword match: "${rawKeyword}")`);
                     } else if (serpDataMap[keyword.toLowerCase()]) {
                         // Fallback to lowercase keyword
                         analysis.serpData = serpDataMap[keyword.toLowerCase()];
+                        console.log(`✓ Attached SERP data for "${keyword}" (lowercase match)`);
+                    } else {
+                        console.log(`✗ No SERP data found for "${keyword}" (tried: "${keyword}", "${rawKeyword}", "${keyword.toLowerCase()}")`);
+                        console.log(`Available keys in serpDataMap:`, Object.keys(serpDataMap));
                     }
 
                     analyzedKeywords.push(analysis);

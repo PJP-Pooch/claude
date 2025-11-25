@@ -163,7 +163,7 @@ export default function SeasonalityCalendar({ keywords, onSelectKeyword }: Seaso
                                         </div>
 
                                         {/* SERP Intelligence */}
-                                        {task.serpData && (
+                                        {task.serpData && task.serpData.topUrls && task.serpData.topUrls.length > 0 && (
                                             <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
                                                 <h5 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">SERP Intelligence</h5>
                                                 <div className="grid grid-cols-3 gap-4 mb-4">

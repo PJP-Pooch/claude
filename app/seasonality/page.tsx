@@ -231,7 +231,7 @@ export default function SeasonalityPage() {
                                             </div>
 
                                             {/* SERP Data */}
-                                            {selectedKeyword.serpData && (
+                                            {selectedKeyword.serpData && selectedKeyword.serpData.topUrls && selectedKeyword.serpData.topUrls.length > 0 && (
                                                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
                                                     <details className="group">
                                                         <summary className="flex items-center justify-between p-6 cursor-pointer list-none">
