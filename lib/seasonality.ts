@@ -225,3 +225,18 @@ export function aggregateByCategory(keywords: KeywordSeasonality[]) {
 
     return categories;
 }
+
+export const getActionType = (keyword: KeywordSeasonality): { type: 'Upcycle' | 'Review' | 'New Content'; color: string } => {
+    const rank = keyword.serpData?.currentRank;
+
+    if (!rank) {
+        return { type: 'New Content', color: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' };
+    }
+
+    if (rank <= 20) {
+        return { type: 'Upcycle', color: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200' };
+    }
+
+    // rank 21-100
+    return { type: 'Review', color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' };
+};
