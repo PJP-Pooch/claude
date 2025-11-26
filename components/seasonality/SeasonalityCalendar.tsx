@@ -131,7 +131,24 @@ export default function SeasonalityCalendar({ keywords, onSelectKeyword }: Seaso
 
     const downloadCalendarCSV = () => {
         const headers = [
-            'Subject', 'Start Date', 'Description', 'Priority', 'Seasonality Type', 'Action'
+            'Subject',
+            'Planned Start Date',
+            'Peak Month',
+            'Avg Search Volume',
+            'Peak Search Volume',
+            'YoY Growth (%)',
+            'Current Rank',
+            'Ranking URL',
+            'In AI Overview',
+            'Search Intent',
+            'Difficulty',
+            'CPC',
+            'Content Stage',
+            'Lead Time (Days)',
+            'Priority',
+            'Seasonality Type',
+            'Action',
+            'Suggestion'
         ];
 
         const rows: string[][] = [];
@@ -139,13 +156,27 @@ export default function SeasonalityCalendar({ keywords, onSelectKeyword }: Seaso
         Object.values(tasksByMonth).forEach(monthTasks => {
             monthTasks.forEach(task => {
                 const action = getActionType(task);
+                const date = movedKeywords[task.keyword] || task.startOptimizingDate;
+
                 rows.push([
                     task.keyword,
-                    task.startOptimizingDate,
-                    `Peak in ${task.peakMonth}. ${task.contentSuggestion}`,
+                    date,
+                    task.peakMonth,
+                    task.average.toFixed(0),
+                    task.peakVolume.toFixed(0),
+                    task.yoyGrowth ? `${(task.yoyGrowth * 100).toFixed(1)}%` : 'N/A',
+                    task.serpData?.currentRank ? task.serpData.currentRank.toString() : 'N/A',
+                    task.serpData?.currentUrl || 'N/A',
+                    task.serpData?.inAiOverview ? 'Yes' : 'No',
+                    task.serpData?.intent || 'N/A',
+                    task.serpData?.difficulty ? task.serpData.difficulty.toString() : 'N/A',
+                    task.serpData?.cpc ? `$${task.serpData.cpc.toFixed(2)}` : 'N/A',
+                    task.contentStage,
+                    task.leadTimeDays.toString(),
                     task.priorityScore.toFixed(1),
                     task.seasonalityType,
-                    action.type
+                    action.type,
+                    task.contentSuggestion
                 ]);
             });
         });
@@ -176,8 +207,13 @@ export default function SeasonalityCalendar({ keywords, onSelectKeyword }: Seaso
                         <input
                             type="month"
                             id="startMonth"
+                            min={format(new Date(), 'yyyy-MM')}
                             value={format(startMonth, 'yyyy-MM')}
-                            onChange={(e) => setStartMonth(parseISO(e.target.value + '-01'))}
+                            onChange={(e) => {
+                                if (e.target.value) {
+                                    setStartMonth(parseISO(e.target.value + '-01'));
+                                }
+                            }}
                             className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                         />
                     </div>

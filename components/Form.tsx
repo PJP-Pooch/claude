@@ -48,9 +48,9 @@ const Form = ({ onSubmit, isLoading }: FormProps) => {
   const [mockMode, setMockMode] = useState<boolean>(false);
   const [targetQuery, setTargetQuery] = useState('');
   const [targetPageUrl, setTargetPageUrl] = useState('');
-  const [openaiApiKey, setOpenaiApiKey] = useState(process.env.NEXT_PUBLIC_OPENAI_API_KEY || '');
-  const [dataForSeoApiLogin, setDataForSeoApiLogin] = useState(process.env.NEXT_PUBLIC_DATAFORSEO_LOGIN || '');
-  const [dataForSeoApiPassword, setDataForSeoApiPassword] = useState(process.env.NEXT_PUBLIC_DATAFORSEO_PASSWORD || '');
+  const [openaiApiKey, setOpenaiApiKey] = useState('');
+  const [dataForSeoApiLogin, setDataForSeoApiLogin] = useState('');
+  const [dataForSeoApiPassword, setDataForSeoApiPassword] = useState('');
   const [location, setLocation] = useState(process.env.NEXT_PUBLIC_DEFAULT_LOCATION || 'United Kingdom');
   const [language, setLanguage] = useState(process.env.NEXT_PUBLIC_DEFAULT_LANGUAGE || 'English');
   const [device, setDevice] = useState<'desktop' | 'mobile'>((process.env.NEXT_PUBLIC_DEFAULT_DEVICE as 'desktop' | 'mobile') || 'desktop');
@@ -172,39 +172,37 @@ const Form = ({ onSubmit, isLoading }: FormProps) => {
 
         <div>
           <label htmlFor="dataForSeoApiLogin" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            DataForSEO Login {!mockMode && '*'}
+            DataForSEO Login
           </label>
           <input
             type="text"
             id="dataForSeoApiLogin"
             value={dataForSeoApiLogin}
             onChange={(e) => setDataForSeoApiLogin(e.target.value)}
-            required={!mockMode}
             disabled={mockMode}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:text-gray-500 dark:disabled:text-gray-500 transition-colors"
-            placeholder={mockMode ? "Not needed in mock mode" : "login@example.com"}
+            placeholder={mockMode ? "Not needed in mock mode" : "Leave blank if configured on server"}
           />
           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            {mockMode ? "Mock mode uses sample data - no API needed" : "Used to fetch SERP data from Google for each query."}
+            {mockMode ? "Mock mode uses sample data - no API needed" : "Used to fetch SERP data. Leave blank to use server environment variables."}
           </p>
         </div>
 
         <div>
           <label htmlFor="openaiApiKey" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            OpenAI API Key {!mockMode && '*'}
+            OpenAI API Key
           </label>
           <input
             type="password"
             id="openaiApiKey"
             value={openaiApiKey}
             onChange={(e) => setOpenaiApiKey(e.target.value)}
-            required={!mockMode}
             disabled={mockMode}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:text-gray-500 dark:disabled:text-gray-500 transition-colors"
-            placeholder={mockMode ? "Not needed in mock mode" : "Enter your OpenAI API key"}
+            placeholder={mockMode ? "Not needed in mock mode" : "Leave blank if configured on server"}
           />
           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            {mockMode ? "Mock mode uses sample data - no API needed" : "Used for semantic analysis and recommendations (required)."}
+            {mockMode ? "Mock mode uses sample data - no API needed" : "Used for semantic analysis. Leave blank to use server environment variables."}
           </p>
         </div>
 
@@ -230,17 +228,16 @@ const Form = ({ onSubmit, isLoading }: FormProps) => {
 
         <div>
           <label htmlFor="dataForSeoApiPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            DataForSEO Password {!mockMode && '*'}
+            DataForSEO Password
           </label>
           <input
             type="password"
             id="dataForSeoApiPassword"
             value={dataForSeoApiPassword}
             onChange={(e) => setDataForSeoApiPassword(e.target.value)}
-            required={!mockMode}
             disabled={mockMode}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:text-gray-500 dark:disabled:text-gray-500 transition-colors"
-            placeholder={mockMode ? "Not needed in mock mode" : "Enter your password"}
+            placeholder={mockMode ? "Not needed in mock mode" : "Leave blank if configured on server"}
           />
         </div>
 

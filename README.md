@@ -63,11 +63,8 @@ copy .env.example .env
 4. (Optional) Add your API credentials to `.env`:
 ```env
 OPENAI_API_KEY=your_openai_api_key_here
-NEXT_PUBLIC_OPENAI_API_KEY=your_openai_api_key_here
 DATAFORSEO_LOGIN=your_dataforseo_login_here
 DATAFORSEO_PASSWORD=your_dataforseo_password_here
-NEXT_PUBLIC_DATAFORSEO_LOGIN=your_dataforseo_login_here
-NEXT_PUBLIC_DATAFORSEO_PASSWORD=your_dataforseo_password_here
 
 # Optional: Set default configuration
 DEFAULT_LOCATION=United Kingdom
@@ -178,11 +175,8 @@ The repository includes a `render.yaml` file for Infrastructure as Code deployme
 
    ```
    OPENAI_API_KEY=your_openai_api_key_here
-   NEXT_PUBLIC_OPENAI_API_KEY=your_openai_api_key_here
    DATAFORSEO_LOGIN=your_dataforseo_login
    DATAFORSEO_PASSWORD=your_dataforseo_password
-   NEXT_PUBLIC_DATAFORSEO_LOGIN=your_dataforseo_login
-   NEXT_PUBLIC_DATAFORSEO_PASSWORD=your_dataforseo_password
    ```
 
 4. **Deploy:** Click "Apply" and Render will build and deploy your application
@@ -211,15 +205,12 @@ The repository includes a `render.yaml` file for Infrastructure as Code deployme
    ```
    NODE_VERSION=18
    OPENAI_API_KEY=your_openai_api_key_here
-   NEXT_PUBLIC_OPENAI_API_KEY=your_openai_api_key_here
    ```
 
    **Optional (pre-fills form defaults):**
    ```
    DATAFORSEO_LOGIN=your_dataforseo_login
    DATAFORSEO_PASSWORD=your_dataforseo_password
-   NEXT_PUBLIC_DATAFORSEO_LOGIN=your_dataforseo_login
-   NEXT_PUBLIC_DATAFORSEO_PASSWORD=your_dataforseo_password
    DEFAULT_LOCATION=United Kingdom
    DEFAULT_LANGUAGE=English
    DEFAULT_DEVICE=desktop

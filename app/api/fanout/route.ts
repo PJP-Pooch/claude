@@ -45,13 +45,16 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Use provided API key or fallback to server-side environment variable
+    const apiKey = openaiApiKey || process.env.OPENAI_API_KEY;
+
     // Validate OpenAI API key is provided for real API calls
-    if (!openaiApiKey) {
-      throw new Error('OpenAI API key is required when not in mock mode');
+    if (!apiKey) {
+      throw new Error('OpenAI API key is required (either provided in request or configured on server)');
     }
 
     // Call OpenAI API
-    const result = await fanOutQueries(targetQuery, openaiApiKey);
+    const result = await fanOutQueries(targetQuery, apiKey);
 
     // Deduplicate and filter near-duplicates
     const dedupedQueries = filterNearDuplicates(result.subQueries, 0.9);

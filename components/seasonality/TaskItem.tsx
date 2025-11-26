@@ -57,6 +57,44 @@ export default function TaskItem({ task, month, onMove, onRemove }: TaskItemProp
                     </div>
 
                     <div className="flex items-center space-x-2">
+                        <div className="flex items-center space-x-1 mr-2">
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onMove(task.keyword, format(month, 'yyyy-MM'), 'prev');
+                                }}
+                                className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:text-gray-500 dark:hover:text-gray-300 dark:hover:bg-gray-700 rounded transition-colors"
+                                title="Move to Prev Month"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                                </svg>
+                            </button>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onMove(task.keyword, format(month, 'yyyy-MM'), 'next');
+                                }}
+                                className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:text-gray-500 dark:hover:text-gray-300 dark:hover:bg-gray-700 rounded transition-colors"
+                                title="Move to Next Month"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                </svg>
+                            </button>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onRemove(task.keyword);
+                                }}
+                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:text-gray-500 dark:hover:text-red-400 dark:hover:bg-red-900/20 rounded transition-colors"
+                                title="Remove from Calendar"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                            </button>
+                        </div>
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getActionType(task).color}`}>
                             {getActionType(task).type}
                         </span>
@@ -218,29 +256,7 @@ export default function TaskItem({ task, month, onMove, onRemove }: TaskItemProp
                         </div>
                     )}
 
-                    {/* Calendar Actions */}
-                    <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 flex justify-between items-center">
-                        <div className="flex space-x-2">
-                            <button
-                                onClick={() => onMove(task.keyword, format(month, 'yyyy-MM'), 'prev')}
-                                className="px-3 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700"
-                            >
-                                ← Move to Prev Month
-                            </button>
-                            <button
-                                onClick={() => onMove(task.keyword, format(month, 'yyyy-MM'), 'next')}
-                                className="px-3 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700"
-                            >
-                                Move to Next Month →
-                            </button>
-                        </div>
-                        <button
-                            onClick={() => onRemove(task.keyword)}
-                            className="px-3 py-1 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-md hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800 dark:hover:bg-red-900/40"
-                        >
-                            Remove from Calendar
-                        </button>
-                    </div>
+
                 </div>
             </details>
         </div>

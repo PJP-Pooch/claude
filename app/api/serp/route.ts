@@ -47,9 +47,13 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Use provided credentials or fallback to server-side environment variables
+    const login = dataForSeoApiLogin || process.env.DATAFORSEO_LOGIN;
+    const password = dataForSeoApiPassword || process.env.DATAFORSEO_PASSWORD;
+
     // Validate credentials are provided for real API calls
-    if (!dataForSeoApiLogin || !dataForSeoApiPassword) {
-      throw new Error('DataForSEO credentials are required when not in mock mode');
+    if (!login || !password) {
+      throw new Error('DataForSEO credentials are required (either provided in request or configured on server)');
     }
 
     // Fetch real SERP results
@@ -62,8 +66,8 @@ export async function POST(request: NextRequest) {
         device,
       },
       {
-        login: dataForSeoApiLogin,
-        password: dataForSeoApiPassword,
+        login,
+        password,
       },
       25 // concurrency - optimized for maximum parallel performance
     );

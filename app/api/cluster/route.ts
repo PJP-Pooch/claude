@@ -30,9 +30,12 @@ export async function POST(request: NextRequest) {
       mockMode,
     } = RequestSchema.parse(body);
 
+    // Use provided API key or fallback to server-side environment variable
+    const apiKey = openaiApiKey || process.env.OPENAI_API_KEY;
+
     // Validate OpenAI API key is provided for real API calls
-    if (!mockMode && !openaiApiKey) {
-      throw new Error('OpenAI API key is required when not in mock mode');
+    if (!mockMode && !apiKey) {
+      throw new Error('OpenAI API key is required (either provided in request or configured on server)');
     }
 
     // Perform clustering
@@ -44,7 +47,7 @@ export async function POST(request: NextRequest) {
       clusters,
       targetQuery,
       targetPageUrl,
-      openaiApiKey || '',
+      apiKey || '',
       mockMode
     );
 
