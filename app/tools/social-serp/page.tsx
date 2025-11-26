@@ -5,6 +5,7 @@ import * as XLSX from 'xlsx';
 import { Download, ExternalLink, Search, AlertCircle, CheckCircle2 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 import { ThemeProvider } from '@/components/ThemeProvider';
+import { LOCATION_MAP, LANGUAGE_MAP } from '@/lib/types';
 
 const PLATFORMS = ["Reddit", "Pinterest", "Instagram", "TikTok", "YouTube"];
 
@@ -19,8 +20,8 @@ export default function SocialSerpPage() {
     // Form State
     const [baseKeyword, setBaseKeyword] = useState('');
     const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(PLATFORMS);
-    const [locationCode, setLocationCode] = useState('20339'); // UK default
-    const [languageCode, setLanguageCode] = useState('en');
+    const [location, setLocation] = useState('United Kingdom');
+    const [language, setLanguage] = useState('English');
     const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop');
     const [depth, setDepth] = useState(100);
     const [apiLogin, setApiLogin] = useState('');
@@ -31,6 +32,19 @@ export default function SocialSerpPage() {
     const [isLoading, setIsLoading] = useState(false);
     const [results, setResults] = useState<PlatformResult[] | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [expandedPlatforms, setExpandedPlatforms] = useState<Set<string>>(new Set());
+
+    const togglePlatform = (platform: string) => {
+        setExpandedPlatforms(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(platform)) {
+                newSet.delete(platform);
+            } else {
+                newSet.add(platform);
+            }
+            return newSet;
+        });
+    };
 
     const handlePlatformToggle = (platform: string) => {
         setSelectedPlatforms(prev =>
@@ -69,8 +83,8 @@ export default function SocialSerpPage() {
                     platforms: selectedPlatforms,
                     dataforseoLogin: apiLogin || undefined,
                     dataforseoPassword: apiPassword || undefined,
-                    locationCode: parseInt(locationCode),
-                    languageCode,
+                    locationCode: LOCATION_MAP[location],
+                    languageCode: LANGUAGE_MAP[language],
                     device,
                     depth
                 }),
@@ -220,24 +234,28 @@ export default function SocialSerpPage() {
                             {showAdvanced && (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-700">
                                     <div>
-                                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Location Code</label>
-                                        <input
-                                            type="number"
-                                            value={locationCode}
-                                            onChange={(e) => setLocationCode(e.target.value)}
+                                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Location</label>
+                                        <select
+                                            value={location}
+                                            onChange={(e) => setLocation(e.target.value)}
                                             className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white"
-                                        />
-                                        <p className="text-xs text-gray-400 mt-1">Default: 20339 (UK)</p>
+                                        >
+                                            {Object.keys(LOCATION_MAP).map(loc => (
+                                                <option key={loc} value={loc}>{loc}</option>
+                                            ))}
+                                        </select>
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Language Code</label>
-                                        <input
-                                            type="text"
-                                            value={languageCode}
-                                            onChange={(e) => setLanguageCode(e.target.value)}
+                                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Language</label>
+                                        <select
+                                            value={language}
+                                            onChange={(e) => setLanguage(e.target.value)}
                                             className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white"
-                                        />
-                                        <p className="text-xs text-gray-400 mt-1">Default: en</p>
+                                        >
+                                            {Object.keys(LANGUAGE_MAP).map(lang => (
+                                                <option key={lang} value={lang}>{lang}</option>
+                                            ))}
+                                        </select>
                                     </div>
                                     <div>
                                         <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Device</label>
@@ -374,7 +392,10 @@ export default function SocialSerpPage() {
                             <div className="grid grid-cols-1 gap-6">
                                 {results.map((result) => (
                                     <div key={result.platform} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                                        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex justify-between items-center">
+                                        <button
+                                            onClick={() => togglePlatform(result.platform)}
+                                            className="w-full px-6 py-4 bg-gray-50 dark:bg-gray-900/50 flex justify-between items-center hover:bg-gray-100 dark:hover:bg-gray-900/70 transition-colors"
+                                        >
                                             <div className="flex items-center space-x-3">
                                                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                                                     {result.platform}
@@ -383,58 +404,72 @@ export default function SocialSerpPage() {
                                                     {result.rows.length} results
                                                 </span>
                                             </div>
-                                            <span className="text-xs text-gray-500 dark:text-gray-400 font-mono">
-                                                Query: {result.query}
-                                            </span>
-                                        </div>
+                                            <div className="flex items-center space-x-3">
+                                                <span className="text-xs text-gray-500 dark:text-gray-400 font-mono">
+                                                    Query: {result.query}
+                                                </span>
+                                                <svg
+                                                    className={`w-5 h-5 text-gray-500 transition-transform ${expandedPlatforms.has(result.platform) ? 'rotate-180' : ''}`}
+                                                    fill="none"
+                                                    viewBox="0 0 24 24"
+                                                    stroke="currentColor"
+                                                >
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                </svg>
+                                            </div>
+                                        </button>
 
-                                        {result.error ? (
-                                            <div className="p-6 text-center text-red-500 dark:text-red-400 text-sm">
-                                                Error fetching results: {result.error}
-                                            </div>
-                                        ) : result.rows.length === 0 ? (
-                                            <div className="p-8 text-center text-gray-500 dark:text-gray-400 italic">
-                                                No results found for this platform.
-                                            </div>
-                                        ) : (
-                                            <div className="overflow-x-auto">
-                                                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                                                    <thead className="bg-gray-50 dark:bg-gray-900/30">
-                                                        <tr>
-                                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-2/3">
-                                                                Title
-                                                            </th>
-                                                            <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                                                Action
-                                                            </th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                                        {result.rows.map((row, idx) => (
-                                                            <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                                                                <td className="px-6 py-4">
-                                                                    <div className="text-sm font-medium text-gray-900 dark:text-white line-clamp-2">
-                                                                        {row.title}
-                                                                    </div>
-                                                                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate max-w-lg">
-                                                                        {row.url}
-                                                                    </div>
-                                                                </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                                    <a
-                                                                        href={row.url}
-                                                                        target="_blank"
-                                                                        rel="noopener noreferrer"
-                                                                        className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 inline-flex items-center"
-                                                                    >
-                                                                        Open <ExternalLink className="h-3 w-3 ml-1" />
-                                                                    </a>
-                                                                </td>
-                                                            </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
-                                            </div>
+                                        {expandedPlatforms.has(result.platform) && (
+                                            <>
+                                                {result.error ? (
+                                                    <div className="p-6 text-center text-red-500 dark:text-red-400 text-sm border-t border-gray-200 dark:border-gray-700">
+                                                        Error fetching results: {result.error}
+                                                    </div>
+                                                ) : result.rows.length === 0 ? (
+                                                    <div className="p-8 text-center text-gray-500 dark:text-gray-400 italic border-t border-gray-200 dark:border-gray-700">
+                                                        No results found for this platform.
+                                                    </div>
+                                                ) : (
+                                                    <div className="overflow-x-auto border-t border-gray-200 dark:border-gray-700">
+                                                        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                                            <thead className="bg-gray-50 dark:bg-gray-900/30">
+                                                                <tr>
+                                                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-2/3">
+                                                                        Title
+                                                                    </th>
+                                                                    <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                                        Action
+                                                                    </th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                                                {result.rows.map((row, idx) => (
+                                                                    <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                                                        <td className="px-6 py-4">
+                                                                            <div className="text-sm font-medium text-gray-900 dark:text-white line-clamp-2">
+                                                                                {row.title}
+                                                                            </div>
+                                                                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate max-w-lg">
+                                                                                {row.url}
+                                                                            </div>
+                                                                        </td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                                            <a
+                                                                                href={row.url}
+                                                                                target="_blank"
+                                                                                rel="noopener noreferrer"
+                                                                                className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 inline-flex items-center"
+                                                                            >
+                                                                                Open <ExternalLink className="h-3 w-3 ml-1" />
+                                                                            </a>
+                                                                        </td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                )}
+                                            </>
                                         )}
                                     </div>
                                 ))}
