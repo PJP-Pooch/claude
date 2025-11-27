@@ -63,6 +63,25 @@ export default function Home() {
         'Domain filtering',
       ],
     },
+    {
+      id: 'gsc-export',
+      title: 'GSC Bulk Export & Query Insights',
+      description: 'Export all your Google Search Console queries with full metrics, analyze query position distribution, and identify optimization opportunities.',
+      icon: (
+        <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+      ),
+      href: '/tools/gsc-export',
+      color: 'from-orange-500 to-red-600',
+      features: [
+        'OAuth integration with GSC',
+        'Bulk export all queries',
+        'Position distribution analysis',
+        'Monthly trend visualization',
+        'CSV export with full metrics',
+      ],
+    },
     // Placeholder for future tools
     {
       id: 'coming-soon-1',

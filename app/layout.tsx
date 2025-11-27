@@ -9,6 +9,8 @@ export const metadata: Metadata = {
   description: 'Powerful tools to analyze, optimize, and improve your search engine performance.',
 };
 
+import { Providers } from './providers';
+
 export default function RootLayout({
   children,
 }: {
@@ -16,7 +18,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }
