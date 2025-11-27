@@ -157,6 +157,8 @@ export default function GscExportPage() {
             if (dateIndex === -1) return;
 
             const dateStr = row.keys[dateIndex];
+            if (!dateStr) return;
+
             const date = parseISO(dateStr);
             const month = format(date, "yyyy-MM");
 
@@ -387,8 +389,8 @@ export default function GscExportPage() {
                                         }
                                     }}
                                     className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${selectedDimensions.includes(dim)
-                                            ? "bg-blue-100 text-blue-800 border-blue-200 border"
-                                            : "bg-gray-100 text-gray-600 border-gray-200 border hover:bg-gray-200"
+                                        ? "bg-blue-100 text-blue-800 border-blue-200 border"
+                                        : "bg-gray-100 text-gray-600 border-gray-200 border hover:bg-gray-200"
                                         }`}
                                 >
                                     {dim}
@@ -409,8 +411,8 @@ export default function GscExportPage() {
                         onClick={handleFetchData}
                         disabled={loading || !selectedProperty}
                         className={`flex items-center px-6 py-3 rounded-lg font-medium text-white transition-all ${loading || !selectedProperty
-                                ? "bg-gray-400 cursor-not-allowed"
-                                : "bg-blue-600 hover:bg-blue-700 shadow-md hover:shadow-lg"
+                            ? "bg-gray-400 cursor-not-allowed"
+                            : "bg-blue-600 hover:bg-blue-700 shadow-md hover:shadow-lg"
                             }`}
                     >
                         {loading ? (
