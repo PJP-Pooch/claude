@@ -54,7 +54,7 @@ const Form = ({ onSubmit, isLoading }: FormProps) => {
   const [location, setLocation] = useState(process.env.NEXT_PUBLIC_DEFAULT_LOCATION || 'United Kingdom');
   const [language, setLanguage] = useState(process.env.NEXT_PUBLIC_DEFAULT_LANGUAGE || 'English');
   const [device, setDevice] = useState<'desktop' | 'mobile'>((process.env.NEXT_PUBLIC_DEFAULT_DEVICE as 'desktop' | 'mobile') || 'desktop');
-  const [clusteringOverlapThreshold, setClusteringOverlapThreshold] = useState(parseInt(process.env.NEXT_PUBLIC_DEFAULT_CLUSTERING_OVERLAP || '4'));
+  const [clusteringOverlapThreshold, setClusteringOverlapThreshold] = useState(parseInt(process.env.NEXT_PUBLIC_DEFAULT_CLUSTERING_OVERLAP || '2'));
 
   const [maxQueries, setMaxQueries] = useState(parseInt(process.env.NEXT_PUBLIC_MAX_QUERIES || '25'));
   const [querySource, setQuerySource] = useState<'ai' | 'manual'>('ai');
@@ -209,7 +209,7 @@ const Form = ({ onSubmit, isLoading }: FormProps) => {
         {querySource === 'manual' && (
           <div className="md:col-span-2">
             <label htmlFor="manualQueries" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Manual Queries (One per line) *
+              Manual Queries *
             </label>
             <textarea
               id="manualQueries"
@@ -221,7 +221,7 @@ const Form = ({ onSubmit, isLoading }: FormProps) => {
               placeholder="best seo tools&#10;seo software comparison&#10;free keyword research tools"
             />
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              Enter each query on a new line. These will be analyzed directly without AI expansion.
+              Enter queries separated by commas or new lines. These will be analyzed directly without AI expansion.
             </p>
           </div>
         )}

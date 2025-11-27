@@ -8,7 +8,7 @@ interface SocialSerpRequest {
     dataforseoPassword?: string;
     locationCode?: number;
     languageCode?: string;
-    device?: 'desktop' | 'mobile'?;
+    device?: 'desktop' | 'mobile';
     depth?: number;
 }
 

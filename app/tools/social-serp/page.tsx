@@ -34,6 +34,10 @@ export default function SocialSerpPage() {
     const [error, setError] = useState<string | null>(null);
     const [expandedPlatforms, setExpandedPlatforms] = useState<Set<string>>(new Set());
 
+    // URL Filter State
+    const [instagramFilter, setInstagramFilter] = useState<'all' | 'posts' | 'reels'>('all');
+    const [tiktokFilter, setTiktokFilter] = useState<'all' | 'discover' | 'video'>('all');
+
     const togglePlatform = (platform: string) => {
         setExpandedPlatforms(prev => {
             const newSet = new Set(prev);
@@ -123,6 +127,24 @@ export default function SocialSerpPage() {
         const date = new Date().toISOString().split('T')[0];
         const safeKeyword = baseKeyword.replace(/[^a-z0-9]/gi, '_').toLowerCase();
         XLSX.writeFile(wb, `social_serp_export_${safeKeyword}_${date}.xlsx`);
+    };
+
+    // Filter results based on URL patterns
+    const getFilteredRows = (platform: string, rows: { title: string; url: string }[]) => {
+        if (platform === 'Instagram') {
+            if (instagramFilter === 'posts') {
+                return rows.filter(row => row.url.toLowerCase().includes('/p/'));
+            } else if (instagramFilter === 'reels') {
+                return rows.filter(row => row.url.toLowerCase().includes('/reel/'));
+            }
+        } else if (platform === 'TikTok') {
+            if (tiktokFilter === 'discover') {
+                return rows.filter(row => row.url.toLowerCase().includes('/discover/'));
+            } else if (tiktokFilter === 'video') {
+                return rows.filter(row => row.url.toLowerCase().includes('/video/'));
+            }
+        }
+        return rows; // Return all rows if no filter or 'all' selected
     };
 
     return (
@@ -421,13 +443,50 @@ export default function SocialSerpPage() {
 
                                         {expandedPlatforms.has(result.platform) && (
                                             <>
+                                                {/* URL Filter UI for Instagram and TikTok */}
+                                                {(result.platform === 'Instagram' || result.platform === 'TikTok') && (
+                                                    <div className="px-6 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Filter by URL:</span>
+                                                            {result.platform === 'Instagram' ? (
+                                                                <div className="flex gap-2">
+                                                                    <button
+                                                                        onClick={() => setInstagramFilter('all')}
+                                                                        className={`px-2 py-1 text-xs rounded ${instagramFilter === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}`}
+                                                                    >All</button>
+                                                                    <button
+                                                                        onClick={() => setInstagramFilter('posts')}
+                                                                        className={`px-2 py-1 text-xs rounded ${instagramFilter === 'posts' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}`}
+                                                                    >Posts (/p/)</button>
+                                                                    <button
+                                                                        onClick={() => setInstagramFilter('reels')}
+                                                                        className={`px-2 py-1 text-xs rounded ${instagramFilter === 'reels' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}`}
+                                                                    >Reels (/reel/)</button>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex gap-2">
+                                                                    <button
+                                                                        onClick={() => setTiktokFilter('all')}
+                                                                        className={`px-2 py-1 text-xs rounded ${tiktokFilter === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}`}
+                                                                    >All</button>
+                                                                    <button
+                                                                        onClick={() => setTiktokFilter('discover')}
+                                                                        className={`px-2 py-1 text-xs rounded ${tiktokFilter === 'discover' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}`}
+                                                                    >Discover (/discover/)</button>
+                                                                    <button
+                                                                        onClick={() => setTiktokFilter('video')}
+                                                                        className={`px-2 py-1 text-xs rounded ${tiktokFilter === 'video' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}`}
+                                                                    >Video (/video/)</button>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Results Table */}
                                                 {result.error ? (
                                                     <div className="p-6 text-center text-red-500 dark:text-red-400 text-sm border-t border-gray-200 dark:border-gray-700">
                                                         Error fetching results: {result.error}
-                                                    </div>
-                                                ) : result.rows.length === 0 ? (
-                                                    <div className="p-8 text-center text-gray-500 dark:text-gray-400 italic border-t border-gray-200 dark:border-gray-700">
-                                                        No results found for this platform.
                                                     </div>
                                                 ) : (
                                                     <div className="overflow-x-auto border-t border-gray-200 dark:border-gray-700">
@@ -443,7 +502,7 @@ export default function SocialSerpPage() {
                                                                 </tr>
                                                             </thead>
                                                             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                                                {result.rows.map((row, idx) => (
+                                                                {getFilteredRows(result.platform, result.rows).map((row, idx) => (
                                                                     <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                                                                         <td className="px-6 py-4">
                                                                             <div className="text-sm font-medium text-gray-900 dark:text-white line-clamp-2">
@@ -471,6 +530,7 @@ export default function SocialSerpPage() {
                                                 )}
                                             </>
                                         )}
+
                                     </div>
                                 ))}
                             </div>

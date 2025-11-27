@@ -155,7 +155,7 @@ export default function Home() {
       // Handle manual query entry
       if (input.querySource === 'manual' && input.manualQueries) {
         const manualList = input.manualQueries
-          .split('\n')
+          .split(/[\n,]+/)
           .map(q => q.trim())
           .filter(q => q.length > 0);
 
