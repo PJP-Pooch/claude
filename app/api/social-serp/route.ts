@@ -8,7 +8,7 @@ interface SocialSerpRequest {
     dataforseoPassword?: string;
     locationCode?: number;
     languageCode?: string;
-    device?: 'desktop' | 'mobile';
+    device?: 'desktop' | 'mobile'?;
     depth?: number;
 }
 
@@ -32,23 +32,11 @@ const PLATFORMS: Record<string, { querySuffix: string; domainMatch: (domain: str
     },
     "Instagram": {
         querySuffix: "instagram",
-        domainMatch: (d, u) => {
-            const urlLower = (u || "").toLowerCase();
-            const domainLower = (d || "").toLowerCase();
-            // Filter for Instagram posts (/p/) and reels (/reel/)
-            return (domainLower.includes("instagram.com") || urlLower.includes("instagram.com")) &&
-                (urlLower.includes("/p/") || urlLower.includes("/reel/"));
-        }
+        domainMatch: (d, u) => (d || "").toLowerCase().includes("instagram.com") || (u || "").toLowerCase().includes("instagram.com")
     },
     "TikTok": {
         querySuffix: "tiktok",
-        domainMatch: (d, u) => {
-            const urlLower = (u || "").toLowerCase();
-            const domainLower = (d || "").toLowerCase();
-            // Filter for TikTok discover pages and videos
-            return (domainLower.includes("tiktok.com") || urlLower.includes("tiktok.com")) &&
-                (urlLower.includes("/discover/") || urlLower.includes("/video/"));
-        }
+        domainMatch: (d, u) => (d || "").toLowerCase().includes("tiktok.com") || (u || "").toLowerCase().includes("tiktok.com")
     },
     "YouTube": {
         querySuffix: "youtube",
