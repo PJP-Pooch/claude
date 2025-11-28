@@ -34,10 +34,12 @@ export async function POST(req: Request) {
             query += ` WHERE price_competitiveness.country_code = '${countryCode}'`;
         }
 
-        do {
+        // Fetch data with pagination
+        let hasMorePages = true;
+        while (hasMorePages) {
             const apiUrl = `https://merchantapi.googleapis.com/reports/v1beta/accounts/${merchantId}/reports:search`;
 
-            const response = await fetch(apiUrl, {
+            const response: Response = await fetch(apiUrl, {
                 method: "POST",
                 headers: {
                     "Authorization": `Bearer ${session.accessToken}`,
@@ -69,8 +71,8 @@ export async function POST(req: Request) {
                 allRows = [...allRows, ...data.results];
             }
             nextPageToken = data.nextPageToken;
-
-        } while (nextPageToken);
+            hasMorePages = !!nextPageToken;
+        }
 
         // Process rows
         const processedRows = allRows.map((row: any) => {
