@@ -15,7 +15,7 @@ import {
     Legend,
     ResponsiveContainer,
 } from "recharts";
-import { Download, Loader2, Search, AlertCircle, ExternalLink, LogOut, User, ArrowLeft, LayoutDashboard, Filter, RefreshCw } from "lucide-react";
+import { Download, Loader2, Search, AlertCircle, ExternalLink, LogOut, User, ArrowLeft, LayoutDashboard, Filter, RefreshCw, ChevronDown, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import Link from "next/link";
@@ -85,6 +85,82 @@ export default function GscExportPage() {
     const [queryCountChartData, setQueryCountChartData] = useState<any[] | null>(null);
     const [error, setError] = useState("");
     const [activeTab, setActiveTab] = useState<"raw" | "analysis" | "cannibalization" | "query_counts">("raw");
+    const [expandedQueries, setExpandedQueries] = useState<Set<string>>(new Set());
+    const [sortConfig, setSortConfig] = useState<{ key: string; direction: "asc" | "desc" } | null>(null);
+
+    const toggleQueryExpansion = (query: string) => {
+        const newExpanded = new Set(expandedQueries);
+        if (newExpanded.has(query)) {
+            newExpanded.delete(query);
+        } else {
+            newExpanded.add(query);
+        }
+        setExpandedQueries(newExpanded);
+    };
+
+    const handleSort = (key: string) => {
+        let direction: "asc" | "desc" = "asc";
+        if (sortConfig && sortConfig.key === key && sortConfig.direction === "asc") {
+            direction = "desc";
+        }
+        setSortConfig({ key, direction });
+    };
+
+    const getSortedCannibalizationData = () => {
+        if (!cannibalizationData) return null;
+        if (!sortConfig) return cannibalizationData;
+
+        return [...cannibalizationData].sort((a, b) => {
+            let aValue: any = a[sortConfig.key as keyof CannibalizationRow];
+            let bValue: any = b[sortConfig.key as keyof CannibalizationRow];
+
+            // Handle nested properties or special cases if needed
+            // For now, top-level properties are sufficient based on the type definition
+
+            if (aValue < bValue) {
+                return sortConfig.direction === "asc" ? -1 : 1;
+            }
+            if (aValue > bValue) {
+                return sortConfig.direction === "asc" ? 1 : -1;
+            }
+            return 0;
+        });
+    };
+
+    const sortedCannibalizationData = getSortedCannibalizationData();
+
+    const getSortedData = () => {
+        if (!data) return null;
+        if (!sortConfig) return data;
+
+        return [...data].sort((a, b) => {
+            let aValue: any;
+            let bValue: any;
+
+            if (selectedDimensions.includes(sortConfig.key)) {
+                const index = selectedDimensions.indexOf(sortConfig.key);
+                aValue = a.keys[index];
+                bValue = b.keys[index];
+            } else {
+                aValue = a[sortConfig.key as keyof GscRow];
+                bValue = b[sortConfig.key as keyof GscRow];
+            }
+
+            if (aValue < bValue) {
+                return sortConfig.direction === "asc" ? -1 : 1;
+            }
+            if (aValue > bValue) {
+                return sortConfig.direction === "asc" ? 1 : -1;
+            }
+            return 0;
+        });
+    };
+
+    const sortedData = getSortedData();
+
+    useEffect(() => {
+        setSortConfig(null);
+    }, [activeTab]);
 
     useEffect(() => {
         if (session) {
@@ -856,27 +932,75 @@ export default function GscExportPage() {
                                                                 {selectedDimensions.map((dim) => (
                                                                     <th
                                                                         key={dim}
-                                                                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+                                                                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                                                                        onClick={() => handleSort(dim)}
                                                                     >
-                                                                        {dim}
+                                                                        <div className="flex items-center">
+                                                                            {dim}
+                                                                            {sortConfig?.key === dim ? (
+                                                                                sortConfig.direction === "asc" ? <ArrowUp className="w-4 h-4 ml-1" /> : <ArrowDown className="w-4 h-4 ml-1" />
+                                                                            ) : (
+                                                                                <ArrowUpDown className="w-4 h-4 ml-1 opacity-50" />
+                                                                            )}
+                                                                        </div>
                                                                     </th>
                                                                 ))}
-                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                                                    Clicks
+                                                                <th
+                                                                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                                                                    onClick={() => handleSort("clicks")}
+                                                                >
+                                                                    <div className="flex items-center">
+                                                                        Clicks
+                                                                        {sortConfig?.key === "clicks" ? (
+                                                                            sortConfig.direction === "asc" ? <ArrowUp className="w-4 h-4 ml-1" /> : <ArrowDown className="w-4 h-4 ml-1" />
+                                                                        ) : (
+                                                                            <ArrowUpDown className="w-4 h-4 ml-1 opacity-50" />
+                                                                        )}
+                                                                    </div>
                                                                 </th>
-                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                                                    Imp.
+                                                                <th
+                                                                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                                                                    onClick={() => handleSort("impressions")}
+                                                                >
+                                                                    <div className="flex items-center">
+                                                                        Imp.
+                                                                        {sortConfig?.key === "impressions" ? (
+                                                                            sortConfig.direction === "asc" ? <ArrowUp className="w-4 h-4 ml-1" /> : <ArrowDown className="w-4 h-4 ml-1" />
+                                                                        ) : (
+                                                                            <ArrowUpDown className="w-4 h-4 ml-1 opacity-50" />
+                                                                        )}
+                                                                    </div>
                                                                 </th>
-                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                                                    CTR
+                                                                <th
+                                                                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                                                                    onClick={() => handleSort("ctr")}
+                                                                >
+                                                                    <div className="flex items-center">
+                                                                        CTR
+                                                                        {sortConfig?.key === "ctr" ? (
+                                                                            sortConfig.direction === "asc" ? <ArrowUp className="w-4 h-4 ml-1" /> : <ArrowDown className="w-4 h-4 ml-1" />
+                                                                        ) : (
+                                                                            <ArrowUpDown className="w-4 h-4 ml-1 opacity-50" />
+                                                                        )}
+                                                                    </div>
                                                                 </th>
-                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                                                    Pos
+                                                                <th
+                                                                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                                                                    onClick={() => handleSort("position")}
+                                                                >
+                                                                    <div className="flex items-center">
+                                                                        Pos
+                                                                        {sortConfig?.key === "position" ? (
+                                                                            sortConfig.direction === "asc" ? <ArrowUp className="w-4 h-4 ml-1" /> : <ArrowDown className="w-4 h-4 ml-1" />
+                                                                        ) : (
+                                                                            <ArrowUpDown className="w-4 h-4 ml-1 opacity-50" />
+                                                                        )}
+                                                                    </div>
                                                                 </th>
                                                             </tr>
                                                         </thead>
                                                         <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                                            {data.slice(0, 10).map((row, i) => (
+                                                            {sortedData?.slice(0, 10).map((row, i) => (
                                                                 <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                                                                     {row.keys &&
                                                                         row.keys.map((k, j) => (
@@ -1056,14 +1180,44 @@ export default function GscExportPage() {
                                                     <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                                                         <thead className="bg-gray-50 dark:bg-gray-900/30">
                                                             <tr>
-                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                                                    Query
+                                                                <th
+                                                                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                                                                    onClick={() => handleSort("query")}
+                                                                >
+                                                                    <div className="flex items-center">
+                                                                        Query
+                                                                        {sortConfig?.key === "query" ? (
+                                                                            sortConfig.direction === "asc" ? <ArrowUp className="w-4 h-4 ml-1" /> : <ArrowDown className="w-4 h-4 ml-1" />
+                                                                        ) : (
+                                                                            <ArrowUpDown className="w-4 h-4 ml-1 opacity-50" />
+                                                                        )}
+                                                                    </div>
                                                                 </th>
-                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                                                    Pages
+                                                                <th
+                                                                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                                                                    onClick={() => handleSort("pageCount")}
+                                                                >
+                                                                    <div className="flex items-center">
+                                                                        Pages
+                                                                        {sortConfig?.key === "pageCount" ? (
+                                                                            sortConfig.direction === "asc" ? <ArrowUp className="w-4 h-4 ml-1" /> : <ArrowDown className="w-4 h-4 ml-1" />
+                                                                        ) : (
+                                                                            <ArrowUpDown className="w-4 h-4 ml-1 opacity-50" />
+                                                                        )}
+                                                                    </div>
                                                                 </th>
-                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                                                    Total Clicks
+                                                                <th
+                                                                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                                                                    onClick={() => handleSort("totalClicks")}
+                                                                >
+                                                                    <div className="flex items-center">
+                                                                        Total Clicks
+                                                                        {sortConfig?.key === "totalClicks" ? (
+                                                                            sortConfig.direction === "asc" ? <ArrowUp className="w-4 h-4 ml-1" /> : <ArrowDown className="w-4 h-4 ml-1" />
+                                                                        ) : (
+                                                                            <ArrowUpDown className="w-4 h-4 ml-1 opacity-50" />
+                                                                        )}
+                                                                    </div>
                                                                 </th>
                                                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                                                                     Top Page
@@ -1074,34 +1228,75 @@ export default function GscExportPage() {
                                                             </tr>
                                                         </thead>
                                                         <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                                            {cannibalizationData.map((item, i) => (
-                                                                <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                                                                        {item.query}
-                                                                    </td>
-                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                                                        {item.pageCount}
-                                                                    </td>
-                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                                                        {item.totalClicks}
-                                                                    </td>
-                                                                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate" title={item.pages[0]?.url}>
-                                                                        {item.pages[0]?.url}
-                                                                        {item.pages[0] && (
-                                                                            <div className="text-xs text-gray-400">
-                                                                                Pos: {item.pages[0].position.toFixed(1)} | Clicks: {item.pages[0].clicks}
-                                                                            </div>
-                                                                        )}
-                                                                    </td>
-                                                                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate" title={item.pages[1]?.url}>
-                                                                        {item.pages[1]?.url}
-                                                                        {item.pages[1] && (
-                                                                            <div className="text-xs text-gray-400">
-                                                                                Pos: {item.pages[1].position.toFixed(1)} | Clicks: {item.pages[1].clicks}
-                                                                            </div>
-                                                                        )}
-                                                                    </td>
-                                                                </tr>
+                                                            {sortedCannibalizationData?.map((item, i) => (
+                                                                <>
+                                                                    <tr
+                                                                        key={i}
+                                                                        className="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition-colors"
+                                                                        onClick={() => toggleQueryExpansion(item.query)}
+                                                                    >
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white flex items-center">
+                                                                            {expandedQueries.has(item.query) ? (
+                                                                                <ChevronDown className="w-4 h-4 mr-2 text-gray-500" />
+                                                                            ) : (
+                                                                                <ChevronRight className="w-4 h-4 mr-2 text-gray-500" />
+                                                                            )}
+                                                                            {item.query}
+                                                                        </td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                                            {item.pageCount}
+                                                                        </td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                                            {item.totalClicks}
+                                                                        </td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                                            {/* Top Page (Preview) */}
+                                                                            <span className="max-w-xs truncate inline-block align-bottom" title={item.pages[0]?.url}>
+                                                                                {item.pages[0]?.url}
+                                                                            </span>
+                                                                        </td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                                            {/* Conflict (Preview) */}
+                                                                            <span className="max-w-xs truncate inline-block align-bottom" title={item.pages[1]?.url}>
+                                                                                {item.pages[1]?.url}
+                                                                            </span>
+                                                                        </td>
+                                                                    </tr>
+                                                                    {expandedQueries.has(item.query) && (
+                                                                        <tr className="bg-gray-50 dark:bg-gray-900/50">
+                                                                            <td colSpan={5} className="px-6 py-4">
+                                                                                <div className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                                                                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                                                                        <thead className="bg-gray-100 dark:bg-gray-800">
+                                                                                            <tr>
+                                                                                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">URL</th>
+                                                                                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Clicks</th>
+                                                                                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Impressions</th>
+                                                                                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">CTR</th>
+                                                                                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Position</th>
+                                                                                            </tr>
+                                                                                        </thead>
+                                                                                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                                                                            {item.pages.map((page, idx) => (
+                                                                                                <tr key={idx}>
+                                                                                                    <td className="px-4 py-2 text-sm text-gray-900 dark:text-white break-all">
+                                                                                                        <a href={page.url} target="_blank" rel="noopener noreferrer" className="hover:underline text-blue-600 dark:text-blue-400">
+                                                                                                            {page.url}
+                                                                                                        </a>
+                                                                                                    </td>
+                                                                                                    <td className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">{page.clicks}</td>
+                                                                                                    <td className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">{page.impressions}</td>
+                                                                                                    <td className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">{(page.ctr * 100).toFixed(2)}%</td>
+                                                                                                    <td className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">{page.position.toFixed(1)}</td>
+                                                                                                </tr>
+                                                                                            ))}
+                                                                                        </tbody>
+                                                                                    </table>
+                                                                                </div>
+                                                                            </td>
+                                                                        </tr>
+                                                                    )}
+                                                                </>
                                                             ))}
                                                         </tbody>
                                                     </table>
