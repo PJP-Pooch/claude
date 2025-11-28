@@ -1,10 +1,13 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 import ThemeToggle from '@/components/ThemeToggle';
 import { ThemeProvider } from '@/components/ThemeProvider';
 
 export default function Home() {
+  const [apiFilter, setApiFilter] = useState<'all' | 'dataforseo' | 'google'>('all');
+
   const tools = [
     {
       id: 'serp',
@@ -17,6 +20,7 @@ export default function Home() {
       ),
       href: '/tools/serp',
       color: 'from-blue-500 to-indigo-600',
+      apiType: 'dataforseo',
       features: [
         'AI-powered query generation',
         'SERP similarity clustering',
@@ -36,6 +40,7 @@ export default function Home() {
       ),
       href: '/seasonality',
       color: 'from-green-500 to-teal-600',
+      apiType: 'dataforseo',
       features: [
         'Historical search volume trends',
         '12-month demand forecasting',
@@ -55,6 +60,7 @@ export default function Home() {
       ),
       href: '/tools/social-serp',
       color: 'from-purple-500 to-pink-600',
+      apiType: 'dataforseo',
       features: [
         'Multi-platform search',
         'Reddit, TikTok, Instagram & more',
@@ -74,6 +80,7 @@ export default function Home() {
       ),
       href: '/tools/gsc-export',
       color: 'from-orange-500 to-red-600',
+      apiType: 'google',
       features: [
         'OAuth integration with GSC',
         'Bulk export all queries',
@@ -94,6 +101,7 @@ export default function Home() {
       ),
       href: '#',
       color: 'from-gray-400 to-gray-500',
+      apiType: 'all',
       features: [
         'More features in development',
         'Stay tuned for updates',
@@ -102,24 +110,59 @@ export default function Home() {
     },
   ];
 
+  const filteredTools = tools.filter(tool =>
+    apiFilter === 'all' || tool.apiType === apiFilter || tool.apiType === 'all'
+  );
+
   return (
     <ThemeProvider>
       <ThemeToggle />
       <main className="min-h-screen bg-gray-100 dark:bg-gray-900 py-8 px-4 sm:px-6 lg:px-8 transition-colors">
         <div className="max-w-7xl mx-auto">
           {/* Header */}
-          <div className="mb-12 text-center">
+          <div className="mb-8 text-center">
             <h1 className="text-5xl font-bold text-gray-900 dark:text-white mb-4">
               SEO Analysis Tools
             </h1>
-            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
+            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto mb-8">
               Powerful tools to analyze, optimize, and improve your search engine performance
             </p>
+
+            {/* API Toggle */}
+            <div className="inline-flex bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm border border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => setApiFilter('all')}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${apiFilter === 'all'
+                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                  }`}
+              >
+                All Tools
+              </button>
+              <button
+                onClick={() => setApiFilter('dataforseo')}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${apiFilter === 'dataforseo'
+                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                  }`}
+              >
+                DataForSEO API
+              </button>
+              <button
+                onClick={() => setApiFilter('google')}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${apiFilter === 'google'
+                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                  }`}
+              >
+                Google API
+              </button>
+            </div>
           </div>
 
           {/* Tools Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-8">
-            {tools.map((tool) => (
+            {filteredTools.map((tool) => (
               <Link
                 key={tool.id}
                 href={tool.href}
