@@ -256,6 +256,9 @@ export default function GscExportPage() {
             const query = row.keys[queryIndex];
             const page = row.keys[pageIndex];
 
+            // Skip if query or page is undefined
+            if (!query || !page) return;
+
             if (!queryMap[query]) {
                 queryMap[query] = {
                     query,
@@ -304,7 +307,10 @@ export default function GscExportPage() {
             const query = row.keys[queryIndex];
             const page = row.keys[pageIndex];
             const dateStr = row.keys[dateIndex];
-            if (!dateStr) return;
+
+            // Skip if any required value is undefined
+            if (!query || !page || !dateStr) return;
+
             const month = format(parseISO(dateStr), "yyyy-MM");
             allMonths.add(month);
 
@@ -782,8 +788,8 @@ export default function GscExportPage() {
                                             <button
                                                 onClick={() => setActiveTab("raw")}
                                                 className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === "raw"
-                                                        ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
-                                                        : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                                                    ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
+                                                    : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                                                     }`}
                                             >
                                                 Raw Data
@@ -792,8 +798,8 @@ export default function GscExportPage() {
                                                 <button
                                                     onClick={() => setActiveTab("analysis")}
                                                     className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === "analysis"
-                                                            ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
-                                                            : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                                                        ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
+                                                        : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                                                         }`}
                                                 >
                                                     Query Analysis
@@ -803,8 +809,8 @@ export default function GscExportPage() {
                                                 <button
                                                     onClick={() => setActiveTab("cannibalization")}
                                                     className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === "cannibalization"
-                                                            ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
-                                                            : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                                                        ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
+                                                        : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                                                         }`}
                                                 >
                                                     Cannibalization
@@ -814,8 +820,8 @@ export default function GscExportPage() {
                                                 <button
                                                     onClick={() => setActiveTab("query_counts")}
                                                     className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === "query_counts"
-                                                            ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
-                                                            : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                                                        ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
+                                                        : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                                                         }`}
                                                 >
                                                     Query Counts
