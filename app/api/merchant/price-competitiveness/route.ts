@@ -9,17 +9,16 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const merchantId = process.env.MERCHANT_CENTER_ACCOUNT_ID;
-    if (!merchantId) {
-        return NextResponse.json(
-            { error: "Merchant Center Account ID not configured" },
-            { status: 500 }
-        );
-    }
-
     try {
         const body = await req.json();
-        const { countryCode, productType, priceBucket } = body;
+        const { merchantAccountId, countryCode, productType, priceBucket } = body;
+
+        if (!merchantAccountId) {
+            return NextResponse.json(
+                { error: "Merchant Center Account ID is required" },
+                { status: 400 }
+            );
+        }
 
         let allRows: any[] = [];
         let nextPageToken: string | undefined = undefined;
@@ -37,7 +36,7 @@ export async function POST(req: Request) {
         // Fetch data with pagination
         let hasMorePages = true;
         while (hasMorePages) {
-            const apiUrl = `https://merchantapi.googleapis.com/reports/v1beta/accounts/${merchantId}/reports:search`;
+            const apiUrl = `https://merchantapi.googleapis.com/reports/v1beta/accounts/${merchantAccountId}/reports:search`;
 
             const response: Response = await fetch(apiUrl, {
                 method: "POST",

@@ -38,6 +38,7 @@ export default function MerchantPriceCompetitivenessPage() {
     const [loading, setLoading] = useState(false);
     const [data, setData] = useState<PriceCompetitivenessItem[] | null>(null);
     const [error, setError] = useState("");
+    const [merchantAccountId, setMerchantAccountId] = useState("");
 
     // Filters
     const [countryFilter, setCountryFilter] = useState("all");
@@ -108,6 +109,11 @@ export default function MerchantPriceCompetitivenessPage() {
     const totalPages = Math.ceil(filteredAndSortedData.length / itemsPerPage);
 
     const handleFetchData = async () => {
+        if (!merchantAccountId.trim()) {
+            setError("Please enter your Merchant Center Account ID");
+            return;
+        }
+
         setLoading(true);
         setError("");
         setData(null);
@@ -117,6 +123,7 @@ export default function MerchantPriceCompetitivenessPage() {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
+                    merchantAccountId: merchantAccountId.trim(),
                     countryCode: countryFilter,
                     productType: productTypeFilter,
                     priceBucket: priceBucketFilter
@@ -255,6 +262,23 @@ export default function MerchantPriceCompetitivenessPage() {
                         <div className="space-y-8">
                             {/* Controls Card */}
                             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                                {/* Merchant Account ID Input */}
+                                <div className="mb-6 pb-6 border-b border-gray-200 dark:border-gray-700">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Merchant Center Account ID
+                                    </label>
+                                    <input
+                                        type="text"
+                                        placeholder="Enter your Merchant Center Account ID (e.g., 123456789)"
+                                        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                        value={merchantAccountId}
+                                        onChange={(e) => setMerchantAccountId(e.target.value)}
+                                    />
+                                    <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                        Find your Account ID in the <a href="https://merchants.google.com/" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">Google Merchant Center</a> URL or settings.
+                                    </p>
+                                </div>
+
                                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                                     <div className="space-y-2">
                                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
