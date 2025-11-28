@@ -6,6 +6,8 @@ import { format, parseISO } from "date-fns";
 import {
     BarChart,
     Bar,
+    LineChart,
+    Line,
     XAxis,
     YAxis,
     CartesianGrid,
@@ -13,7 +15,7 @@ import {
     Legend,
     ResponsiveContainer,
 } from "recharts";
-import { Download, Loader2, Search, AlertCircle, ExternalLink, LogOut, User, ArrowLeft, LayoutDashboard } from "lucide-react";
+import { Download, Loader2, Search, AlertCircle, ExternalLink, LogOut, User, ArrowLeft, LayoutDashboard, Filter, RefreshCw } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import Link from "next/link";
@@ -35,6 +37,26 @@ type QueryPositionRow = {
     totalQueries: number;
 };
 
+type CannibalizationRow = {
+    query: string;
+    pageCount: number;
+    totalClicks: number;
+    totalImpressions: number;
+    pages: {
+        url: string;
+        clicks: number;
+        impressions: number;
+        position: number;
+        ctr: number;
+    }[];
+};
+
+type QueryCountRow = {
+    page: string;
+    counts: { [month: string]: number };
+    totalQueries: number;
+};
+
 export default function GscExportPage() {
     const { data: session, status } = useSession();
     const [properties, setProperties] = useState<string[]>([]);
@@ -48,12 +70,21 @@ export default function GscExportPage() {
         "query",
     ]);
     const [deviceFilter, setDeviceFilter] = useState("all");
+
+    // Advanced Filters State
+    const [pageFilterType, setPageFilterType] = useState("contains");
+    const [pageFilterValue, setPageFilterValue] = useState("");
+    const [queryFilterType, setQueryFilterType] = useState("contains");
+    const [queryFilterValue, setQueryFilterValue] = useState("");
+
     const [loading, setLoading] = useState(false);
     const [data, setData] = useState<GscRow[] | null>(null);
-    const [queryAnalysis, setQueryAnalysis] = useState<QueryPositionRow[] | null>(
-        null
-    );
+    const [queryAnalysis, setQueryAnalysis] = useState<QueryPositionRow[] | null>(null);
+    const [cannibalizationData, setCannibalizationData] = useState<CannibalizationRow[] | null>(null);
+    const [queryCountData, setQueryCountData] = useState<QueryCountRow[] | null>(null);
+    const [queryCountChartData, setQueryCountChartData] = useState<any[] | null>(null);
     const [error, setError] = useState("");
+    const [activeTab, setActiveTab] = useState<"raw" | "analysis" | "cannibalization" | "query_counts">("raw");
 
     useEffect(() => {
         if (session) {
@@ -78,6 +109,8 @@ export default function GscExportPage() {
         setError("");
         setData(null);
         setQueryAnalysis(null);
+        setCannibalizationData(null);
+        setQueryCountData(null);
 
         try {
             let startDate = "";
@@ -110,6 +143,24 @@ export default function GscExportPage() {
                 });
             }
 
+            // Add Page Filter
+            if (pageFilterValue) {
+                filters.push({
+                    dimension: "page",
+                    operator: pageFilterType,
+                    expression: pageFilterValue,
+                });
+            }
+
+            // Add Query Filter
+            if (queryFilterValue) {
+                filters.push({
+                    dimension: "query",
+                    operator: queryFilterType,
+                    expression: queryFilterValue,
+                });
+            }
+
             const res = await fetch("/api/gsc/query", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -134,6 +185,22 @@ export default function GscExportPage() {
             ) {
                 analyzeQueryPositions(result.rows);
             }
+
+            if (
+                selectedDimensions.includes("query") &&
+                selectedDimensions.includes("page")
+            ) {
+                analyzeCannibalization(result.rows);
+            }
+
+            if (
+                selectedDimensions.includes("query") &&
+                selectedDimensions.includes("page") &&
+                selectedDimensions.includes("date")
+            ) {
+                analyzeQueryCounts(result.rows);
+            }
+
         } catch (err) {
             setError("Failed to fetch data. Please try again.");
             console.error(err);
@@ -178,6 +245,105 @@ export default function GscExportPage() {
         setQueryAnalysis(Object.values(buckets).sort((a, b) => a.month.localeCompare(b.month)));
     };
 
+    const analyzeCannibalization = (rows: GscRow[]) => {
+        const queryMap: { [key: string]: CannibalizationRow } = {};
+        const queryIndex = selectedDimensions.indexOf("query");
+        const pageIndex = selectedDimensions.indexOf("page");
+
+        if (queryIndex === -1 || pageIndex === -1) return;
+
+        rows.forEach(row => {
+            const query = row.keys[queryIndex];
+            const page = row.keys[pageIndex];
+
+            if (!queryMap[query]) {
+                queryMap[query] = {
+                    query,
+                    pageCount: 0,
+                    totalClicks: 0,
+                    totalImpressions: 0,
+                    pages: []
+                };
+            }
+
+            queryMap[query].totalClicks += row.clicks;
+            queryMap[query].totalImpressions += row.impressions;
+            queryMap[query].pages.push({
+                url: page,
+                clicks: row.clicks,
+                impressions: row.impressions,
+                position: row.position,
+                ctr: row.ctr
+            });
+        });
+
+        // Filter for queries with > 1 page and sort by total clicks
+        const cannibalizedQueries = Object.values(queryMap)
+            .map(item => ({
+                ...item,
+                pageCount: item.pages.length,
+                pages: item.pages.sort((a, b) => b.clicks - a.clicks)
+            }))
+            .filter(item => item.pageCount > 1 && item.totalClicks > 0)
+            .sort((a, b) => b.totalClicks - a.totalClicks);
+
+        setCannibalizationData(cannibalizedQueries);
+    };
+
+    const analyzeQueryCounts = (rows: GscRow[]) => {
+        const pageMap: { [page: string]: { [month: string]: Set<string> } } = {};
+        const queryIndex = selectedDimensions.indexOf("query");
+        const pageIndex = selectedDimensions.indexOf("page");
+        const dateIndex = selectedDimensions.indexOf("date");
+
+        if (queryIndex === -1 || pageIndex === -1 || dateIndex === -1) return;
+
+        const allMonths = new Set<string>();
+
+        rows.forEach(row => {
+            const query = row.keys[queryIndex];
+            const page = row.keys[pageIndex];
+            const dateStr = row.keys[dateIndex];
+            if (!dateStr) return;
+            const month = format(parseISO(dateStr), "yyyy-MM");
+            allMonths.add(month);
+
+            if (!pageMap[page]) {
+                pageMap[page] = {};
+            }
+            if (!pageMap[page][month]) {
+                pageMap[page][month] = new Set();
+            }
+            pageMap[page][month].add(query);
+        });
+
+        const sortedMonths = Array.from(allMonths).sort();
+
+        const processedData: QueryCountRow[] = Object.entries(pageMap).map(([page, months]) => {
+            const counts: { [month: string]: number } = {};
+            let totalQueries = 0;
+            sortedMonths.forEach(month => {
+                const count = months[month] ? months[month].size : 0;
+                counts[month] = count;
+                totalQueries += count;
+            });
+            return { page, counts, totalQueries };
+        }).sort((a, b) => b.totalQueries - a.totalQueries).slice(0, 50); // Top 50 pages
+
+        setQueryCountData(processedData);
+
+        // Prepare chart data (Top 5 pages)
+        const top5Pages = processedData.slice(0, 5);
+        const chartData = sortedMonths.map(month => {
+            const point: any = { month };
+            top5Pages.forEach(p => {
+                point[p.page] = p.counts[month];
+            });
+            return point;
+        });
+        setQueryCountChartData(chartData);
+    };
+
     const downloadCsv = (data: any[], filename: string) => {
         if (!data || data.length === 0) return;
 
@@ -212,6 +378,14 @@ export default function GscExportPage() {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+    };
+
+    const resetFilters = () => {
+        setPageFilterType("contains");
+        setPageFilterValue("");
+        setQueryFilterType("contains");
+        setQueryFilterValue("");
+        setDeviceFilter("all");
     };
 
     if (status === "loading") {
@@ -476,9 +650,98 @@ export default function GscExportPage() {
                                                 !selectedDimensions.includes("date")) && (
                                                     <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center">
                                                         <AlertCircle className="w-3 h-3 mr-1" />
-                                                        Select both &apos;query&apos; and &apos;date&apos; to enable Query Position Analysis.
+                                                        Select both &apos;query&apos; and &apos;date&apos; for Position Analysis.
                                                     </p>
                                                 )}
+                                            {(!selectedDimensions.includes("query") ||
+                                                !selectedDimensions.includes("page")) && (
+                                                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center">
+                                                        <AlertCircle className="w-3 h-3 mr-1" />
+                                                        Select both &apos;query&apos; and &apos;page&apos; for Cannibalization Analysis.
+                                                    </p>
+                                                )}
+                                            {(!selectedDimensions.includes("query") ||
+                                                !selectedDimensions.includes("page") ||
+                                                !selectedDimensions.includes("date")) && (
+                                                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center">
+                                                        <AlertCircle className="w-3 h-3 mr-1" />
+                                                        Select &apos;query&apos;, &apos;page&apos;, and &apos;date&apos; for Query Counting.
+                                                    </p>
+                                                )}
+                                        </div>
+                                    </div>
+
+                                    {/* Advanced Filters Section */}
+                                    <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center">
+                                                <Filter className="w-4 h-4 mr-2" />
+                                                Advanced Filters
+                                            </h3>
+                                            <button
+                                                onClick={resetFilters}
+                                                className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center"
+                                            >
+                                                <RefreshCw className="w-3 h-3 mr-1" />
+                                                Reset Filters
+                                            </button>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            {/* Page Filter */}
+                                            <div className="space-y-2">
+                                                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                                                    Page Filter
+                                                </label>
+                                                <div className="flex space-x-2">
+                                                    <select
+                                                        className="w-1/3 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                                                        value={pageFilterType}
+                                                        onChange={(e) => setPageFilterType(e.target.value)}
+                                                    >
+                                                        <option value="contains">Contains</option>
+                                                        <option value="equals">Equals</option>
+                                                        <option value="notContains">Not Contains</option>
+                                                        <option value="notEquals">Not Equals</option>
+                                                        <option value="includingRegex">Regex Match</option>
+                                                        <option value="excludingRegex">Not Regex Match</option>
+                                                    </select>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Filter by page URL..."
+                                                        className="w-2/3 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                                                        value={pageFilterValue}
+                                                        onChange={(e) => setPageFilterValue(e.target.value)}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* Query Filter */}
+                                            <div className="space-y-2">
+                                                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                                                    Query Filter
+                                                </label>
+                                                <div className="flex space-x-2">
+                                                    <select
+                                                        className="w-1/3 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                                                        value={queryFilterType}
+                                                        onChange={(e) => setQueryFilterType(e.target.value)}
+                                                    >
+                                                        <option value="contains">Contains</option>
+                                                        <option value="equals">Equals</option>
+                                                        <option value="notContains">Not Contains</option>
+                                                        <option value="notEquals">Not Equals</option>
+                                                        <option value="includingRegex">Regex Match</option>
+                                                        <option value="excludingRegex">Not Regex Match</option>
+                                                    </select>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Filter by query..."
+                                                        className="w-2/3 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                                                        value={queryFilterValue}
+                                                        onChange={(e) => setQueryFilterValue(e.target.value)}
+                                                    />
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -513,89 +776,139 @@ export default function GscExportPage() {
                                 )}
 
                                 {data && (
-                                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                                        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                                            <div className="flex justify-between items-center mb-6">
-                                                <div>
-                                                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">Raw Data</h2>
-                                                    <p className="text-gray-500 dark:text-gray-400 text-sm">
-                                                        Fetched {data.length.toLocaleString()} rows
-                                                    </p>
-                                                </div>
+                                    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                        {/* Tabs */}
+                                        <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg w-fit overflow-x-auto">
+                                            <button
+                                                onClick={() => setActiveTab("raw")}
+                                                className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === "raw"
+                                                        ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
+                                                        : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                                                    }`}
+                                            >
+                                                Raw Data
+                                            </button>
+                                            {queryAnalysis && (
                                                 <button
-                                                    onClick={() =>
-                                                        downloadCsv(data, `gsc_data_${selectedProperty}.csv`)
-                                                    }
-                                                    className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+                                                    onClick={() => setActiveTab("analysis")}
+                                                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === "analysis"
+                                                            ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
+                                                            : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                                                        }`}
                                                 >
-                                                    <Download className="h-4 w-4 mr-2" />
-                                                    Download CSV
+                                                    Query Analysis
                                                 </button>
-                                            </div>
-                                            <div className="overflow-x-auto border rounded-lg border-gray-200 dark:border-gray-700">
-                                                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                                                    <thead className="bg-gray-50 dark:bg-gray-900/30">
-                                                        <tr>
-                                                            {selectedDimensions.map((dim) => (
-                                                                <th
-                                                                    key={dim}
-                                                                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
-                                                                >
-                                                                    {dim}
-                                                                </th>
-                                                            ))}
-                                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                                                Clicks
-                                                            </th>
-                                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                                                Imp.
-                                                            </th>
-                                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                                                CTR
-                                                            </th>
-                                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                                                Pos
-                                                            </th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                                        {data.slice(0, 10).map((row, i) => (
-                                                            <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                                                {row.keys &&
-                                                                    row.keys.map((k, j) => (
-                                                                        <td
-                                                                            key={j}
-                                                                            className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white max-w-xs truncate"
-                                                                            title={k}
-                                                                        >
-                                                                            {k}
-                                                                        </td>
-                                                                    ))}
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                                                    {row.clicks}
-                                                                </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                                                    {row.impressions}
-                                                                </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                                                    {(row.ctr * 100).toFixed(2)}%
-                                                                </td>
-                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                                                    {row.position.toFixed(1)}
-                                                                </td>
-                                                            </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
-                                                {data.length > 10 && (
-                                                    <div className="px-6 py-3 bg-gray-50 dark:bg-gray-900/30 text-center text-sm text-gray-500 dark:text-gray-400 border-t border-gray-200 dark:border-gray-700">
-                                                        Showing first 10 rows of {data.length.toLocaleString()}
-                                                    </div>
-                                                )}
-                                            </div>
+                                            )}
+                                            {cannibalizationData && (
+                                                <button
+                                                    onClick={() => setActiveTab("cannibalization")}
+                                                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === "cannibalization"
+                                                            ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
+                                                            : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                                                        }`}
+                                                >
+                                                    Cannibalization
+                                                </button>
+                                            )}
+                                            {queryCountData && (
+                                                <button
+                                                    onClick={() => setActiveTab("query_counts")}
+                                                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === "query_counts"
+                                                            ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
+                                                            : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                                                        }`}
+                                                >
+                                                    Query Counts
+                                                </button>
+                                            )}
                                         </div>
 
-                                        {queryAnalysis && (
+                                        {/* Raw Data Tab */}
+                                        {activeTab === "raw" && (
+                                            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                                                <div className="flex justify-between items-center mb-6">
+                                                    <div>
+                                                        <h2 className="text-xl font-bold text-gray-900 dark:text-white">Raw Data</h2>
+                                                        <p className="text-gray-500 dark:text-gray-400 text-sm">
+                                                            Fetched {data.length.toLocaleString()} rows
+                                                        </p>
+                                                    </div>
+                                                    <button
+                                                        onClick={() =>
+                                                            downloadCsv(data, `gsc_data_${selectedProperty}.csv`)
+                                                        }
+                                                        className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+                                                    >
+                                                        <Download className="h-4 w-4 mr-2" />
+                                                        Download CSV
+                                                    </button>
+                                                </div>
+                                                <div className="overflow-x-auto border rounded-lg border-gray-200 dark:border-gray-700">
+                                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                                        <thead className="bg-gray-50 dark:bg-gray-900/30">
+                                                            <tr>
+                                                                {selectedDimensions.map((dim) => (
+                                                                    <th
+                                                                        key={dim}
+                                                                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+                                                                    >
+                                                                        {dim}
+                                                                    </th>
+                                                                ))}
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                                    Clicks
+                                                                </th>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                                    Imp.
+                                                                </th>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                                    CTR
+                                                                </th>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                                    Pos
+                                                                </th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                                            {data.slice(0, 10).map((row, i) => (
+                                                                <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                                                    {row.keys &&
+                                                                        row.keys.map((k, j) => (
+                                                                            <td
+                                                                                key={j}
+                                                                                className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white max-w-xs truncate"
+                                                                                title={k}
+                                                                            >
+                                                                                {k}
+                                                                            </td>
+                                                                        ))}
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                                        {row.clicks}
+                                                                    </td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                                        {row.impressions}
+                                                                    </td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                                        {(row.ctr * 100).toFixed(2)}%
+                                                                    </td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                                        {row.position.toFixed(1)}
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                    {data.length > 10 && (
+                                                        <div className="px-6 py-3 bg-gray-50 dark:bg-gray-900/30 text-center text-sm text-gray-500 dark:text-gray-400 border-t border-gray-200 dark:border-gray-700">
+                                                            Showing first 10 rows of {data.length.toLocaleString()}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Query Analysis Tab */}
+                                        {activeTab === "analysis" && queryAnalysis && (
                                             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
                                                 <div className="flex justify-between items-center mb-6">
                                                     <div>
@@ -709,6 +1022,164 @@ export default function GscExportPage() {
                                                                         {row.positions_20_plus}
                                                                     </td>
                                                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white font-medium">
+                                                                        {row.totalQueries}
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Cannibalization Tab */}
+                                        {activeTab === "cannibalization" && cannibalizationData && (
+                                            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                                                <div className="flex justify-between items-center mb-6">
+                                                    <div>
+                                                        <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                                                            Cannibalization Analysis
+                                                        </h2>
+                                                        <p className="text-gray-500 dark:text-gray-400 text-sm">
+                                                            Queries where multiple pages are competing for rankings
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="overflow-x-auto border rounded-lg border-gray-200 dark:border-gray-700">
+                                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                                        <thead className="bg-gray-50 dark:bg-gray-900/30">
+                                                            <tr>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                                    Query
+                                                                </th>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                                    Pages
+                                                                </th>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                                    Total Clicks
+                                                                </th>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                                    Top Page
+                                                                </th>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                                    Conflict
+                                                                </th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                                            {cannibalizationData.map((item, i) => (
+                                                                <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                                                                        {item.query}
+                                                                    </td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                                        {item.pageCount}
+                                                                    </td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                                        {item.totalClicks}
+                                                                    </td>
+                                                                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate" title={item.pages[0].url}>
+                                                                        {item.pages[0].url}
+                                                                        <div className="text-xs text-gray-400">
+                                                                            Pos: {item.pages[0].position.toFixed(1)} | Clicks: {item.pages[0].clicks}
+                                                                        </div>
+                                                                    </td>
+                                                                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate" title={item.pages[1].url}>
+                                                                        {item.pages[1].url}
+                                                                        <div className="text-xs text-gray-400">
+                                                                            Pos: {item.pages[1].position.toFixed(1)} | Clicks: {item.pages[1].clicks}
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Query Counts Tab */}
+                                        {activeTab === "query_counts" && queryCountData && queryCountChartData && (
+                                            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                                                <div className="flex justify-between items-center mb-6">
+                                                    <div>
+                                                        <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                                                            Query Count Analysis
+                                                        </h2>
+                                                        <p className="text-gray-500 dark:text-gray-400 text-sm">
+                                                            Number of unique ranking queries per page over time
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="h-[400px] w-full mb-8">
+                                                    <ResponsiveContainer width="100%" height="100%">
+                                                        <LineChart
+                                                            data={queryCountChartData}
+                                                            margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                                                        >
+                                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#374151" opacity={0.2} />
+                                                            <XAxis dataKey="month" stroke="#9CA3AF" />
+                                                            <YAxis stroke="#9CA3AF" />
+                                                            <Tooltip
+                                                                contentStyle={{
+                                                                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                                                                    borderRadius: '8px',
+                                                                    border: 'none',
+                                                                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                                                                }}
+                                                            />
+                                                            <Legend />
+                                                            {queryCountData.slice(0, 5).map((page, index) => (
+                                                                <Line
+                                                                    key={page.page}
+                                                                    type="monotone"
+                                                                    dataKey={page.page}
+                                                                    stroke={[
+                                                                        "#3b82f6", // blue
+                                                                        "#ef4444", // red
+                                                                        "#10b981", // green
+                                                                        "#f59e0b", // amber
+                                                                        "#8b5cf6"  // violet
+                                                                    ][index % 5]}
+                                                                    strokeWidth={2}
+                                                                    dot={{ r: 4 }}
+                                                                />
+                                                            ))}
+                                                        </LineChart>
+                                                    </ResponsiveContainer>
+                                                </div>
+
+                                                <div className="overflow-x-auto border rounded-lg border-gray-200 dark:border-gray-700">
+                                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                                        <thead className="bg-gray-50 dark:bg-gray-900/30">
+                                                            <tr>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                                    Page
+                                                                </th>
+                                                                {queryCountChartData.map(d => (
+                                                                    <th key={d.month} className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                                        {d.month}
+                                                                    </th>
+                                                                ))}
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                                    Total Queries
+                                                                </th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                                            {queryCountData.map((row, i) => (
+                                                                <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                                                    <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white max-w-md truncate" title={row.page}>
+                                                                        {row.page}
+                                                                    </td>
+                                                                    {queryCountChartData.map(d => (
+                                                                        <td key={d.month} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                                            {row.counts[d.month] || 0}
+                                                                        </td>
+                                                                    ))}
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 dark:text-white">
                                                                         {row.totalQueries}
                                                                     </td>
                                                                 </tr>
