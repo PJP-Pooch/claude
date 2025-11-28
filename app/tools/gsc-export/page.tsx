@@ -1085,17 +1085,21 @@ export default function GscExportPage() {
                                                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                                                         {item.totalClicks}
                                                                     </td>
-                                                                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate" title={item.pages[0].url}>
-                                                                        {item.pages[0].url}
-                                                                        <div className="text-xs text-gray-400">
-                                                                            Pos: {item.pages[0].position.toFixed(1)} | Clicks: {item.pages[0].clicks}
-                                                                        </div>
+                                                                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate" title={item.pages[0]?.url}>
+                                                                        {item.pages[0]?.url}
+                                                                        {item.pages[0] && (
+                                                                            <div className="text-xs text-gray-400">
+                                                                                Pos: {item.pages[0].position.toFixed(1)} | Clicks: {item.pages[0].clicks}
+                                                                            </div>
+                                                                        )}
                                                                     </td>
-                                                                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate" title={item.pages[1].url}>
-                                                                        {item.pages[1].url}
-                                                                        <div className="text-xs text-gray-400">
-                                                                            Pos: {item.pages[1].position.toFixed(1)} | Clicks: {item.pages[1].clicks}
-                                                                        </div>
+                                                                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate" title={item.pages[1]?.url}>
+                                                                        {item.pages[1]?.url}
+                                                                        {item.pages[1] && (
+                                                                            <div className="text-xs text-gray-400">
+                                                                                Pos: {item.pages[1].position.toFixed(1)} | Clicks: {item.pages[1].clicks}
+                                                                            </div>
+                                                                        )}
                                                                     </td>
                                                                 </tr>
                                                             ))}

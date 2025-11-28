@@ -89,6 +89,26 @@ export default function Home() {
         'CSV export with full metrics',
       ],
     },
+    {
+      id: 'merchant-price',
+      title: 'Merchant Center Price Competitiveness',
+      description: 'Compare your Merchant Center prices vs Google’s benchmark to find overpriced or underpriced products and improve Shopping ROAS.',
+      icon: (
+        <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+        </svg>
+      ),
+      href: '/tools/merchant-price-competitiveness',
+      color: 'from-blue-500 to-cyan-600',
+      apiType: 'google',
+      features: [
+        'Price competitiveness benchmarks',
+        'Identify under/overpriced products',
+        'Market Insights data',
+        'Visual price distribution',
+        'CSV export',
+      ],
+    },
     // Placeholder for future tools
     {
       id: 'coming-soon-1',
@@ -133,8 +153,8 @@ export default function Home() {
               <button
                 onClick={() => setApiFilter('all')}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${apiFilter === 'all'
-                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
                   }`}
               >
                 All Tools
@@ -142,8 +162,8 @@ export default function Home() {
               <button
                 onClick={() => setApiFilter('dataforseo')}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${apiFilter === 'dataforseo'
-                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
                   }`}
               >
                 DataForSEO API
@@ -151,8 +171,8 @@ export default function Home() {
               <button
                 onClick={() => setApiFilter('google')}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${apiFilter === 'google'
-                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
                   }`}
               >
                 Google API
