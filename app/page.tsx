@@ -89,6 +89,7 @@ export default function Home() {
         'CSV export with full metrics',
       ],
     },
+    /*
     {
       id: 'merchant-price',
       title: 'Merchant Center Price Competitiveness',
@@ -109,6 +110,7 @@ export default function Home() {
         'CSV export',
       ],
     },
+    */
     // Placeholder for future tools
     {
       id: 'coming-soon-1',
