@@ -1372,15 +1372,13 @@ export default function GscExportPage() {
                             </div>
                         )
                     }
-            </div >
-                                )}
+            </div>
         </>
     )
 }
-
-    </div >
-    </main >
-            </div >
-        </ThemeProvider >
-    );
-}
+                        </div >
+                    </main >
+                </div >
+            </ThemeProvider >
+        );
+    }
