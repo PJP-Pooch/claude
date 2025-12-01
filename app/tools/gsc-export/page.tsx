@@ -1131,254 +1131,249 @@ export default function GscExportPage() {
                                                                 fill="#94a3b8"
                                                             />
                                                         </BarChart>
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white font-medium">
-                                                            {row.totalQueries}
-                                                        </td>
-                                                    </tr>
-                                                        ))}
-                                                </tbody>
-                                            </table>
+                                                    </ResponsiveContainer>
+                                                </div>
                                             </div>
-                                        </div>
-                                    )}
+                                        )}
 
-                        {/* Cannibalization Tab */}
-                        {activeTab === "cannibalization" && cannibalizationData && (
-                            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                                <div className="flex justify-between items-center mb-6">
-                                    <div>
-                                        <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                                            Cannibalization Analysis
-                                        </h2>
-                                        <p className="text-gray-500 dark:text-gray-400 text-sm">
-                                            Queries where multiple pages are competing for rankings
-                                        </p>
+                                        {/* Cannibalization Tab */}
+                                        {activeTab === "cannibalization" && cannibalizationData && (
+                                            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                                                <div className="flex justify-between items-center mb-6">
+                                                    <div>
+                                                        <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                                                            Cannibalization Analysis
+                                                        </h2>
+                                                        <p className="text-gray-500 dark:text-gray-400 text-sm">
+                                                            Queries where multiple pages are competing for rankings
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="overflow-x-auto border rounded-lg border-gray-200 dark:border-gray-700">
+                                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                                        <thead className="bg-gray-50 dark:bg-gray-900/30">
+                                                            <tr>
+                                                                <th
+                                                                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                                                                    onClick={() => handleSort("query")}
+                                                                >
+                                                                    <div className="flex items-center">
+                                                                        Query
+                                                                        {sortConfig?.key === "query" ? (
+                                                                            sortConfig.direction === "asc" ? <ArrowUp className="w-4 h-4 ml-1" /> : <ArrowDown className="w-4 h-4 ml-1" />
+                                                                        ) : (
+                                                                            <ArrowUpDown className="w-4 h-4 ml-1 opacity-50" />
+                                                                        )}
+                                                                    </div>
+                                                                </th>
+                                                                <th
+                                                                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                                                                    onClick={() => handleSort("pageCount")}
+                                                                >
+                                                                    <div className="flex items-center">
+                                                                        Pages
+                                                                        {sortConfig?.key === "pageCount" ? (
+                                                                            sortConfig.direction === "asc" ? <ArrowUp className="w-4 h-4 ml-1" /> : <ArrowDown className="w-4 h-4 ml-1" />
+                                                                        ) : (
+                                                                            <ArrowUpDown className="w-4 h-4 ml-1 opacity-50" />
+                                                                        )}
+                                                                    </div>
+                                                                </th>
+                                                                <th
+                                                                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                                                                    onClick={() => handleSort("totalClicks")}
+                                                                >
+                                                                    <div className="flex items-center">
+                                                                        Total Clicks
+                                                                        {sortConfig?.key === "totalClicks" ? (
+                                                                            sortConfig.direction === "asc" ? <ArrowUp className="w-4 h-4 ml-1" /> : <ArrowDown className="w-4 h-4 ml-1" />
+                                                                        ) : (
+                                                                            <ArrowUpDown className="w-4 h-4 ml-1 opacity-50" />
+                                                                        )}
+                                                                    </div>
+                                                                </th>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                                    Top Page
+                                                                </th>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                                    Conflict
+                                                                </th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                                            {sortedCannibalizationData?.map((item) => (
+                                                                <Fragment key={item.query}>
+                                                                    <tr className="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer" onClick={() => toggleQueryExpansion(item.query)}>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white flex items-center">
+                                                                            {expandedQueries.has(item.query) ? (
+                                                                                <ChevronDown className="w-4 h-4 mr-2 text-gray-500" />
+                                                                            ) : (
+                                                                                <ChevronRight className="w-4 h-4 mr-2 text-gray-500" />
+                                                                            )}
+                                                                            {item.query}
+                                                                        </td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                                            {item.pageCount}
+                                                                        </td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                                            {item.totalClicks}
+                                                                        </td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                                            <span className="max-w-xs truncate inline-block align-bottom" title={item.pages[0]?.url}>
+                                                                                {item.pages[0]?.url}
+                                                                            </span>
+                                                                        </td>
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                                            <span className="max-w-xs truncate inline-block align-bottom" title={item.pages[1]?.url}>
+                                                                                {item.pages[1]?.url}
+                                                                            </span>
+                                                                        </td>
+                                                                    </tr>
+                                                                    {expandedQueries.has(item.query) && (
+                                                                        <tr className="bg-gray-50 dark:bg-gray-900/50">
+                                                                            <td colSpan={5} className="px-6 py-4">
+                                                                                <div className="overflow-x-auto">
+                                                                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                                                                        <thead className="bg-gray-100 dark:bg-gray-800">
+                                                                                            <tr>
+                                                                                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700" onClick={() => handleChildSort('url')}>URL {childSortConfig?.key === 'url' ? (childSortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 inline" /> : <ArrowDown className="w-3 h-3 inline" />) : <ArrowUpDown className="w-3 h-3 inline opacity-50" />}</th>
+                                                                                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700" onClick={() => handleChildSort('clicks')}>Clicks {childSortConfig?.key === 'clicks' ? (childSortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 inline" /> : <ArrowDown className="w-3 h-3 inline" />) : <ArrowUpDown className="w-3 h-3 inline opacity-50" />}</th>
+                                                                                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700" onClick={() => handleChildSort('impressions')}>Impr. {childSortConfig?.key === 'impressions' ? (childSortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 inline" /> : <ArrowDown className="w-3 h-3 inline" />) : <ArrowUpDown className="w-3 h-3 inline opacity-50" />}</th>
+                                                                                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700" onClick={() => handleChildSort('ctr')}>CTR {childSortConfig?.key === 'ctr' ? (childSortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 inline" /> : <ArrowDown className="w-3 h-3 inline" />) : <ArrowUpDown className="w-3 h-3 inline opacity-50" />}</th>
+                                                                                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700" onClick={() => handleChildSort('position')}>Pos {childSortConfig?.key === 'position' ? (childSortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 inline" /> : <ArrowDown className="w-3 h-3 inline" />) : <ArrowUpDown className="w-3 h-3 inline opacity-50" />}</th>
+                                                                                            </tr>
+                                                                                        </thead>
+                                                                                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                                                                            {getSortedPages(item.pages).map((page) => (
+                                                                                                <tr key={page.url} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                                                                                    <td className="px-4 py-2 text-sm text-gray-900 dark:text-white break-all">
+                                                                                                        <a href={page.url} target="_blank" rel="noopener noreferrer" className="hover:underline text-blue-600 dark:text-blue-400">
+                                                                                                            {page.url}
+                                                                                                        </a>
+                                                                                                    </td>
+                                                                                                    <td className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">{page.clicks}</td>
+                                                                                                    <td className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">{page.impressions}</td>
+                                                                                                    <td className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">{(page.ctr * 100).toFixed(2)}%</td>
+                                                                                                    <td className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">{page.position.toFixed(1)}</td>
+                                                                                                </tr>
+                                                                                            ))}
+                                                                                        </tbody>
+                                                                                    </table>
+                                                                                </div>
+                                                                            </td>
+                                                                        </tr>
+                                                                    )}
+                                                                </Fragment>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+
+                                            </div>
+                                        )
+                                        }
+
+                                        {/* Query Counts Tab */}
+                                        {
+                                            activeTab === "query_counts" && queryCountData && queryCountChartData && (
+                                                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                                                    <div className="flex justify-between items-center mb-6">
+                                                        <div>
+                                                            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                                                                Query Count Analysis
+                                                            </h2>
+                                                            <p className="text-gray-500 dark:text-gray-400 text-sm">
+                                                                Number of unique ranking queries per page over time
+                                                            </p>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="h-[400px] w-full mb-8">
+                                                        <ResponsiveContainer width="100%" height="100%">
+                                                            <LineChart
+                                                                data={queryCountChartData}
+                                                                margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                                                            >
+                                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#374151" opacity={0.2} />
+                                                                <XAxis dataKey="month" stroke="#9CA3AF" />
+                                                                <YAxis stroke="#9CA3AF" />
+                                                                <Tooltip
+                                                                    contentStyle={{
+                                                                        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                                                                        borderRadius: '8px',
+                                                                        border: 'none',
+                                                                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                                                                    }}
+                                                                />
+                                                                <Legend />
+                                                                {queryCountData.slice(0, 5).map((page, index) => (
+                                                                    <Line
+                                                                        key={page.page}
+                                                                        type="monotone"
+                                                                        dataKey={page.page}
+                                                                        stroke={[
+                                                                            "#3b82f6", // blue
+                                                                            "#ef4444", // red
+                                                                            "#10b981", // green
+                                                                            "#f59e0b", // amber
+                                                                            "#8b5cf6"  // violet
+                                                                        ][index % 5]}
+                                                                        strokeWidth={2}
+                                                                        dot={{ r: 4 }}
+                                                                    />
+                                                                ))}
+                                                            </LineChart>
+                                                        </ResponsiveContainer>
+                                                    </div>
+
+                                                    <div className="overflow-x-auto border rounded-lg border-gray-200 dark:border-gray-700">
+                                                        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                                            <thead className="bg-gray-50 dark:bg-gray-900/30">
+                                                                <tr>
+                                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                                        Page
+                                                                    </th>
+                                                                    {queryCountChartData.map(d => (
+                                                                        <th key={d.month} className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                                            {d.month}
+                                                                        </th>
+                                                                    ))}
+                                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                                        Total Queries
+                                                                    </th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                                                {queryCountData.map((row, i) => (
+                                                                    <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                                                        <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white max-w-md truncate" title={row.page}>
+                                                                            {row.page}
+                                                                        </td>
+                                                                        {queryCountChartData.map(d => (
+                                                                            <td key={d.month} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                                                {row.counts[d.month] || 0}
+                                                                            </td>
+                                                                        ))}
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 dark:text-white">
+                                                                            {row.totalQueries}
+                                                                        </td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            )
+                                        }
                                     </div>
-                                </div>
-
-                                <div className="overflow-x-auto border rounded-lg border-gray-200 dark:border-gray-700">
-                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                                        <thead className="bg-gray-50 dark:bg-gray-900/30">
-                                            <tr>
-                                                <th
-                                                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
-                                                    onClick={() => handleSort("query")}
-                                                >
-                                                    <div className="flex items-center">
-                                                        Query
-                                                        {sortConfig?.key === "query" ? (
-                                                            sortConfig.direction === "asc" ? <ArrowUp className="w-4 h-4 ml-1" /> : <ArrowDown className="w-4 h-4 ml-1" />
-                                                        ) : (
-                                                            <ArrowUpDown className="w-4 h-4 ml-1 opacity-50" />
-                                                        )}
-                                                    </div>
-                                                </th>
-                                                <th
-                                                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
-                                                    onClick={() => handleSort("pageCount")}
-                                                >
-                                                    <div className="flex items-center">
-                                                        Pages
-                                                        {sortConfig?.key === "pageCount" ? (
-                                                            sortConfig.direction === "asc" ? <ArrowUp className="w-4 h-4 ml-1" /> : <ArrowDown className="w-4 h-4 ml-1" />
-                                                        ) : (
-                                                            <ArrowUpDown className="w-4 h-4 ml-1 opacity-50" />
-                                                        )}
-                                                    </div>
-                                                </th>
-                                                <th
-                                                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
-                                                    onClick={() => handleSort("totalClicks")}
-                                                >
-                                                    <div className="flex items-center">
-                                                        Total Clicks
-                                                        {sortConfig?.key === "totalClicks" ? (
-                                                            sortConfig.direction === "asc" ? <ArrowUp className="w-4 h-4 ml-1" /> : <ArrowDown className="w-4 h-4 ml-1" />
-                                                        ) : (
-                                                            <ArrowUpDown className="w-4 h-4 ml-1 opacity-50" />
-                                                        )}
-                                                    </div>
-                                                </th>
-                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                                    Top Page
-                                                </th>
-                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                                    Conflict
-                                                </th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                            {sortedCannibalizationData?.map((item) => (
-                                                <Fragment key={item.query}>
-                                                    <tr className="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer" onClick={() => toggleQueryExpansion(item.query)}>
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white flex items-center">
-                                                            {expandedQueries.has(item.query) ? (
-                                                                <ChevronDown className="w-4 h-4 mr-2 text-gray-500" />
-                                                            ) : (
-                                                                <ChevronRight className="w-4 h-4 mr-2 text-gray-500" />
-                                                            )}
-                                                            {item.query}
-                                                        </td>
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                                            {item.pageCount}
-                                                        </td>
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                                            {item.totalClicks}
-                                                        </td>
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                                            <span className="max-w-xs truncate inline-block align-bottom" title={item.pages[0]?.url}>
-                                                                {item.pages[0]?.url}
-                                                            </span>
-                                                        </td>
-                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                                            <span className="max-w-xs truncate inline-block align-bottom" title={item.pages[1]?.url}>
-                                                                {item.pages[1]?.url}
-                                                            </span>
-                                                        </td>
-                                                    </tr>
-                                                    {expandedQueries.has(item.query) && (
-                                                        <tr className="bg-gray-50 dark:bg-gray-900/50">
-                                                            <td colSpan={5} className="px-6 py-4">
-                                                                <div className="overflow-x-auto">
-                                                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                                                                        <thead className="bg-gray-100 dark:bg-gray-800">
-                                                                            <tr>
-                                                                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700" onClick={() => handleChildSort('url')}>URL {childSortConfig?.key === 'url' ? (childSortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 inline" /> : <ArrowDown className="w-3 h-3 inline" />) : <ArrowUpDown className="w-3 h-3 inline opacity-50" />}</th>
-                                                                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700" onClick={() => handleChildSort('clicks')}>Clicks {childSortConfig?.key === 'clicks' ? (childSortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 inline" /> : <ArrowDown className="w-3 h-3 inline" />) : <ArrowUpDown className="w-3 h-3 inline opacity-50" />}</th>
-                                                                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700" onClick={() => handleChildSort('impressions')}>Impr. {childSortConfig?.key === 'impressions' ? (childSortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 inline" /> : <ArrowDown className="w-3 h-3 inline" />) : <ArrowUpDown className="w-3 h-3 inline opacity-50" />}</th>
-                                                                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700" onClick={() => handleChildSort('ctr')}>CTR {childSortConfig?.key === 'ctr' ? (childSortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 inline" /> : <ArrowDown className="w-3 h-3 inline" />) : <ArrowUpDown className="w-3 h-3 inline opacity-50" />}</th>
-                                                                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700" onClick={() => handleChildSort('position')}>Pos {childSortConfig?.key === 'position' ? (childSortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 inline" /> : <ArrowDown className="w-3 h-3 inline" />) : <ArrowUpDown className="w-3 h-3 inline opacity-50" />}</th>
-                                                                            </tr>
-                                                                        </thead>
-                                                                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                                                            {getSortedPages(item.pages).map((page) => (
-                                                                                <tr key={page.url} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                                                                    <td className="px-4 py-2 text-sm text-gray-900 dark:text-white break-all">
-                                                                                        <a href={page.url} target="_blank" rel="noopener noreferrer" className="hover:underline text-blue-600 dark:text-blue-400">
-                                                                                            {page.url}
-                                                                                        </a>
-                                                                                    </td>
-                                                                                    <td className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">{page.clicks}</td>
-                                                                                    <td className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">{page.impressions}</td>
-                                                                                    <td className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">{(page.ctr * 100).toFixed(2)}%</td>
-                                                                                    <td className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">{page.position.toFixed(1)}</td>
-                                                                                </tr>
-                                                                            ))}
-                                                                        </tbody>
-                                                                    </table>
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                    )}
-                                                </Fragment>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-
-                            </div >
-    </div >
-)}
-
-                    {/* Query Counts Tab */}
-                    {
-                        activeTab === "query_counts" && queryCountData && queryCountChartData && (
-                            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                                <div className="flex justify-between items-center mb-6">
-                                    <div>
-                                        <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                                            Query Count Analysis
-                                        </h2>
-                                        <p className="text-gray-500 dark:text-gray-400 text-sm">
-                                            Number of unique ranking queries per page over time
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <div className="h-[400px] w-full mb-8">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <LineChart
-                                            data={queryCountChartData}
-                                            margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                                        >
-                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#374151" opacity={0.2} />
-                                            <XAxis dataKey="month" stroke="#9CA3AF" />
-                                            <YAxis stroke="#9CA3AF" />
-                                            <Tooltip
-                                                contentStyle={{
-                                                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                                                    borderRadius: '8px',
-                                                    border: 'none',
-                                                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                                                }}
-                                            />
-                                            <Legend />
-                                            {queryCountData.slice(0, 5).map((page, index) => (
-                                                <Line
-                                                    key={page.page}
-                                                    type="monotone"
-                                                    dataKey={page.page}
-                                                    stroke={[
-                                                        "#3b82f6", // blue
-                                                        "#ef4444", // red
-                                                        "#10b981", // green
-                                                        "#f59e0b", // amber
-                                                        "#8b5cf6"  // violet
-                                                    ][index % 5]}
-                                                    strokeWidth={2}
-                                                    dot={{ r: 4 }}
-                                                />
-                                            ))}
-                                        </LineChart>
-                                    </ResponsiveContainer>
-                                </div>
-
-                                <div className="overflow-x-auto border rounded-lg border-gray-200 dark:border-gray-700">
-                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                                        <thead className="bg-gray-50 dark:bg-gray-900/30">
-                                            <tr>
-                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                                    Page
-                                                </th>
-                                                {queryCountChartData.map(d => (
-                                                    <th key={d.month} className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                                        {d.month}
-                                                    </th>
-                                                ))}
-                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                                    Total Queries
-                                                </th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                            {queryCountData.map((row, i) => (
-                                                <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                                    <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white max-w-md truncate" title={row.page}>
-                                                        {row.page}
-                                                    </td>
-                                                    {queryCountChartData.map(d => (
-                                                        <td key={d.month} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                                            {row.counts[d.month] || 0}
-                                                        </td>
-                                                    ))}
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 dark:text-white">
-                                                        {row.totalQueries}
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
+                                )}
+                            </>
                         )
-                    }
-            </div>
-        </>
-    )
+                        }
+                    </div >
+                </main >
+            </div >
+        </ThemeProvider >
+    );
 }
-                        </div >
-                    </main >
-                </div >
-            </ThemeProvider >
-        );
-    }
