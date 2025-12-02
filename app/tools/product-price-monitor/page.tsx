@@ -119,7 +119,8 @@ export default function ProductPriceMonitorPage() {
                 const items = data.tasks[0].result[0].items;
                 console.log(`Found ${items.length} products`);
                 console.log('First product structure:', items[0]);
-                setProducts(items);
+                // Enforce depth limit on the client side as well
+                setProducts(items.slice(0, depth));
             } else if (data.tasks && data.tasks[0]?.status_message) {
                 // Show DataForSEO error message
                 setError(`DataForSEO Error: ${data.tasks[0].status_message}`);
@@ -174,7 +175,8 @@ export default function ProductPriceMonitorPage() {
             });
 
             if (!res.ok) {
-                throw new Error("Failed to fetch seller data");
+                const errorData = await res.json().catch(() => ({}));
+                throw new Error(errorData.error || `Failed to fetch seller data: ${res.statusText}`);
             }
 
             const data = await res.json();
@@ -190,10 +192,12 @@ export default function ProductPriceMonitorPage() {
                 }).slice(0, 5);
 
                 setSellers(sortedItems);
+            } else if (data.tasks && data.tasks[0]?.status_message) {
+                throw new Error(`DataForSEO Error: ${data.tasks[0].status_message}`);
             }
         } catch (err) {
             console.error(err);
-            setError("Failed to fetch seller information");
+            setError(err instanceof Error ? err.message : "Failed to fetch seller information");
         } finally {
             setLoadingSellers(false);
         }
