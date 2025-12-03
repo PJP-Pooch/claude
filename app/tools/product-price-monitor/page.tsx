@@ -30,6 +30,7 @@ type ProductResult = {
     product_images?: any[];
     xpath?: string;
     available?: boolean;
+    shopping_url?: string;
 };
 
 
@@ -514,9 +515,9 @@ export default function ProductPriceMonitorPage() {
                                                                     ? `${product.currency || ''} ${product.price.toFixed(2)}`
                                                                     : "N/A"}
                                                             </div>
-                                                            {product['shopping_url'] && (
+                                                            {product.shopping_url && (
                                                                 <a
-                                                                    href={product['shopping_url'] as string}
+                                                                    href={product.shopping_url}
                                                                     target="_blank"
                                                                     rel="noopener noreferrer"
                                                                     className="text-sm text-blue-600 dark:text-blue-400 hover:underline block mt-1"
