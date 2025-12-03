@@ -57,14 +57,15 @@ export default function ProductPriceMonitorPage() {
     const [apiPassword, setApiPassword] = useState("");
     const [showAdvanced, setShowAdvanced] = useState(false);
 
+    const [searchType, setSearchType] = useState<"keyword" | "url">("keyword");
     const [loading, setLoading] = useState(false);
     const [products, setProducts] = useState<ProductResult[]>([]);
-    const [selectedProduct, setSelectedProduct] = useState<ProductResult | null>(null);
-    const [sellers, setSellers] = useState<SellerInfo[]>([]);
-    const [loadingSellers, setLoadingSellers] = useState(false);
     const [error, setError] = useState("");
     const [expandedProducts, setExpandedProducts] = useState<Set<number>>(new Set());
     const [sellerCache, setSellerCache] = useState<Record<string, SellerInfo[]>>({});
+
+    const [loadingProducts, setLoadingProducts] = useState<Record<string, boolean>>({});
+    const [sortState, setSortState] = useState<Record<string, { field: 'total_price', direction: 'asc' | 'desc' }>>({});
 
     const LOCATION_CODES: Record<string, number> = {
         "United States": 2840,
@@ -89,16 +90,16 @@ export default function ProductPriceMonitorPage() {
         setLoading(true);
         setError("");
         setProducts([]);
-        setSelectedProduct(null);
-        setSellers([]);
         setExpandedProducts(new Set());
+        setSellerCache({});
+        setLoadingProducts({});
 
         try {
             const res = await fetch("/api/merchant/google-shopping/products", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    keyword: keyword.trim(),
+                    keyword: searchType === 'url' ? `product_id:${keyword.trim()}` : keyword.trim(),
                     location_code: LOCATION_CODES[location],
                     language_code: "en",
                     depth,
@@ -138,7 +139,7 @@ export default function ProductPriceMonitorPage() {
         }
     };
 
-    const handleSelectProduct = async (product: ProductResult) => {
+    const handleSelectProduct = (product: ProductResult) => {
         if (!product.product_id) {
             setError("This product doesn't have a valid ID");
             return;
@@ -149,27 +150,32 @@ export default function ProductPriceMonitorPage() {
 
         if (newExpanded.has(productIndex)) {
             newExpanded.delete(productIndex);
-            setExpandedProducts(newExpanded);
-            if (selectedProduct === product) {
-                setSelectedProduct(null);
-                setSellers([]);
-            }
-            return;
+        } else {
+            newExpanded.add(productIndex);
         }
-
-        newExpanded.add(productIndex);
         setExpandedProducts(newExpanded);
-        setSelectedProduct(product);
+    };
+
+    const handleSort = (productId: string) => {
+        setSortState(prev => {
+            const current = prev[productId] || { field: 'total_price', direction: 'asc' }; // Default to asc if not set
+            return {
+                ...prev,
+                [productId]: {
+                    field: 'total_price',
+                    direction: current.direction === 'asc' ? 'desc' : 'asc'
+                }
+            };
+        });
+    };
+
+    const fetchSellers = async (product: ProductResult) => {
+        if (!product.product_id) return;
 
         // Check cache first
-        const cachedSellers = sellerCache[product.product_id];
-        if (cachedSellers) {
-            setSellers(cachedSellers);
-            return;
-        }
+        if (sellerCache[product.product_id]) return;
 
-        setLoadingSellers(true);
-        setSellers([]);
+        setLoadingProducts(prev => ({ ...prev, [product.product_id!]: true }));
 
         try {
             const res = await fetch("/api/merchant/google-shopping/sellers", {
@@ -193,19 +199,13 @@ export default function ProductPriceMonitorPage() {
 
             if (data.tasks && data.tasks[0]?.result?.[0]?.items) {
                 const items = data.tasks[0].result[0].items;
+                // Take top 5 items in original order (no sorting)
+                const topItems = items.slice(0, 5);
 
-                // Sort by price (cheapest first) and take top 5
-                const sortedItems = items.sort((a: any, b: any) => {
-                    const priceA = a.total_price ?? a.price ?? a.base_price ?? Infinity;
-                    const priceB = b.total_price ?? b.price ?? b.base_price ?? Infinity;
-                    return priceA - priceB;
-                }).slice(0, 5);
-
-                setSellers(sortedItems);
                 // Update cache
                 setSellerCache(prev => ({
                     ...prev,
-                    [product.product_id!]: sortedItems
+                    [product.product_id!]: topItems
                 }));
             } else if (data.tasks && data.tasks[0]?.status_message) {
                 throw new Error(`DataForSEO Error: ${data.tasks[0].status_message}`);
@@ -214,7 +214,7 @@ export default function ProductPriceMonitorPage() {
             console.error(err);
             setError(err instanceof Error ? err.message : "Failed to fetch seller information");
         } finally {
-            setLoadingSellers(false);
+            setLoadingProducts(prev => ({ ...prev, [product.product_id!]: false }));
         }
     };
 
@@ -276,8 +276,32 @@ export default function ProductPriceMonitorPage() {
                             {/* Product Keyword */}
                             <div>
                                 <label htmlFor="keyword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Product Keyword *
+                                    Search By
                                 </label>
+                                <div className="flex gap-4 mb-3">
+                                    <label className="inline-flex items-center">
+                                        <input
+                                            type="radio"
+                                            className="form-radio text-blue-600"
+                                            name="searchType"
+                                            value="keyword"
+                                            checked={searchType === 'keyword'}
+                                            onChange={() => setSearchType('keyword')}
+                                        />
+                                        <span className="ml-2 text-gray-700 dark:text-gray-300">Keyword</span>
+                                    </label>
+                                    <label className="inline-flex items-center">
+                                        <input
+                                            type="radio"
+                                            className="form-radio text-blue-600"
+                                            name="searchType"
+                                            value="url"
+                                            checked={searchType === 'url'}
+                                            onChange={() => setSearchType('url')}
+                                        />
+                                        <span className="ml-2 text-gray-700 dark:text-gray-300">Product ID</span>
+                                    </label>
+                                </div>
                                 <div className="relative">
                                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                         <Search className="h-5 w-5 text-gray-400" />
@@ -289,7 +313,7 @@ export default function ProductPriceMonitorPage() {
                                         onChange={(e) => setKeyword(e.target.value)}
                                         required
                                         className="block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-600 rounded-lg leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors"
-                                        placeholder="e.g., running shoes, wireless headphones"
+                                        placeholder={searchType === 'keyword' ? "e.g., running shoes, wireless headphones" : "e.g., 12693300312433459747"}
                                     />
                                 </div>
                             </div>
@@ -440,7 +464,6 @@ export default function ProductPriceMonitorPage() {
                             <div className="grid grid-cols-1 gap-4">
                                 {products.map((product, index) => {
                                     const isExpanded = expandedProducts.has(index);
-                                    const isSelected = selectedProduct === product;
 
                                     return (
                                         <div key={index} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
@@ -453,6 +476,16 @@ export default function ProductPriceMonitorPage() {
                                                         <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 mt-1">
                                                             #{product.rank_absolute || product.rank_group || '-'}
                                                         </span>
+                                                        {product.product_images && product.product_images.length > 0 && (
+                                                            <img
+                                                                src={typeof product.product_images[0] === 'string' ? product.product_images[0] : product.product_images[0].url}
+                                                                alt={product.title || 'Product image'}
+                                                                className="w-20 h-20 object-contain rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex-shrink-0"
+                                                                onError={(e) => {
+                                                                    e.currentTarget.style.display = 'none';
+                                                                }}
+                                                            />
+                                                        )}
                                                         <div className="flex-1">
                                                             <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2">
                                                                 {product.title}
@@ -481,6 +514,17 @@ export default function ProductPriceMonitorPage() {
                                                                     ? `${product.currency || ''} ${product.price.toFixed(2)}`
                                                                     : "N/A"}
                                                             </div>
+                                                            {product['shopping_url'] && (
+                                                                <a
+                                                                    href={product['shopping_url'] as string}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="text-sm text-blue-600 dark:text-blue-400 hover:underline block mt-1"
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                >
+                                                                    View on Shopping
+                                                                </a>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -495,13 +539,13 @@ export default function ProductPriceMonitorPage() {
                                             </button>
 
                                             {/* Seller Information */}
-                                            {isExpanded && isSelected && (
+                                            {isExpanded && (
                                                 <div className="border-t border-gray-200 dark:border-gray-700">
-                                                    {loadingSellers ? (
+                                                    {loadingProducts[product.product_id || ''] ? (
                                                         <div className="flex justify-center items-center py-12">
                                                             <Loader2 className="animate-spin h-8 w-8 text-blue-600" />
                                                         </div>
-                                                    ) : sellers.length > 0 ? (
+                                                    ) : sellerCache[product.product_id!]?.length > 0 ? (
                                                         <div className="overflow-x-auto">
                                                             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                                                                 <thead className="bg-gray-50 dark:bg-gray-900/30">
@@ -515,8 +559,16 @@ export default function ProductPriceMonitorPage() {
                                                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                                                                             Shipping
                                                                         </th>
-                                                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                                                            Total
+                                                                        <th
+                                                                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors select-none group"
+                                                                            onClick={() => handleSort(product.product_id!)}
+                                                                        >
+                                                                            <div className="flex items-center gap-1">
+                                                                                Total
+                                                                                <span className="text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300">
+                                                                                    {sortState[product.product_id!]?.direction === 'asc' ? '↑' : sortState[product.product_id!]?.direction === 'desc' ? '↓' : '↕'}
+                                                                                </span>
+                                                                            </div>
                                                                         </th>
                                                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                                                                             Details
@@ -527,54 +579,77 @@ export default function ProductPriceMonitorPage() {
                                                                     </tr>
                                                                 </thead>
                                                                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                                                    {sellers.map((seller, idx) => {
-                                                                        const price = seller.price ?? seller.base_price ?? 0;
-                                                                        const shipping = seller.shipping_price;
-                                                                        // If total_price is missing, calculate it: if shipping is 0/null, total = price
-                                                                        const total = seller.total_price ?? ((shipping == null || shipping === 0) ? price : null);
+                                                                    {(() => {
+                                                                        const sellers = sellerCache[product.product_id!] || [];
+                                                                        const currentSort = sortState[product.product_id!];
 
-                                                                        return (
-                                                                            <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                                                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                                                                                    {seller.title || seller.seller_name || seller.domain || "Unknown Seller"}
-                                                                                </td>
-                                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                                                                    {seller.currency || ''} {price.toFixed(2)}
-                                                                                </td>
-                                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                                                                    {shipping != null && shipping > 0
-                                                                                        ? `${seller.currency || ''} ${shipping.toFixed(2)}`
-                                                                                        : "Free"}
-                                                                                </td>
-                                                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900 dark:text-white">
-                                                                                    {total != null ? `${seller.currency || ''} ${total.toFixed(2)}` : 'N/A'}
-                                                                                </td>
-                                                                                <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate" title={seller.details}>
-                                                                                    {seller.details || "-"}
-                                                                                </td>
-                                                                                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                                                                    <a
-                                                                                        href={seller.url}
-                                                                                        target="_blank"
-                                                                                        rel="noopener noreferrer"
-                                                                                        className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 inline-flex items-center"
-                                                                                    >
-                                                                                        View <ExternalLink className="h-3 w-3 ml-1" />
-                                                                                    </a>
-                                                                                </td>
-                                                                            </tr>
-                                                                        );
-                                                                    })}
+                                                                        const sortedSellers = [...sellers].sort((a, b) => {
+                                                                            if (!currentSort) return 0;
+
+                                                                            const priceA = a.total_price ?? a.price ?? a.base_price ?? Infinity;
+                                                                            const priceB = b.total_price ?? b.price ?? b.base_price ?? Infinity;
+
+                                                                            return currentSort.direction === 'asc'
+                                                                                ? priceA - priceB
+                                                                                : priceB - priceA;
+                                                                        });
+
+                                                                        return sortedSellers.map((seller, idx) => {
+                                                                            const price = seller.price ?? seller.base_price ?? 0;
+                                                                            const shipping = seller.shipping_price;
+                                                                            // If total_price is missing, calculate it: if shipping is 0/null, total = price
+                                                                            const total = seller.total_price ?? ((shipping == null || shipping === 0) ? price : null);
+
+                                                                            return (
+                                                                                <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                                                                                        {seller.title || seller.seller_name || seller.domain || "Unknown Seller"}
+                                                                                    </td>
+                                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                                                        {seller.currency || ''} {price.toFixed(2)}
+                                                                                    </td>
+                                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                                                        {shipping != null && shipping > 0
+                                                                                            ? `${seller.currency || ''} ${shipping.toFixed(2)}`
+                                                                                            : "Free"}
+                                                                                    </td>
+                                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900 dark:text-white">
+                                                                                        {total != null ? `${seller.currency || ''} ${total.toFixed(2)}` : 'N/A'}
+                                                                                    </td>
+                                                                                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate" title={seller.details}>
+                                                                                        {seller.details || "-"}
+                                                                                    </td>
+                                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                                                                        <a
+                                                                                            href={seller.url}
+                                                                                            target="_blank"
+                                                                                            rel="noopener noreferrer"
+                                                                                            className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 inline-flex items-center"
+                                                                                        >
+                                                                                            View <ExternalLink className="h-3 w-3 ml-1" />
+                                                                                        </a>
+                                                                                    </td>
+                                                                                </tr>
+                                                                            );
+
+                                                                        })
+                                                                    })()}
                                                                 </tbody>
                                                             </table>
                                                         </div>
                                                     ) : (
-                                                        <p className="text-gray-500 dark:text-gray-400 text-center py-8 text-sm">
-                                                            No seller information available for this product
-                                                        </p>
+                                                        <div className="flex justify-center py-6">
+                                                            <button
+                                                                onClick={() => fetchSellers(product)}
+                                                                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                                            >
+                                                                Load Sellers
+                                                            </button>
+                                                        </div>
                                                     )}
                                                 </div>
-                                            )}
+                                            )
+                                            }
                                         </div>
                                     );
                                 })}
@@ -583,6 +658,6 @@ export default function ProductPriceMonitorPage() {
                     )}
                 </div>
             </main>
-        </ThemeProvider>
+        </ThemeProvider >
     );
 }
