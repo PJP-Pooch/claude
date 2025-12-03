@@ -64,6 +64,7 @@ export default function ProductPriceMonitorPage() {
     const [loadingSellers, setLoadingSellers] = useState(false);
     const [error, setError] = useState("");
     const [expandedProducts, setExpandedProducts] = useState<Set<number>>(new Set());
+    const [sellerCache, setSellerCache] = useState<Record<string, SellerInfo[]>>({});
 
     const LOCATION_CODES: Record<string, number> = {
         "United States": 2840,
@@ -78,6 +79,7 @@ export default function ProductPriceMonitorPage() {
 
     const handleSearch = async (e: React.FormEvent) => {
         e.preventDefault();
+        console.log(`Searching for "${keyword}" with depth ${depth}`);
 
         if (!keyword.trim()) {
             setError("Please enter a product keyword");
@@ -158,6 +160,13 @@ export default function ProductPriceMonitorPage() {
         newExpanded.add(productIndex);
         setExpandedProducts(newExpanded);
         setSelectedProduct(product);
+
+        // Check cache first
+        if (sellerCache[product.product_id]) {
+            setSellers(sellerCache[product.product_id]);
+            return;
+        }
+
         setLoadingSellers(true);
         setSellers([]);
 
@@ -192,6 +201,11 @@ export default function ProductPriceMonitorPage() {
                 }).slice(0, 5);
 
                 setSellers(sortedItems);
+                // Update cache
+                setSellerCache(prev => ({
+                    ...prev,
+                    [product.product_id!]: sortedItems
+                }));
             } else if (data.tasks && data.tasks[0]?.status_message) {
                 throw new Error(`DataForSEO Error: ${data.tasks[0].status_message}`);
             }
