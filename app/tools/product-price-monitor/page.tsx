@@ -162,8 +162,9 @@ export default function ProductPriceMonitorPage() {
         setSelectedProduct(product);
 
         // Check cache first
-        if (sellerCache[product.product_id]) {
-            setSellers(sellerCache[product.product_id]);
+        const cachedSellers = sellerCache[product.product_id];
+        if (cachedSellers) {
+            setSellers(cachedSellers);
             return;
         }
 
