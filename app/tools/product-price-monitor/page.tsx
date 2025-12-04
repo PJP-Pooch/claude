@@ -67,6 +67,7 @@ export default function ProductPriceMonitorPage() {
 
     const [loadingProducts, setLoadingProducts] = useState<Record<string, boolean>>({});
     const [sortState, setSortState] = useState<Record<string, { field: 'total_price', direction: 'asc' | 'desc' }>>({});
+    const [targetDomain, setTargetDomain] = useState("");
 
     const LOCATION_CODES: Record<string, number> = {
         "United States": 2840,
@@ -403,7 +404,7 @@ export default function ProductPriceMonitorPage() {
                             </div>
 
                             {/* Main Settings Row */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Location</label>
                                     <select
@@ -429,6 +430,18 @@ export default function ProductPriceMonitorPage() {
                                         />
                                     </div>
                                 )}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        Your Domain <span className="text-xs text-gray-500">(optional)</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={targetDomain}
+                                        onChange={(e) => setTargetDomain(e.target.value)}
+                                        placeholder="e.g., amazon.co.uk"
+                                        className="block w-full px-3 py-3 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                                    />
+                                </div>
                             </div>
 
                             {/* API Login Details Toggle */}
@@ -702,20 +715,41 @@ export default function ProductPriceMonitorPage() {
                                                                             // If total_price is missing, calculate it: if shipping is 0/null, total = price
                                                                             const total = seller.total_price ?? ((shipping == null || shipping === 0) ? price : null);
 
+                                                                            // Check if this seller matches the target domain
+                                                                            const sellerDomain = seller.domain || seller.url || '';
+                                                                            const normalizedTarget = targetDomain.toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, '');
+                                                                            const isTargetMatch = normalizedTarget && sellerDomain.toLowerCase().includes(normalizedTarget);
+                                                                            const position = idx + 1;
+
                                                                             return (
-                                                                                <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                                                                <tr
+                                                                                    key={idx}
+                                                                                    className={`transition-colors ${isTargetMatch
+                                                                                            ? 'bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500'
+                                                                                            : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                                                                                        }`}
+                                                                                >
                                                                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                                                                                        {seller.title || seller.seller_name || seller.domain || "Unknown Seller"}
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            {isTargetMatch && (
+                                                                                                <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-bold text-white bg-green-500 rounded-full">
+                                                                                                    #{position}
+                                                                                                </span>
+                                                                                            )}
+                                                                                            <span className={isTargetMatch ? 'text-green-700 dark:text-green-400 font-semibold' : ''}>
+                                                                                                {seller.title || seller.seller_name || seller.domain || "Unknown Seller"}
+                                                                                            </span>
+                                                                                        </div>
                                                                                     </td>
-                                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                                                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${isTargetMatch ? 'text-green-700 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
                                                                                         {seller.currency || ''} {price.toFixed(2)}
                                                                                     </td>
-                                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                                                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${isTargetMatch ? 'text-green-700 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
                                                                                         {shipping != null && shipping > 0
                                                                                             ? `${seller.currency || ''} ${shipping.toFixed(2)}`
                                                                                             : "Free"}
                                                                                     </td>
-                                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900 dark:text-white">
+                                                                                    <td className={`px-6 py-4 whitespace-nowrap text-sm font-semibold ${isTargetMatch ? 'text-green-700 dark:text-green-400' : 'text-gray-900 dark:text-white'}`}>
                                                                                         {total != null ? `${seller.currency || ''} ${total.toFixed(2)}` : 'N/A'}
                                                                                     </td>
                                                                                     <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate" title={seller.details}>
