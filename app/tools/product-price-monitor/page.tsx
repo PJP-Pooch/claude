@@ -100,105 +100,98 @@ export default function ProductPriceMonitorPage() {
         setProducts([]);
         try {
             if (searchType === 'url') {
-                // Search by Product ID
-                // 1. Fetch Sellers (to ensure availability and get pricing)
-                const sellersPromise = fetch("/api/merchant/google-shopping/sellers", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        product_id: keyword.trim(),
-                        location_code: LOCATION_CODES[location],
-                        language_code: "en",
-                        dataforseoLogin: apiLogin || undefined,
-                        dataforseoPassword: apiPassword || undefined,
-                    }),
-                });
+                // Search by Product ID(s) - support multiple IDs separated by commas or newlines
+                const productIds = keyword
+                    .split(/[,\n]/)
+                    .map(id => id.trim())
+                    .filter(id => id.length > 0);
 
-                // 2. Fetch Product Metadata (to get image and proper title)
-                const productPromise = fetch("/api/merchant/google-shopping/products", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        keyword: `product_id:${keyword.trim()}`,
-                        location_code: LOCATION_CODES[location],
-                        language_code: "en",
-                        depth: 1, // We only need the top result for metadata
-                        dataforseoLogin: apiLogin || undefined,
-                        dataforseoPassword: apiPassword || undefined,
-                    }),
-                });
-
-                const [sellersRes, productRes] = await Promise.all([sellersPromise, productPromise]);
-
-                if (!sellersRes.ok) {
-                    const errorData = await sellersRes.json().catch(() => ({}));
-                    throw new Error(errorData.error || `Failed to fetch seller data: ${sellersRes.statusText}`);
+                if (productIds.length === 0) {
+                    setError("Please enter at least one Product ID.");
+                    setLoading(false);
+                    return;
                 }
 
-                const sellersData = await sellersRes.json();
-                const productData = await productRes.json().catch(() => ({})); // Ignore product fetch errors, it's just for metadata
-
-                if (sellersData.tasks && sellersData.tasks[0]?.result?.[0]?.items) {
-                    const sellerItems = sellersData.tasks[0].result[0].items;
-
-                    if (sellerItems.length === 0) {
-                        setError("No sellers found for this Product ID.");
-                        setLoading(false);
-                        return;
-                    }
-
-                    // Use the title from the sellers response - this is always accurate for the product ID
-                    // The products endpoint keyword search can return mismatched products
-                    const productTitle = sellerItems[0].title || "Product Found";
-                    let productImages: any[] = [];
-                    let shoppingUrl = "";
-
-                    // Only try to get the image from products endpoint, but DON'T override the title
-                    if (productData.tasks && productData.tasks[0]?.result?.[0]?.items) {
-                        const productItems = productData.tasks[0].result[0].items;
-                        // Look for a product that matches part of our title to get the image
-                        const matchingProduct = productItems.find((p: any) => {
-                            const sellerTitle = productTitle.toLowerCase();
-                            const productName = (p.title || '').toLowerCase();
-                            // Check if there's meaningful overlap in the titles
-                            return sellerTitle.includes(productName.split(' ')[0]) ||
-                                productName.includes(sellerTitle.split(' ')[0]);
+                // Fetch sellers for all product IDs in parallel
+                const fetchPromises = productIds.map(async (productId) => {
+                    try {
+                        const sellersRes = await fetch("/api/merchant/google-shopping/sellers", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                product_id: productId,
+                                location_code: LOCATION_CODES[location],
+                                language_code: "en",
+                                dataforseoLogin: apiLogin || undefined,
+                                dataforseoPassword: apiPassword || undefined,
+                            }),
                         });
 
-                        if (matchingProduct) {
-                            productImages = matchingProduct.product_images || [];
-                            shoppingUrl = matchingProduct.url || "";
+                        if (!sellersRes.ok) {
+                            return { productId, error: `Failed to fetch: ${sellersRes.statusText}`, sellers: [] as SellerInfo[], product: null };
                         }
-                        // If no matching product found, leave images empty - better than showing wrong image
+
+                        const sellersData = await sellersRes.json();
+
+                        if (sellersData.tasks && sellersData.tasks[0]?.result?.[0]?.items) {
+                            const sellerItems = sellersData.tasks[0].result[0].items as SellerInfo[];
+
+                            if (sellerItems.length === 0) {
+                                return { productId, error: "No sellers found", sellers: [] as SellerInfo[], product: null };
+                            }
+
+                            const firstSeller = sellerItems[0];
+                            const productTitle = firstSeller?.title || "Product Found";
+                            const googleShoppingUrl = `https://www.google.com/shopping/product/${productId}`;
+
+                            const syntheticProduct: ProductResult = {
+                                product_id: productId,
+                                title: productTitle,
+                                price: firstSeller?.price ?? firstSeller?.base_price ?? null,
+                                currency: firstSeller?.currency,
+                                shop_name: "Various Sellers",
+                                product_images: [],
+                                available: true,
+                                shopping_url: googleShoppingUrl
+                            };
+
+                            return { productId, error: null, sellers: sellerItems, product: syntheticProduct };
+                        } else {
+                            return { productId, error: sellersData.tasks?.[0]?.status_message || "No data found", sellers: [] as SellerInfo[], product: null };
+                        }
+                    } catch (err) {
+                        return { productId, error: `Error: ${err instanceof Error ? err.message : 'Unknown error'}`, sellers: [] as SellerInfo[], product: null };
                     }
+                });
 
-                    // Construct Google Shopping URL from product ID if no URL found
-                    const googleShoppingUrl = shoppingUrl || `https://www.google.com/shopping/product/${keyword.trim()}`;
+                const results = await Promise.all(fetchPromises);
 
-                    const syntheticProduct: ProductResult = {
-                        product_id: keyword.trim(),
-                        title: productTitle,
-                        price: sellerItems[0].price || sellerItems[0].base_price,
-                        currency: sellerItems[0].currency,
-                        shop_name: "Various Sellers",
-                        product_images: productImages,
-                        available: true,
-                        shopping_url: googleShoppingUrl
-                    };
+                // Collect successful products and sellers
+                const successfulProducts: ProductResult[] = [];
+                const newSellerCache: Record<string, SellerInfo[]> = {};
+                const errors: string[] = [];
 
-                    setProducts([syntheticProduct]);
+                results.forEach(result => {
+                    if (result.product && result.sellers.length > 0) {
+                        successfulProducts.push(result.product);
+                        newSellerCache[result.productId] = result.sellers;
+                    } else if (result.error) {
+                        errors.push(`${result.productId}: ${result.error}`);
+                    }
+                });
 
-                    // Populate cache with the fetched sellers
-                    setSellerCache({
-                        [keyword.trim()]: sellerItems
-                    });
+                if (successfulProducts.length > 0) {
+                    setProducts(successfulProducts);
+                    setSellerCache(newSellerCache);
+                    // Auto-expand all products
+                    setExpandedProducts(new Set(successfulProducts.map((_, i) => i)));
+                }
 
-                    // Auto-expand the product since we have the data
-                    setExpandedProducts(new Set([0]));
-                } else if (sellersData.tasks && sellersData.tasks[0]?.status_message) {
-                    setError(`DataForSEO Error: ${sellersData.tasks[0].status_message}`);
-                } else {
-                    setError("No data found for this Product ID.");
+                if (errors.length > 0 && successfulProducts.length === 0) {
+                    setError(errors.join('\n'));
+                } else if (errors.length > 0) {
+                    // Show partial errors as warning
+                    console.warn('Some products failed:', errors);
                 }
 
             } else {
@@ -406,18 +399,37 @@ export default function ProductPriceMonitorPage() {
                                     </label>
                                 </div>
                                 <div className="relative">
-                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                        <Search className="h-5 w-5 text-gray-400" />
-                                    </div>
-                                    <input
-                                        type="text"
-                                        id="keyword"
-                                        value={keyword}
-                                        onChange={(e) => setKeyword(e.target.value)}
-                                        required
-                                        className="block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-600 rounded-lg leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors"
-                                        placeholder={searchType === 'keyword' ? "e.g., running shoes, wireless headphones" : "e.g., 12693300312433459747"}
-                                    />
+                                    {searchType === 'keyword' ? (
+                                        <>
+                                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                                <Search className="h-5 w-5 text-gray-400" />
+                                            </div>
+                                            <input
+                                                type="text"
+                                                id="keyword"
+                                                value={keyword}
+                                                onChange={(e) => setKeyword(e.target.value)}
+                                                required
+                                                className="block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-600 rounded-lg leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors"
+                                                placeholder="e.g., running shoes, wireless headphones"
+                                            />
+                                        </>
+                                    ) : (
+                                        <div>
+                                            <textarea
+                                                id="keyword"
+                                                value={keyword}
+                                                onChange={(e) => setKeyword(e.target.value)}
+                                                required
+                                                rows={3}
+                                                className="block w-full px-3 py-3 border border-gray-300 dark:border-gray-600 rounded-lg leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors font-mono"
+                                                placeholder="Enter Product ID(s) - one per line or comma-separated&#10;e.g., 12693300312433459747&#10;     5678901234567890123"
+                                            />
+                                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                                Supports multiple Product IDs separated by commas or new lines
+                                            </p>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
