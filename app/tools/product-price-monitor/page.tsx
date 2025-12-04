@@ -147,20 +147,29 @@ export default function ProductPriceMonitorPage() {
                         return;
                     }
 
-                    // Try to extract metadata from product response
-                    let productTitle = sellerItems[0].title || "Product Found";
+                    // Use the title from the sellers response - this is always accurate for the product ID
+                    // The products endpoint keyword search can return mismatched products
+                    const productTitle = sellerItems[0].title || "Product Found";
                     let productImages: any[] = [];
                     let shoppingUrl = "";
 
+                    // Only try to get the image from products endpoint, but DON'T override the title
                     if (productData.tasks && productData.tasks[0]?.result?.[0]?.items) {
                         const productItems = productData.tasks[0].result[0].items;
-                        if (productItems.length > 0) {
-                            // Use the first product result for metadata
-                            const metaProduct = productItems[0];
-                            productTitle = metaProduct.title || productTitle;
-                            productImages = metaProduct.product_images || [];
-                            shoppingUrl = metaProduct.url || "";
+                        // Look for a product that matches part of our title to get the image
+                        const matchingProduct = productItems.find((p: any) => {
+                            const sellerTitle = productTitle.toLowerCase();
+                            const productName = (p.title || '').toLowerCase();
+                            // Check if there's meaningful overlap in the titles
+                            return sellerTitle.includes(productName.split(' ')[0]) ||
+                                productName.includes(sellerTitle.split(' ')[0]);
+                        });
+
+                        if (matchingProduct) {
+                            productImages = matchingProduct.product_images || [];
+                            shoppingUrl = matchingProduct.url || "";
                         }
+                        // If no matching product found, leave images empty - better than showing wrong image
                     }
 
                     const syntheticProduct: ProductResult = {
