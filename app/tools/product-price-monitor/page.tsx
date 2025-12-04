@@ -96,41 +96,98 @@ export default function ProductPriceMonitorPage() {
         setLoadingProducts({});
 
         try {
-            const res = await fetch("/api/merchant/google-shopping/products", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    keyword: searchType === 'url' ? `product_id:${keyword.trim()}` : keyword.trim(),
-                    location_code: LOCATION_CODES[location],
-                    language_code: "en",
-                    depth,
-                    dataforseoLogin: apiLogin || undefined,
-                    dataforseoPassword: apiPassword || undefined,
-                }),
-            });
+            if (searchType === 'url') {
+                // Search by Product ID - Use Sellers Endpoint directly
+                const res = await fetch("/api/merchant/google-shopping/sellers", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        product_id: keyword.trim(),
+                        location_code: LOCATION_CODES[location],
+                        language_code: "en",
+                        dataforseoLogin: apiLogin || undefined,
+                        dataforseoPassword: apiPassword || undefined,
+                    }),
+                });
 
-            if (!res.ok) {
-                const errorData = await res.json();
-                throw new Error(errorData.error || "Failed to fetch product data");
-            }
+                if (!res.ok) {
+                    const errorData = await res.json().catch(() => ({}));
+                    throw new Error(errorData.error || `Failed to fetch product data: ${res.statusText}`);
+                }
 
-            const data = await res.json();
+                const data = await res.json();
+                console.log("Sellers API Response:", data);
 
-            // Log the full response for debugging
-            console.log("API Response:", data);
+                if (data.tasks && data.tasks[0]?.result?.[0]?.items) {
+                    const items = data.tasks[0].result[0].items;
 
-            if (data.tasks && data.tasks[0]?.result?.[0]?.items) {
-                const items = data.tasks[0].result[0].items;
-                console.log(`Found ${items.length} products`);
-                console.log('First product structure:', items[0]);
-                // Enforce depth limit on the client side as well
-                setProducts(items.slice(0, depth));
-            } else if (data.tasks && data.tasks[0]?.status_message) {
-                // Show DataForSEO error message
-                setError(`DataForSEO Error: ${data.tasks[0].status_message}`);
+                    if (items.length === 0) {
+                        setError("No sellers found for this Product ID.");
+                        setLoading(false);
+                        return;
+                    }
+
+                    // Construct a synthetic product from the first seller's data
+                    // Note: Sellers endpoint might not return high-res images or full descriptions,
+                    // but it guarantees we have the right product ID.
+                    const firstItem = items[0];
+                    const syntheticProduct: ProductResult = {
+                        product_id: keyword.trim(),
+                        title: firstItem.title || "Product Found (Title Unavailable)",
+                        price: firstItem.price || firstItem.base_price,
+                        currency: firstItem.currency,
+                        shop_name: "Various Sellers",
+                        product_images: [], // Sellers endpoint often lacks product images
+                        available: true
+                    };
+
+                    setProducts([syntheticProduct]);
+
+                    // Populate cache with the fetched sellers
+                    setSellerCache({
+                        [keyword.trim()]: items
+                    });
+
+                    // Auto-expand the product since we have the data
+                    setExpandedProducts(new Set([0]));
+                } else if (data.tasks && data.tasks[0]?.status_message) {
+                    setError(`DataForSEO Error: ${data.tasks[0].status_message}`);
+                } else {
+                    setError("No data found for this Product ID.");
+                }
+
             } else {
-                console.log("Unexpected response structure:", data);
-                setError("No products found for this search. The API may have returned no results or there may be an authentication issue.");
+                // Search by Keyword - Use Products Endpoint
+                const res = await fetch("/api/merchant/google-shopping/products", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        keyword: keyword.trim(),
+                        location_code: LOCATION_CODES[location],
+                        language_code: "en",
+                        depth,
+                        dataforseoLogin: apiLogin || undefined,
+                        dataforseoPassword: apiPassword || undefined,
+                    }),
+                });
+
+                if (!res.ok) {
+                    const errorData = await res.json();
+                    throw new Error(errorData.error || "Failed to fetch product data");
+                }
+
+                const data = await res.json();
+                console.log("API Response:", data);
+
+                if (data.tasks && data.tasks[0]?.result?.[0]?.items) {
+                    const items = data.tasks[0].result[0].items;
+                    console.log(`Found ${items.length} products`);
+                    setProducts(items.slice(0, depth));
+                } else if (data.tasks && data.tasks[0]?.status_message) {
+                    setError(`DataForSEO Error: ${data.tasks[0].status_message}`);
+                } else {
+                    setError("No products found for this search.");
+                }
             }
         } catch (err) {
             console.error(err);
