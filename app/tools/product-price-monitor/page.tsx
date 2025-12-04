@@ -48,6 +48,12 @@ type SellerInfo = {
     currency?: string;
     shipping_price?: number | null;
     total_price?: number | null;
+    // Additional fields for stock status and sales messaging
+    availability?: string;
+    condition?: string;
+    old_price?: number | null;
+    price_tag?: string;
+    product_condition?: string;
 };
 
 export default function ProductPriceMonitorPage() {
@@ -686,7 +692,10 @@ export default function ProductPriceMonitorPage() {
                                                                             </div>
                                                                         </th>
                                                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                                                            Details
+                                                                            Availability
+                                                                        </th>
+                                                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                                            Offers
                                                                         </th>
                                                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                                                                             Link
@@ -725,8 +734,8 @@ export default function ProductPriceMonitorPage() {
                                                                                 <tr
                                                                                     key={idx}
                                                                                     className={`transition-colors ${isTargetMatch
-                                                                                            ? 'bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500'
-                                                                                            : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                                                                                        ? 'bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500'
+                                                                                        : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
                                                                                         }`}
                                                                                 >
                                                                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
@@ -752,8 +761,46 @@ export default function ProductPriceMonitorPage() {
                                                                                     <td className={`px-6 py-4 whitespace-nowrap text-sm font-semibold ${isTargetMatch ? 'text-green-700 dark:text-green-400' : 'text-gray-900 dark:text-white'}`}>
                                                                                         {total != null ? `${seller.currency || ''} ${total.toFixed(2)}` : 'N/A'}
                                                                                     </td>
-                                                                                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate" title={seller.details}>
-                                                                                        {seller.details || "-"}
+                                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                                                                        {seller.availability ? (
+                                                                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${seller.availability.toLowerCase().includes('in stock')
+                                                                                                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                                                                                                    : seller.availability.toLowerCase().includes('out of stock')
+                                                                                                        ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                                                                                                        : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                                                                                                }`}>
+                                                                                                {seller.availability}
+                                                                                            </span>
+                                                                                        ) : (
+                                                                                            <span className="text-gray-400">-</span>
+                                                                                        )}
+                                                                                    </td>
+                                                                                    <td className="px-6 py-4 text-sm max-w-xs">
+                                                                                        <div className="flex flex-col gap-1">
+                                                                                            {seller.old_price && seller.old_price > price && (
+                                                                                                <span className="text-red-500 dark:text-red-400">
+                                                                                                    <span className="line-through text-gray-400 mr-1">
+                                                                                                        {seller.currency || ''} {seller.old_price.toFixed(2)}
+                                                                                                    </span>
+                                                                                                    <span className="font-medium">
+                                                                                                        {Math.round(((seller.old_price - price) / seller.old_price) * 100)}% off
+                                                                                                    </span>
+                                                                                                </span>
+                                                                                            )}
+                                                                                            {seller.price_tag && (
+                                                                                                <span className="text-purple-600 dark:text-purple-400 text-xs">
+                                                                                                    {seller.price_tag}
+                                                                                                </span>
+                                                                                            )}
+                                                                                            {seller.details && !seller.old_price && !seller.price_tag && (
+                                                                                                <span className="text-gray-500 dark:text-gray-400 truncate" title={seller.details}>
+                                                                                                    {seller.details}
+                                                                                                </span>
+                                                                                            )}
+                                                                                            {!seller.old_price && !seller.price_tag && !seller.details && (
+                                                                                                <span className="text-gray-400">-</span>
+                                                                                            )}
+                                                                                        </div>
                                                                                     </td>
                                                                                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                                                                                         <a
