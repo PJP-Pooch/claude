@@ -172,6 +172,9 @@ export default function ProductPriceMonitorPage() {
                         // If no matching product found, leave images empty - better than showing wrong image
                     }
 
+                    // Construct Google Shopping URL from product ID if no URL found
+                    const googleShoppingUrl = shoppingUrl || `https://www.google.com/shopping/product/${keyword.trim()}`;
+
                     const syntheticProduct: ProductResult = {
                         product_id: keyword.trim(),
                         title: productTitle,
@@ -180,7 +183,7 @@ export default function ProductPriceMonitorPage() {
                         shop_name: "Various Sellers",
                         product_images: productImages,
                         available: true,
-                        shopping_url: shoppingUrl
+                        shopping_url: googleShoppingUrl
                     };
 
                     setProducts([syntheticProduct]);
@@ -784,18 +787,28 @@ export default function ProductPriceMonitorPage() {
                                                                                         {total != null ? `${seller.currency || ''} ${total.toFixed(2)}` : 'N/A'}
                                                                                     </td>
                                                                                     <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                                                                        {seller.availability ? (
-                                                                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${seller.availability.toLowerCase().includes('in stock')
-                                                                                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                                                                                                : seller.availability.toLowerCase().includes('out of stock')
-                                                                                                    ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                                                                                                    : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                                                                                                }`}>
-                                                                                                {seller.availability}
-                                                                                            </span>
-                                                                                        ) : (
-                                                                                            <span className="text-gray-400">-</span>
-                                                                                        )}
+                                                                                        {(() => {
+                                                                                            // Check availability field first, then parse from details
+                                                                                            const availabilityText = seller.availability ||
+                                                                                                (seller.details?.toLowerCase().includes('in stock') ? 'In Stock' :
+                                                                                                    seller.details?.toLowerCase().includes('out of stock') ? 'Out of Stock' : null);
+
+                                                                                            if (availabilityText) {
+                                                                                                const isInStock = availabilityText.toLowerCase().includes('in stock');
+                                                                                                const isOutOfStock = availabilityText.toLowerCase().includes('out of stock');
+                                                                                                return (
+                                                                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${isInStock
+                                                                                                        ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                                                                                                        : isOutOfStock
+                                                                                                            ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                                                                                                            : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                                                                                                        }`}>
+                                                                                                        {isInStock ? 'In Stock' : isOutOfStock ? 'Out of Stock' : availabilityText}
+                                                                                                    </span>
+                                                                                                );
+                                                                                            }
+                                                                                            return <span className="text-gray-400">-</span>;
+                                                                                        })()}
                                                                                     </td>
                                                                                     <td className="px-6 py-4 text-sm max-w-xs">
                                                                                         <div className="flex flex-col gap-1">
