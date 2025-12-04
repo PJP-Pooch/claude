@@ -546,7 +546,7 @@ export default function ProductPriceMonitorPage() {
                                                         <div className="flex justify-center items-center py-12">
                                                             <Loader2 className="animate-spin h-8 w-8 text-blue-600" />
                                                         </div>
-                                                    ) : sellerCache[product.product_id!]?.length > 0 ? (
+                                                    ) : (sellerCache[product.product_id!] || []).length > 0 ? (
                                                         <div className="overflow-x-auto">
                                                             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                                                                 <thead className="bg-gray-50 dark:bg-gray-900/30">
