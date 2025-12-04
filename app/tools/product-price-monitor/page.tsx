@@ -729,45 +729,58 @@ export default function ProductPriceMonitorPage() {
                                                                             const normalizedTarget = targetDomain.toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, '');
                                                                             const isTargetMatch = normalizedTarget && sellerDomain.toLowerCase().includes(normalizedTarget);
                                                                             const position = idx + 1;
+                                                                            const isTopPosition = isTargetMatch && position === 1;
 
                                                                             return (
                                                                                 <tr
                                                                                     key={idx}
-                                                                                    className={`transition-colors ${isTargetMatch
-                                                                                        ? 'bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500'
-                                                                                        : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                                                                                    className={`transition-colors ${isTopPosition
+                                                                                        ? 'bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-900/20 dark:to-amber-900/20 border-l-4 border-yellow-500'
+                                                                                        : isTargetMatch
+                                                                                            ? 'bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500'
+                                                                                            : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
                                                                                         }`}
                                                                                 >
                                                                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
                                                                                         <div className="flex items-center gap-2">
-                                                                                            {isTargetMatch && (
+                                                                                            {isTopPosition ? (
+                                                                                                <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-bold text-white bg-gradient-to-r from-yellow-500 to-amber-500 rounded-full shadow-sm">
+                                                                                                    🏆 #1
+                                                                                                </span>
+                                                                                            ) : isTargetMatch ? (
                                                                                                 <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-bold text-white bg-green-500 rounded-full">
                                                                                                     #{position}
                                                                                                 </span>
-                                                                                            )}
-                                                                                            <span className={isTargetMatch ? 'text-green-700 dark:text-green-400 font-semibold' : ''}>
+                                                                                            ) : null}
+                                                                                            <span className={
+                                                                                                isTopPosition
+                                                                                                    ? 'text-amber-700 dark:text-amber-400 font-bold'
+                                                                                                    : isTargetMatch
+                                                                                                        ? 'text-green-700 dark:text-green-400 font-semibold'
+                                                                                                        : ''
+                                                                                            }>
                                                                                                 {seller.title || seller.seller_name || seller.domain || "Unknown Seller"}
                                                                                             </span>
                                                                                         </div>
                                                                                     </td>
-                                                                                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${isTargetMatch ? 'text-green-700 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                                                                                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${isTopPosition ? 'text-amber-700 dark:text-amber-400' : isTargetMatch ? 'text-green-700 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
                                                                                         {seller.currency || ''} {price.toFixed(2)}
                                                                                     </td>
-                                                                                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${isTargetMatch ? 'text-green-700 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                                                                                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${isTopPosition ? 'text-amber-700 dark:text-amber-400' : isTargetMatch ? 'text-green-700 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
                                                                                         {shipping != null && shipping > 0
                                                                                             ? `${seller.currency || ''} ${shipping.toFixed(2)}`
                                                                                             : "Free"}
                                                                                     </td>
-                                                                                    <td className={`px-6 py-4 whitespace-nowrap text-sm font-semibold ${isTargetMatch ? 'text-green-700 dark:text-green-400' : 'text-gray-900 dark:text-white'}`}>
+                                                                                    <td className={`px-6 py-4 whitespace-nowrap text-sm font-semibold ${isTopPosition ? 'text-amber-700 dark:text-amber-400 font-bold' : isTargetMatch ? 'text-green-700 dark:text-green-400' : 'text-gray-900 dark:text-white'}`}>
                                                                                         {total != null ? `${seller.currency || ''} ${total.toFixed(2)}` : 'N/A'}
                                                                                     </td>
                                                                                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                                                                                         {seller.availability ? (
                                                                                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${seller.availability.toLowerCase().includes('in stock')
-                                                                                                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                                                                                                    : seller.availability.toLowerCase().includes('out of stock')
-                                                                                                        ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                                                                                                        : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                                                                                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                                                                                                : seller.availability.toLowerCase().includes('out of stock')
+                                                                                                    ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                                                                                                    : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
                                                                                                 }`}>
                                                                                                 {seller.availability}
                                                                                             </span>
