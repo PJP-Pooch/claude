@@ -155,6 +155,8 @@ export default function ProductPriceMonitorPage() {
                             const firstSeller = sellerItems[0];
                             // Use details for title if available, otherwise title (which might be seller name sometimes)
                             const productTitle = firstSeller?.details || firstSeller?.title || "Product Found";
+                            // Construct basic Shopping URL - parameters are handled by the destination usually, 
+                            // but adding gl helps if the ID is valid for that region.
                             const googleShoppingUrl = `https://www.google.com/shopping/product/${productId}?gl=${countryCode}&hl=en`;
 
                             const syntheticProduct: ProductResult = {
@@ -234,10 +236,19 @@ export default function ProductPriceMonitorPage() {
                     const items = data.tasks[0].result[0].items;
                     console.log(`Found ${items.length} products`);
 
-                    const updatedItems = items.slice(0, depth).map((item: ProductResult) => ({
-                        ...item,
-                        shopping_url: item.shopping_url ? `${item.shopping_url.split('?')[0]}?gl=${countryCode}&hl=en` : undefined
-                    }));
+                    const updatedItems = items.slice(0, depth).map((item: ProductResult) => {
+                        let shoppingUrl = item.shopping_url;
+                        if (shoppingUrl) {
+                            const hasParams = shoppingUrl.includes('?');
+                            const separator = hasParams ? '&' : '?';
+                            shoppingUrl = `${shoppingUrl}${separator}gl=${countryCode}&hl=en`;
+                        }
+
+                        return {
+                            ...item,
+                            shopping_url: shoppingUrl
+                        };
+                    });
 
                     setProducts(updatedItems);
                     // Auto-expand all products by default
@@ -663,7 +674,28 @@ e.g., 12693300312433459747
                                                 <div className="flex-1">
                                                     <div className="flex items-start gap-3">
                                                         <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 mt-1">
-                                                            #{product.rank_absolute || product.rank_group || (index + 1) || '-'}
+                                                            {(() => {
+                                                                const sellers = sellerCache[product.product_id!] || [];
+                                                                // Check if we have a target domain match in the sellers
+                                                                if (targetDomain && sellers.length > 0) {
+                                                                    const normalizedTarget = targetDomain.toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, '');
+                                                                    const matchIndex = sellers.findIndex(s =>
+                                                                        (s.domain || s.url || '').toLowerCase().includes(normalizedTarget) ||
+                                                                        (s.seller_name || '').toLowerCase().includes(normalizedTarget)
+                                                                    );
+
+                                                                    if (matchIndex !== -1) {
+                                                                        return (
+                                                                            <span className="px-2 py-1 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 rounded-md">
+                                                                                My Rank: #{matchIndex + 1}
+                                                                            </span>
+                                                                        );
+                                                                    }
+                                                                }
+
+                                                                // Default Fallback
+                                                                return `#${product.rank_absolute || product.rank_group || (index + 1) || '-'}`;
+                                                            })()}
                                                         </span>
                                                         {product.product_images && product.product_images.length > 0 && (
                                                             <img
