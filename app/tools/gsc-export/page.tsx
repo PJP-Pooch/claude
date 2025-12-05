@@ -78,6 +78,7 @@ export default function GscExportPage() {
     const [queryFilterValue, setQueryFilterValue] = useState("");
 
     const [loading, setLoading] = useState(false);
+    const [loadingMessage, setLoadingMessage] = useState("");
     const [data, setData] = useState<GscRow[] | null>(null);
     const [queryAnalysis, setQueryAnalysis] = useState<QueryPositionRow[] | null>(null);
     const [cannibalizationData, setCannibalizationData] = useState<CannibalizationRow[] | null>(null);
@@ -200,6 +201,7 @@ export default function GscExportPage() {
 
     const handleFetchData = async () => {
         setLoading(true);
+        setLoadingMessage("Preparing to fetch data...");
         setError("");
         setData(null);
         setQueryAnalysis(null);
@@ -253,6 +255,18 @@ export default function GscExportPage() {
                     operator: queryFilterType,
                     expression: queryFilterValue,
                 });
+            }
+
+            // Calculate date range for loading message
+            const start = parseISO(startDate);
+            const end = parseISO(endDate);
+            const daysDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+
+            if (daysDiff > 30) {
+                const estimatedBatches = Math.ceil(daysDiff / 30);
+                setLoadingMessage(`Fetching ${daysDiff} days of data in ${estimatedBatches} batches. This may take a few moments...`);
+            } else {
+                setLoadingMessage("Fetching data from Google Search Console...");
             }
 
             const res = await fetch("/api/gsc/query", {
@@ -664,6 +678,14 @@ export default function GscExportPage() {
                                                 <option value="last_16_months">Last 16 Months</option>
                                                 <option value="custom">Custom Range</option>
                                             </select>
+                                            {(dateRange === "last_3_months" || dateRange === "last_6_months" || dateRange === "last_12_months" || dateRange === "last_16_months") && (
+                                                <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
+                                                    <p className="text-xs text-blue-800 dark:text-blue-200 flex items-start">
+                                                        <AlertCircle className="w-3 h-3 mr-1 mt-0.5 flex-shrink-0" />
+                                                        <span>Large date ranges are fetched in 30-day batches with delays between requests to respect Google&apos;s API rate limits. This prevents timeouts and ensures reliable data retrieval.</span>
+                                                    </p>
+                                                </div>
+                                            )}
                                         </div>
 
                                         {dateRange === "custom" && (
@@ -864,7 +886,7 @@ export default function GscExportPage() {
                                             {loading ? (
                                                 <>
                                                     <Loader2 className="animate-spin mr-2 h-5 w-5" />
-                                                    Fetching Data...
+                                                    {loadingMessage || "Fetching Data..."}
                                                 </>
                                             ) : (
                                                 "Fetch GSC Data"

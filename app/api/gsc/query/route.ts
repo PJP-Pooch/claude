@@ -62,8 +62,11 @@ export async function POST(req: Request) {
         if (totalDays <= 30) {
             allRows = await fetchData(startDate, endDate);
         } else {
-            // Batching logic
+            // Batching logic with rate limiting
             let currentStart = start;
+            let batchNumber = 0;
+            const totalBatches = Math.ceil(totalDays / 30);
+
             while (currentStart <= end) {
                 let currentEnd = addDays(currentStart, 29); // 30 day chunks
                 if (currentEnd > end) {
@@ -73,10 +76,19 @@ export async function POST(req: Request) {
                 const startStr = format(currentStart, "yyyy-MM-dd");
                 const endStr = format(currentEnd, "yyyy-MM-dd");
 
+                batchNumber++;
+                console.log(`Fetching batch ${batchNumber}/${totalBatches}: ${startStr} to ${endStr}`);
+
                 const rows = await fetchData(startStr, endStr);
                 allRows = [...allRows, ...rows];
 
                 currentStart = addDays(currentEnd, 1);
+
+                // Add delay between requests to respect rate limits (1,200 QPM)
+                // 500ms delay = ~120 requests per minute, well under the limit
+                if (currentStart <= end) {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
             }
         }
 
