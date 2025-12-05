@@ -198,8 +198,8 @@ export default function ProductPriceMonitorPage() {
                 if (successfulProducts.length > 0) {
                     setProducts(successfulProducts);
                     setSellerCache(newSellerCache);
-                    // Auto-expand all products
-                    setExpandedProducts(new Set(successfulProducts.map((_, i) => i)));
+                    // Do not auto-expand products by default
+                    setExpandedProducts(new Set());
                 }
 
                 if (errors.length > 0 && successfulProducts.length === 0) {
@@ -251,8 +251,8 @@ export default function ProductPriceMonitorPage() {
                     });
 
                     setProducts(updatedItems);
-                    // Auto-expand all products by default
-                    setExpandedProducts(new Set(updatedItems.map((_: any, i: number) => i)));
+                    // Do not auto-expand products by default
+                    setExpandedProducts(new Set());
                 } else if (data.tasks && data.tasks[0]?.status_message) {
                     setError(`DataForSEO Error: ${data.tasks[0].status_message}`);
                 } else {
@@ -685,9 +685,20 @@ e.g., 12693300312433459747
                                                                     );
 
                                                                     if (matchIndex !== -1) {
+                                                                        const rank = matchIndex + 1;
+                                                                        const isTop3 = rank <= 3;
                                                                         return (
-                                                                            <span className="px-2 py-1 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 rounded-md">
-                                                                                My Rank: #{matchIndex + 1}
+                                                                            <span className={`px-2 py-1 rounded-md ${isTop3
+                                                                                ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                                                                                : "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
+                                                                                }`}>
+                                                                                My Rank: #{rank}
+                                                                            </span>
+                                                                        );
+                                                                    } else {
+                                                                        return (
+                                                                            <span className="px-2 py-1 rounded-md bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+                                                                                Not Ranked
                                                                             </span>
                                                                         );
                                                                     }
