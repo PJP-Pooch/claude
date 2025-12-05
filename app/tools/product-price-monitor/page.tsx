@@ -317,21 +317,50 @@ export default function ProductPriceMonitorPage() {
     const downloadCSV = () => {
         if (products.length === 0) return;
 
-        const headers = ["Position", "Title", "Shop", "Price", "Currency", "Rating", "Votes", "URL"];
-        const rows = products.map(p => [
-            p.rank_absolute || p.rank_group || "",
-            p.title || "",
-            p.shop_name || "",
-            p.price !== null && p.price !== undefined ? p.price : "",
-            p.currency || "",
-            p.product_rating?.value || "",
-            p.product_rating?.votes_count || "",
-            p.url || "",
-        ]);
+        const headers = ["Product ID", "Product Title", "Position", "Seller", "Price", "Total Price", "Shipping", "Rating", "Votes", "Link"];
+        const rows: string[][] = [];
+
+        products.forEach(p => {
+            const sellers = sellerCache[p.product_id!] || [];
+            if (sellers.length > 0) {
+                sellers.forEach((seller, index) => {
+                    const price = seller.price ?? seller.base_price ?? 0;
+                    const shipping = seller.shipping_price ?? 0;
+                    const total = seller.total_price ?? (price + shipping);
+
+                    rows.push([
+                        p.product_id || "",
+                        p.title || "",
+                        (index + 1).toString(),
+                        seller.title || seller.seller_name || seller.domain || "",
+                        (price).toFixed(2),
+                        (total).toFixed(2),
+                        (shipping).toFixed(2),
+                        p.product_rating?.value?.toString() || "",
+                        p.product_rating?.votes_count?.toString() || "",
+                        seller.url || ""
+                    ]);
+                });
+            } else {
+                // Add the product row even if no sellers loaded yet, with basic info
+                rows.push([
+                    p.product_id || "",
+                    p.title || "",
+                    "", // Position
+                    p.shop_name || "", // Fallback to shop name if no specific seller list
+                    p.price ? p.price.toString() : "",
+                    "", // Total
+                    "", // Shipping
+                    p.product_rating?.value?.toString() || "",
+                    p.product_rating?.votes_count?.toString() || "",
+                    p.url || ""
+                ]);
+            }
+        });
 
         const csv = [
             headers.join(","),
-            ...rows.map(row => row.map(cell => `"${cell}"`).join(",")),
+            ...rows.map(row => row.map(cell => `"${(cell || "").replace(/"/g, '""')}"`).join(",")),
         ].join("\n");
 
         const blob = new Blob([csv], { type: "text/csv" });
@@ -423,7 +452,9 @@ export default function ProductPriceMonitorPage() {
                                                 required
                                                 rows={3}
                                                 className="block w-full px-3 py-3 border border-gray-300 dark:border-gray-600 rounded-lg leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors font-mono"
-                                                placeholder="Enter Product ID(s) - one per line or comma-separated&#10;e.g., 12693300312433459747&#10;     5678901234567890123"
+                                                placeholder={`Enter Product ID(s) - one per line or comma-separated
+e.g., 12693300312433459747
+     5678901234567890123`}
                                             />
                                             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                                 Supports multiple Product IDs separated by commas or new lines
@@ -524,16 +555,8 @@ export default function ProductPriceMonitorPage() {
                                         </div>
                                     </div>
                                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                                        Required. Leave blank only if you've set DATAFORSEO_LOGIN and DATAFORSEO_PASSWORD as environment variables.
+                                        Required. Enter your DataForSEO credentials here.
                                     </p>
-                                    {(!apiLogin && !apiPassword) && (
-                                        <div className="mt-3 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded text-xs text-amber-700 dark:text-amber-400 flex items-start">
-                                            <AlertCircle className="w-4 h-4 mr-2 flex-shrink-0 mt-0.5" />
-                                            <p>
-                                                If you haven't configured environment variables, you <strong>must</strong> enter your DataForSEO credentials here for the tool to work.
-                                            </p>
-                                        </div>
-                                    )}
                                 </div>
                             )}
 
@@ -594,7 +617,7 @@ export default function ProductPriceMonitorPage() {
                                 <div>
                                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Results</h2>
                                     <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">
-                                        Found {products.length} products for "{keyword}"
+                                        {/* Found text removed as requested */}
                                     </p>
                                 </div>
                                 <button
@@ -646,6 +669,9 @@ export default function ProductPriceMonitorPage() {
                                                                         ⭐ {product.product_rating.value} ({product.product_rating.votes_count} reviews)
                                                                     </span>
                                                                 )}
+                                                                <span className="text-xs text-gray-400 font-mono">
+                                                                    ID: {product.product_id}
+                                                                </span>
                                                                 {product.available !== undefined && (
                                                                     <span className={product.available ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>
                                                                         {product.available ? "In Stock" : "Out of Stock"}
@@ -715,9 +741,7 @@ export default function ProductPriceMonitorPage() {
                                                                                 </span>
                                                                             </div>
                                                                         </th>
-                                                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                                                            Availability
-                                                                        </th>
+
                                                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                                                                             Offers
                                                                         </th>
@@ -798,30 +822,7 @@ export default function ProductPriceMonitorPage() {
                                                                                     <td className={`px-6 py-4 whitespace-nowrap text-sm font-semibold ${isTopPosition ? 'text-amber-700 dark:text-amber-400 font-bold' : isTargetMatch ? 'text-green-700 dark:text-green-400' : 'text-gray-900 dark:text-white'}`}>
                                                                                         {total != null ? `${seller.currency || ''} ${total.toFixed(2)}` : 'N/A'}
                                                                                     </td>
-                                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                                                                        {(() => {
-                                                                                            // Check availability field first, then parse from details
-                                                                                            const availabilityText = seller.availability ||
-                                                                                                (seller.details?.toLowerCase().includes('in stock') ? 'In Stock' :
-                                                                                                    seller.details?.toLowerCase().includes('out of stock') ? 'Out of Stock' : null);
 
-                                                                                            if (availabilityText) {
-                                                                                                const isInStock = availabilityText.toLowerCase().includes('in stock');
-                                                                                                const isOutOfStock = availabilityText.toLowerCase().includes('out of stock');
-                                                                                                return (
-                                                                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${isInStock
-                                                                                                        ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                                                                                                        : isOutOfStock
-                                                                                                            ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                                                                                                            : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                                                                                                        }`}>
-                                                                                                        {isInStock ? 'In Stock' : isOutOfStock ? 'Out of Stock' : availabilityText}
-                                                                                                    </span>
-                                                                                                );
-                                                                                            }
-                                                                                            return <span className="text-gray-400">-</span>;
-                                                                                        })()}
-                                                                                    </td>
                                                                                     <td className="px-6 py-4 text-sm max-w-xs">
                                                                                         <div className="flex flex-col gap-1">
                                                                                             {seller.old_price && seller.old_price > price && (
