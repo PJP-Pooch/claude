@@ -86,6 +86,17 @@ export default function ProductPriceMonitorPage() {
         "Italy": 2380,
     };
 
+    const COUNTRY_CODES: Record<string, string> = {
+        "United States": "us",
+        "United Kingdom": "gb",
+        "Canada": "ca",
+        "Australia": "au",
+        "Germany": "de",
+        "France": "fr",
+        "Spain": "es",
+        "Italy": "it",
+    };
+
     const handleSearch = async (e: React.FormEvent) => {
         e.preventDefault();
         console.log(`Searching for "${keyword}" with depth ${depth}`);
@@ -98,6 +109,7 @@ export default function ProductPriceMonitorPage() {
         setLoading(true);
         setError("");
         setProducts([]);
+        const countryCode = COUNTRY_CODES[location] || "us";
         try {
             if (searchType === 'url') {
                 // Search by Product ID(s) - support multiple IDs separated by commas or newlines
@@ -141,8 +153,9 @@ export default function ProductPriceMonitorPage() {
                             }
 
                             const firstSeller = sellerItems[0];
-                            const productTitle = firstSeller?.title || "Product Found";
-                            const googleShoppingUrl = `https://www.google.com/shopping/product/${productId}`;
+                            // Use details for title if available, otherwise title (which might be seller name sometimes)
+                            const productTitle = firstSeller?.details || firstSeller?.title || "Product Found";
+                            const googleShoppingUrl = `https://www.google.com/shopping/product/${productId}?gl=${countryCode}&hl=en`;
 
                             const syntheticProduct: ProductResult = {
                                 product_id: productId,
@@ -220,7 +233,15 @@ export default function ProductPriceMonitorPage() {
                 if (data.tasks && data.tasks[0]?.result?.[0]?.items) {
                     const items = data.tasks[0].result[0].items;
                     console.log(`Found ${items.length} products`);
-                    setProducts(items.slice(0, depth));
+
+                    const updatedItems = items.slice(0, depth).map((item: ProductResult) => ({
+                        ...item,
+                        shopping_url: item.shopping_url ? `${item.shopping_url.split('?')[0]}?gl=${countryCode}&hl=en` : undefined
+                    }));
+
+                    setProducts(updatedItems);
+                    // Auto-expand all products by default
+                    setExpandedProducts(new Set(updatedItems.map((_: any, i: number) => i)));
                 } else if (data.tasks && data.tasks[0]?.status_message) {
                     setError(`DataForSEO Error: ${data.tasks[0].status_message}`);
                 } else {
@@ -642,7 +663,7 @@ e.g., 12693300312433459747
                                                 <div className="flex-1">
                                                     <div className="flex items-start gap-3">
                                                         <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 mt-1">
-                                                            #{product.rank_absolute || product.rank_group || '-'}
+                                                            #{product.rank_absolute || product.rank_group || (index + 1) || '-'}
                                                         </span>
                                                         {product.product_images && product.product_images.length > 0 && (
                                                             <img
