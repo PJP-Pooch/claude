@@ -2,7 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
     try {
-        const body = await request.json();
+        let body;
+        try {
+            const text = await request.text();
+            if (!text) {
+                return NextResponse.json({ error: 'Empty request body' }, { status: 400 });
+            }
+            body = JSON.parse(text);
+        } catch (e) {
+            return NextResponse.json({ error: 'Invalid JSON request body' }, { status: 400 });
+        }
+
         const { keyword, location_code, language_code, depth = 40, dataforseoLogin, dataforseoPassword } = body;
 
         if (!keyword) {
@@ -61,7 +71,19 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const taskData = await taskResponse.json();
+        let taskData;
+        try {
+            const taskText = await taskResponse.text();
+            // Check if response is empty
+            if (!taskText) throw new Error('Empty response from DataForSEO');
+            taskData = JSON.parse(taskText);
+        } catch (error) {
+            console.error('Failed to parse DataForSEO task response:', error);
+            return NextResponse.json(
+                { error: 'Failed to parse response from DataForSEO task creation' },
+                { status: 502 }
+            );
+        }
         console.log('Task creation response:', taskData);
 
         if (taskData.tasks && taskData.tasks[0]?.id) {
@@ -72,7 +94,7 @@ export async function POST(request: NextRequest) {
             let attempts = 0;
             let results = null;
 
-            while (attempts < 6 && !results) {
+            while (attempts < 18 && !results) {
                 attempts++;
                 await new Promise(resolve => setTimeout(resolve, 5000));
 
@@ -91,7 +113,15 @@ export async function POST(request: NextRequest) {
                     continue;
                 }
 
-                const resultData = await resultsResponse.json();
+                let resultData;
+                try {
+                    const resultText = await resultsResponse.text();
+                    if (!resultText) throw new Error('Empty response body');
+                    resultData = JSON.parse(resultText);
+                } catch (e) {
+                    console.error('Failed to parse polling result:', e);
+                    continue;
+                }
 
                 if (resultData.tasks && resultData.tasks[0]?.result?.[0]?.items) {
                     results = resultData;
@@ -103,7 +133,7 @@ export async function POST(request: NextRequest) {
                 return NextResponse.json(results);
             } else {
                 return NextResponse.json(
-                    { error: 'Task created but results not ready after 30 seconds. Please try again.' },
+                    { error: 'Task created but results not ready after 90 seconds. Please try again.' },
                     { status: 504 }
                 );
             }

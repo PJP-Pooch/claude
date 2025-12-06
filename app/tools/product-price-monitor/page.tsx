@@ -58,7 +58,6 @@ type SellerInfo = {
 
 export default function ProductPriceMonitorPage() {
     const [keyword, setKeyword] = useState("");
-    const [brandUrl, setBrandUrl] = useState("");
     const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
     const [location, setLocation] = useState("United Kingdom");
     const [depth, setDepth] = useState(40);
@@ -72,7 +71,7 @@ export default function ProductPriceMonitorPage() {
     const [loading, setLoading] = useState(false);
     const [products, setProducts] = useState<ProductResult[]>([]);
     const [error, setError] = useState("");
-    const [expandedProducts, setExpandedProducts] = useState<Set<number>>(new Set());
+    const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
     const [sellerCache, setSellerCache] = useState<Record<string, SellerInfo[]>>({});
 
     const [loadingProducts, setLoadingProducts] = useState<Record<string, boolean>>({});
@@ -162,9 +161,8 @@ export default function ProductPriceMonitorPage() {
                             const firstSeller = sellerItems[0];
                             // Use details for title if available, otherwise title (which might be seller name sometimes)
                             const productTitle = firstSeller?.details || firstSeller?.title || "Product Found";
-                            // Construct Shopping URL using the robust 'search?tbm=shop&q=gid:ID' format
-                            // This matches the format seen in working keyword search results and avoids 404s from direct product links
-                            const googleShoppingUrl = `https://www.google.com/search?tbm=shop&q=gid:${productId}&gl=${countryCode}&hl=en`;
+                            // Construct Shopping URL directly to the product page
+                            const googleShoppingUrl = `https://www.google.com/shopping/product/${productId}?gl=${countryCode}&hl=en`;
 
                             const syntheticProduct: ProductResult = {
                                 product_id: productId,
@@ -222,10 +220,9 @@ export default function ProductPriceMonitorPage() {
 
                 if (searchType === 'brand') {
                     // specific logic for brand search
-                    if (brandUrl) {
-                        const cleanUrl = brandUrl.replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0];
-                        searchKeyword = `${searchKeyword} site:${cleanUrl}`;
-                    }
+                    // Use only the first brand name (primary) for the search query, split by | or newline
+                    const primaryBrand = (searchKeyword.split(/[|\n]/)[0] || "").trim();
+                    searchKeyword = primaryBrand;
                 }
 
                 const res = await fetch("/api/merchant/google-shopping/products", {
@@ -243,20 +240,29 @@ export default function ProductPriceMonitorPage() {
                     }),
                 });
 
-                if (!res.ok) {
-                    const errorData = await res.json();
-                    throw new Error(errorData.error || "Failed to fetch product data");
+                const responseText = await res.text();
+                let data;
+                try {
+                    data = JSON.parse(responseText);
+                } catch (e) {
+                    console.error("Failed to parse API response:", responseText);
+                    throw new Error(`Server error (${res.status}): The response was not valid JSON.`);
                 }
 
-                const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.error || "Failed to fetch product data");
+                }
                 console.log("API Response:", data);
 
                 if (data.tasks && data.tasks[0]?.result?.[0]?.items) {
                     const items = data.tasks[0].result[0].items;
                     console.log(`Found ${items.length} products`);
 
-                    const updatedItems = items.slice(0, depth).map((item: ProductResult) => {
+                    const updatedItems = items.slice(0, depth).map((item: ProductResult, idx: number) => {
                         let shoppingUrl = item.shopping_url;
+                        // Encapsulate ID generation to ensure every item has one
+                        const finalId = item.product_id || `missing-id-${idx}-${Date.now()}`;
+
                         // Use the URL from API as-is, or construct a simple one if missing
                         if (!shoppingUrl && item.product_id) {
                             shoppingUrl = `https://www.google.com/shopping/product/${item.product_id}`;
@@ -264,6 +270,7 @@ export default function ProductPriceMonitorPage() {
 
                         return {
                             ...item,
+                            product_id: finalId,
                             shopping_url: shoppingUrl
                         };
                     });
@@ -286,20 +293,34 @@ export default function ProductPriceMonitorPage() {
     };
 
     const handleSelectProduct = (product: ProductResult) => {
-        if (!product.product_id) {
-            setError("This product doesn't have a valid ID");
-            return;
-        }
+        if (!product.product_id) return;
 
-        const productIndex = products.indexOf(product);
         const newExpanded = new Set(expandedProducts);
-
-        if (newExpanded.has(productIndex)) {
-            newExpanded.delete(productIndex);
+        if (newExpanded.has(product.product_id)) {
+            newExpanded.delete(product.product_id);
         } else {
-            newExpanded.add(productIndex);
+            newExpanded.add(product.product_id);
         }
         setExpandedProducts(newExpanded);
+    };
+
+    const handleSelectAll = () => {
+        // If all selectable products are selected, deselect all. Otherwise, select all.
+        const allIds = products.map(p => p.product_id).filter(Boolean) as string[];
+        if (selectedProducts.size === allIds.length && allIds.length > 0) {
+            setSelectedProducts(new Set());
+        } else {
+            setSelectedProducts(new Set(allIds));
+        }
+    };
+
+    const handleRemoveProduct = (productId: string) => {
+        setProducts(prev => prev.filter(p => p.product_id !== productId));
+        if (selectedProducts.has(productId)) {
+            const newSelected = new Set(selectedProducts);
+            newSelected.delete(productId);
+            setSelectedProducts(newSelected);
+        }
     };
 
     const handleSort = (productId: string) => {
@@ -410,7 +431,7 @@ export default function ProductPriceMonitorPage() {
     const downloadCSV = () => {
         if (products.length === 0) return;
 
-        const headers = ["Product ID", "Product Title", "Position", "Seller", "Price", "Total Price", "Shipping", "Rating", "Votes", "Link"];
+        const headers = ["Product ID", "Product Title", "Position", "Seller", "Price", "Total Price", "Shipping", "Rating", "Votes", "Shopping Link", "Seller Link"];
         const rows: string[][] = [];
 
         products.forEach(p => {
@@ -431,6 +452,7 @@ export default function ProductPriceMonitorPage() {
                         (shipping).toFixed(2),
                         p.product_rating?.value?.toString() || "",
                         p.product_rating?.votes_count?.toString() || "",
+                        p.shopping_url || "",
                         seller.url || ""
                     ]);
                 });
@@ -446,6 +468,7 @@ export default function ProductPriceMonitorPage() {
                     "", // Shipping
                     p.product_rating?.value?.toString() || "",
                     p.product_rating?.votes_count?.toString() || "",
+                    p.shopping_url || "",
                     p.url || ""
                 ]);
             }
@@ -543,7 +566,6 @@ export default function ProductPriceMonitorPage() {
                                             onChange={() => {
                                                 setSearchType('brand');
                                                 setKeyword("");
-                                                setBrandUrl("");
                                                 setProducts([]);
                                                 setError("");
                                                 setPriceMin("");
@@ -570,28 +592,19 @@ export default function ProductPriceMonitorPage() {
                                             />
                                         </>
                                     ) : searchType === 'brand' ? (
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Brand Name</label>
-                                                <input
-                                                    type="text"
-                                                    value={keyword}
-                                                    onChange={(e) => setKeyword(e.target.value)}
-                                                    required
-                                                    className="block w-full px-3 py-3 border border-gray-300 dark:border-gray-600 rounded-lg leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors"
-                                                    placeholder="e.g. Nike"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Brand Website (Optional)</label>
-                                                <input
-                                                    type="text"
-                                                    value={brandUrl}
-                                                    onChange={(e) => setBrandUrl(e.target.value)}
-                                                    className="block w-full px-3 py-3 border border-gray-300 dark:border-gray-600 rounded-lg leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors"
-                                                    placeholder="e.g. nike.com"
-                                                />
-                                            </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Brand Name (Use | for variations)</label>
+                                            <input
+                                                type="text"
+                                                value={keyword}
+                                                onChange={(e) => setKeyword(e.target.value)}
+                                                required
+                                                className="block w-full px-3 py-3 border border-gray-300 dark:border-gray-600 rounded-lg leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors"
+                                                placeholder="e.g. Pooch & Mutt|Pooch and Mutt"
+                                            />
+                                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                                First value used for search, all used for matching.
+                                            </p>
                                         </div>
                                     ) : (
                                         <div>
@@ -628,7 +641,7 @@ e.g., 12693300312433459747
                                         ))}
                                     </select>
                                 </div>
-                                {searchType === 'keyword' && (
+                                {searchType !== 'url' && (
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Results Depth</label>
                                         <input
@@ -665,18 +678,20 @@ e.g., 12693300312433459747
                                         </div>
                                     </div>
                                 )}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                        Your Domain <span className="text-xs text-gray-500">(optional)</span>
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={targetDomain}
-                                        onChange={(e) => setTargetDomain(e.target.value)}
-                                        placeholder="e.g., amazon.co.uk"
-                                        className="block w-full px-3 py-3 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                                    />
-                                </div>
+                                {searchType !== 'brand' && (
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            Your Brand/Domain Match <span className="text-xs text-gray-500">(optional)</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={targetDomain}
+                                            onChange={(e) => setTargetDomain(e.target.value)}
+                                            placeholder="e.g., brand.com|Brand Name"
+                                            className="block w-full px-3 py-3 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                                        />
+                                    </div>
+                                )}
                             </div>
 
                             {/* API Login Details Toggle */}
@@ -799,7 +814,13 @@ e.g., 12693300312433459747
                                     </p>
                                 </div>
                                 <div className="flex gap-2">
-                                    {searchType === 'brand' && selectedProducts.size > 0 && (
+                                    <button
+                                        onClick={handleSelectAll}
+                                        className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                                    >
+                                        {selectedProducts.size > 0 && selectedProducts.size === products.length ? 'Deselect All' : 'Select All'}
+                                    </button>
+                                    {selectedProducts.size > 0 && (
                                         <>
                                             <button
                                                 onClick={copySelectedIds}
@@ -811,7 +832,7 @@ e.g., 12693300312433459747
                                                 onClick={downloadSelectedCSV}
                                                 className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 transition-colors"
                                             >
-                                                Download Selected
+                                                Export Selected
                                             </button>
                                         </>
                                     )}
@@ -827,10 +848,11 @@ e.g., 12693300312433459747
 
                             <div className="grid grid-cols-1 gap-4">
                                 {products.map((product, index) => {
-                                    const isExpanded = expandedProducts.has(index);
+                                    const isExpanded = product.product_id ? expandedProducts.has(product.product_id) : false;
 
                                     return (
-                                        <div key={index} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                                        <div key={product.product_id || index} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden relative group">
+
                                             <button
                                                 onClick={(e) => {
                                                     // note: if checkbox is clicked, we toggled specific selection, handled by stopPropagation
@@ -860,11 +882,13 @@ e.g., 12693300312433459747
                                                             {(() => {
                                                                 const sellers = sellerCache[product.product_id!] || [];
                                                                 if (targetDomain && sellers.length > 0) {
-                                                                    const normalizedTarget = targetDomain.toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, '');
-                                                                    const matchIndex = sellers.findIndex(s =>
-                                                                        (s.domain || s.url || '').toLowerCase().includes(normalizedTarget) ||
-                                                                        (s.seller_name || '').toLowerCase().includes(normalizedTarget)
-                                                                    );
+                                                                    const matchTargets = targetDomain.toLowerCase().split('|').map(t => t.trim().replace(/^(https?:\/\/)?(www\.)?/, '')).filter(Boolean);
+
+                                                                    const matchIndex = sellers.findIndex(s => {
+                                                                        const sDomain = (s.domain || s.url || '').toLowerCase();
+                                                                        const sName = (s.seller_name || '').toLowerCase();
+                                                                        return matchTargets.some(target => sDomain.includes(target) || sName.includes(target));
+                                                                    });
 
                                                                     if (matchIndex !== -1) {
                                                                         const rank = matchIndex + 1;
@@ -923,7 +947,7 @@ e.g., 12693300312433459747
                                                                 )}
                                                             </div>
                                                         </div>
-                                                        <div className="text-right">
+                                                        <div className="text-right flex flex-col items-end">
                                                             <div className="text-2xl font-bold text-gray-900 dark:text-white">
                                                                 {product.price !== null && product.price !== undefined
                                                                     ? `${product.currency || ''} ${product.price.toFixed(2)}`
@@ -951,6 +975,15 @@ e.g., 12693300312433459747
                                                                     Visit Website
                                                                 </a>
                                                             )}
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    if (product.product_id) handleRemoveProduct(product.product_id);
+                                                                }}
+                                                                className="text-sm text-red-500 hover:text-red-700 hover:underline block mt-2"
+                                                            >
+                                                                Remove
+                                                            </button>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -1026,8 +1059,19 @@ e.g., 12693300312433459747
                                                                             const total = seller.total_price ?? ((shipping == null || shipping === 0) ? price : null);
 
                                                                             const sellerDomain = seller.domain || seller.url || '';
-                                                                            const normalizedTarget = targetDomain.toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, '');
-                                                                            const isTargetMatch = normalizedTarget && sellerDomain.toLowerCase().includes(normalizedTarget);
+
+                                                                            let matchTargets: string[] = [];
+                                                                            if (searchType === 'brand') {
+                                                                                matchTargets = keyword.toLowerCase().split(/[|\n]/).map(t => t.trim()).filter(Boolean);
+                                                                            } else {
+                                                                                matchTargets = targetDomain.toLowerCase().split('|').map(t => t.trim().replace(/^(https?:\/\/)?(www\.)?/, '')).filter(Boolean);
+                                                                            }
+
+                                                                            const isTargetMatch = matchTargets.length > 0 && matchTargets.some(target =>
+                                                                                sellerDomain.toLowerCase().includes(target) ||
+                                                                                (seller.seller_name || '').toLowerCase().includes(target) ||
+                                                                                (seller.title || '').toLowerCase().includes(target)
+                                                                            );
                                                                             const position = idx + 1;
                                                                             const isTopPosition = isTargetMatch && position === 1;
 
