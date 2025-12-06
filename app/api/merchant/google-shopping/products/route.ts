@@ -37,6 +37,8 @@ export async function POST(request: NextRequest) {
                 body: JSON.stringify([
                     {
                         keyword,
+                        price_min: body.price_min,
+                        price_max: body.price_max,
                         location_code: location_code || 2840, // Default to US
                         language_code: language_code || 'en',
                         depth,

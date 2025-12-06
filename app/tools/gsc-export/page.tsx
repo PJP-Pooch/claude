@@ -283,22 +283,67 @@ export default function GscExportPage() {
             });
 
             if (!res.ok) throw new Error("Failed to fetch data");
+            if (!res.body) throw new Error("No response body");
 
-            const result = await res.json();
-            setData(result.rows);
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let accumulatedRows: GscRow[] = [];
+            let buffer = "";
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split("\n");
+
+                // Keep the last potentially incomplete line in the buffer
+                buffer = lines.pop() || "";
+
+                for (const line of lines) {
+                    if (!line.trim()) continue;
+                    try {
+                        const message = JSON.parse(line);
+
+                        if (message.type === "progress") {
+                            setLoadingMessage(message.message);
+                        } else if (message.type === "complete" || message.type === "data") {
+                            accumulatedRows = message.rows;
+                        } else if (message.type === "error") {
+                            throw new Error(message.message);
+                        }
+                    } catch (e) {
+                        console.error("Error parsing stream message", e);
+                    }
+                }
+            }
+
+            // Process any remaining buffer
+            if (buffer.trim()) {
+                try {
+                    const message = JSON.parse(buffer);
+                    if (message.type === "complete" || message.type === "data") {
+                        accumulatedRows = message.rows;
+                    }
+                } catch (e) {
+                    console.error("Error parsing final buffer", e);
+                }
+            }
+
+            setData(accumulatedRows);
 
             if (
                 selectedDimensions.includes("query") &&
                 selectedDimensions.includes("date")
             ) {
-                analyzeQueryPositions(result.rows);
+                analyzeQueryPositions(accumulatedRows);
             }
 
             if (
                 selectedDimensions.includes("query") &&
                 selectedDimensions.includes("page")
             ) {
-                analyzeCannibalization(result.rows);
+                analyzeCannibalization(accumulatedRows);
             }
 
             if (
@@ -306,7 +351,7 @@ export default function GscExportPage() {
                 selectedDimensions.includes("page") &&
                 selectedDimensions.includes("date")
             ) {
-                analyzeQueryCounts(result.rows);
+                analyzeQueryCounts(accumulatedRows);
             }
 
         } catch (err) {

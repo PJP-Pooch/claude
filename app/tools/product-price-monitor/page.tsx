@@ -58,13 +58,17 @@ type SellerInfo = {
 
 export default function ProductPriceMonitorPage() {
     const [keyword, setKeyword] = useState("");
+    const [brandUrl, setBrandUrl] = useState("");
+    const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
     const [location, setLocation] = useState("United Kingdom");
     const [depth, setDepth] = useState(40);
+    const [priceMin, setPriceMin] = useState("");
+    const [priceMax, setPriceMax] = useState("");
     const [apiLogin, setApiLogin] = useState("");
     const [apiPassword, setApiPassword] = useState("");
     const [showAdvanced, setShowAdvanced] = useState(false);
 
-    const [searchType, setSearchType] = useState<"keyword" | "url">("keyword");
+    const [searchType, setSearchType] = useState<"keyword" | "url" | "brand">("keyword");
     const [loading, setLoading] = useState(false);
     const [products, setProducts] = useState<ProductResult[]>([]);
     const [error, setError] = useState("");
@@ -109,6 +113,7 @@ export default function ProductPriceMonitorPage() {
         setLoading(true);
         setError("");
         setProducts([]);
+        setSelectedProducts(new Set());
         const countryCode = COUNTRY_CODES[location] || "us";
         try {
             if (searchType === 'url') {
@@ -146,7 +151,9 @@ export default function ProductPriceMonitorPage() {
                         const sellersData = await sellersRes.json();
 
                         if (sellersData.tasks && sellersData.tasks[0]?.result?.[0]?.items) {
-                            const sellerItems = sellersData.tasks[0].result[0].items as SellerInfo[];
+                            const resultObj = sellersData.tasks[0].result[0];
+                            const sellerItems = resultObj.items as SellerInfo[];
+                            const productInfo = resultObj.item; // This usually contains the product metadata like images
 
                             if (sellerItems.length === 0) {
                                 return { productId, error: "No sellers found", sellers: [] as SellerInfo[], product: null };
@@ -155,17 +162,17 @@ export default function ProductPriceMonitorPage() {
                             const firstSeller = sellerItems[0];
                             // Use details for title if available, otherwise title (which might be seller name sometimes)
                             const productTitle = firstSeller?.details || firstSeller?.title || "Product Found";
-                            // Construct basic Shopping URL - parameters are handled by the destination usually, 
-                            // but adding gl helps if the ID is valid for that region.
-                            const googleShoppingUrl = `https://www.google.com/shopping/product/${productId}?gl=${countryCode}&hl=en`;
+                            // Construct Shopping URL using the robust 'search?tbm=shop&q=gid:ID' format
+                            // This matches the format seen in working keyword search results and avoids 404s from direct product links
+                            const googleShoppingUrl = `https://www.google.com/search?tbm=shop&q=gid:${productId}&gl=${countryCode}&hl=en`;
 
                             const syntheticProduct: ProductResult = {
                                 product_id: productId,
-                                title: productTitle,
+                                title: productInfo?.title || productTitle,
                                 price: firstSeller?.price ?? firstSeller?.base_price ?? null,
                                 currency: firstSeller?.currency,
                                 shop_name: "Various Sellers",
-                                product_images: [],
+                                product_images: productInfo?.images || [], // Use images from the main item object
                                 available: true,
                                 shopping_url: googleShoppingUrl
                             };
@@ -210,15 +217,27 @@ export default function ProductPriceMonitorPage() {
                 }
 
             } else {
-                // Search by Keyword - Use Products Endpoint
+                // Search by Keyword or Brand - Use Products Endpoint
+                let searchKeyword = keyword.trim();
+
+                if (searchType === 'brand') {
+                    // specific logic for brand search
+                    if (brandUrl) {
+                        const cleanUrl = brandUrl.replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0];
+                        searchKeyword = `${searchKeyword} site:${cleanUrl}`;
+                    }
+                }
+
                 const res = await fetch("/api/merchant/google-shopping/products", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                        keyword: keyword.trim(),
+                        keyword: searchKeyword,
                         location_code: LOCATION_CODES[location],
                         language_code: "en",
                         depth,
+                        price_min: priceMin ? parseFloat(priceMin) : undefined,
+                        price_max: priceMax ? parseFloat(priceMax) : undefined,
                         dataforseoLogin: apiLogin || undefined,
                         dataforseoPassword: apiPassword || undefined,
                     }),
@@ -238,10 +257,9 @@ export default function ProductPriceMonitorPage() {
 
                     const updatedItems = items.slice(0, depth).map((item: ProductResult) => {
                         let shoppingUrl = item.shopping_url;
-                        if (shoppingUrl) {
-                            const hasParams = shoppingUrl.includes('?');
-                            const separator = hasParams ? '&' : '?';
-                            shoppingUrl = `${shoppingUrl}${separator}gl=${countryCode}&hl=en`;
+                        // Use the URL from API as-is, or construct a simple one if missing
+                        if (!shoppingUrl && item.product_id) {
+                            shoppingUrl = `https://www.google.com/shopping/product/${item.product_id}`;
                         }
 
                         return {
@@ -296,6 +314,49 @@ export default function ProductPriceMonitorPage() {
             };
         });
     };
+
+    const toggleProductSelection = (productId: string) => {
+        const newSelected = new Set(selectedProducts);
+        if (newSelected.has(productId)) {
+            newSelected.delete(productId);
+        } else {
+            newSelected.add(productId);
+        }
+        setSelectedProducts(newSelected);
+    };
+
+    const copySelectedIds = () => {
+        const ids = Array.from(selectedProducts).join('\n');
+        navigator.clipboard.writeText(ids);
+        alert(`${selectedProducts.size} Product IDs copied to clipboard!`);
+    };
+
+    const downloadSelectedCSV = () => {
+        if (selectedProducts.size === 0) return;
+        // reuse download logic but filter by selected
+        const selectedItems = products.filter(p => p.product_id && selectedProducts.has(p.product_id));
+
+        const headers = ["Product ID", "Product Title", "Price", "Link"];
+        const rows = selectedItems.map(p => [
+            p.product_id || "",
+            p.title || "",
+            p.price ? p.price.toString() : "",
+            p.shopping_url || ""
+        ]);
+
+        const csv = [
+            headers.join(","),
+            ...rows.map(row => row.map(cell => `"${(cell || "").replace(/"/g, '""')}"`).join(",")),
+        ].join("\n");
+
+        const blob = new Blob([csv], { type: "text/csv" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `brand-products-${keyword}.csv`;
+        a.click();
+    };
+
 
     const fetchSellers = async (product: ProductResult) => {
         if (!product.product_id) return;
@@ -443,7 +504,14 @@ export default function ProductPriceMonitorPage() {
                                             name="searchType"
                                             value="keyword"
                                             checked={searchType === 'keyword'}
-                                            onChange={() => setSearchType('keyword')}
+                                            onChange={() => {
+                                                setSearchType('keyword');
+                                                setKeyword("");
+                                                setProducts([]);
+                                                setError("");
+                                                setPriceMin("");
+                                                setPriceMax("");
+                                            }}
                                         />
                                         <span className="ml-2 text-gray-700 dark:text-gray-300">Keyword</span>
                                     </label>
@@ -454,9 +522,35 @@ export default function ProductPriceMonitorPage() {
                                             name="searchType"
                                             value="url"
                                             checked={searchType === 'url'}
-                                            onChange={() => setSearchType('url')}
+                                            onChange={() => {
+                                                setSearchType('url');
+                                                setKeyword("");
+                                                setProducts([]);
+                                                setError("");
+                                                setPriceMin("");
+                                                setPriceMax("");
+                                            }}
                                         />
                                         <span className="ml-2 text-gray-700 dark:text-gray-300">Product ID</span>
+                                    </label>
+                                    <label className="inline-flex items-center">
+                                        <input
+                                            type="radio"
+                                            className="form-radio text-blue-600"
+                                            name="searchType"
+                                            value="brand"
+                                            checked={searchType === 'brand'}
+                                            onChange={() => {
+                                                setSearchType('brand');
+                                                setKeyword("");
+                                                setBrandUrl("");
+                                                setProducts([]);
+                                                setError("");
+                                                setPriceMin("");
+                                                setPriceMax("");
+                                            }}
+                                        />
+                                        <span className="ml-2 text-gray-700 dark:text-gray-300">Brand</span>
                                     </label>
                                 </div>
                                 <div className="relative">
@@ -475,6 +569,30 @@ export default function ProductPriceMonitorPage() {
                                                 placeholder="e.g., running shoes, wireless headphones"
                                             />
                                         </>
+                                    ) : searchType === 'brand' ? (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Brand Name</label>
+                                                <input
+                                                    type="text"
+                                                    value={keyword}
+                                                    onChange={(e) => setKeyword(e.target.value)}
+                                                    required
+                                                    className="block w-full px-3 py-3 border border-gray-300 dark:border-gray-600 rounded-lg leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors"
+                                                    placeholder="e.g. Nike"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Brand Website (Optional)</label>
+                                                <input
+                                                    type="text"
+                                                    value={brandUrl}
+                                                    onChange={(e) => setBrandUrl(e.target.value)}
+                                                    className="block w-full px-3 py-3 border border-gray-300 dark:border-gray-600 rounded-lg leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors"
+                                                    placeholder="e.g. nike.com"
+                                                />
+                                            </div>
+                                        </div>
                                     ) : (
                                         <div>
                                             <textarea
@@ -521,6 +639,30 @@ e.g., 12693300312433459747
                                             max={120}
                                             className="block w-full px-3 py-3 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                                         />
+                                    </div>
+                                )}
+                                {searchType !== 'url' && (
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Min Price</label>
+                                            <input
+                                                type="number"
+                                                value={priceMin}
+                                                onChange={(e) => setPriceMin(e.target.value)}
+                                                placeholder="0"
+                                                className="block w-full px-3 py-3 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Max Price</label>
+                                            <input
+                                                type="number"
+                                                value={priceMax}
+                                                onChange={(e) => setPriceMax(e.target.value)}
+                                                placeholder="Any"
+                                                className="block w-full px-3 py-3 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                                            />
+                                        </div>
                                     </div>
                                 )}
                                 <div>
@@ -649,16 +791,38 @@ e.g., 12693300312433459747
                                 <div>
                                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Results</h2>
                                     <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">
-                                        {/* Found text removed as requested */}
+                                        {searchType === 'brand' && (
+                                            <span className="block mt-1 text-xs text-gray-500">
+                                                {selectedProducts.size} selected for bulk action
+                                            </span>
+                                        )}
                                     </p>
                                 </div>
-                                <button
-                                    onClick={downloadCSV}
-                                    className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-                                >
-                                    <Download className="h-4 w-4 mr-2" />
-                                    Download CSV
-                                </button>
+                                <div className="flex gap-2">
+                                    {searchType === 'brand' && selectedProducts.size > 0 && (
+                                        <>
+                                            <button
+                                                onClick={copySelectedIds}
+                                                className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                                            >
+                                                Copy IDs
+                                            </button>
+                                            <button
+                                                onClick={downloadSelectedCSV}
+                                                className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+                                            >
+                                                Download Selected
+                                            </button>
+                                        </>
+                                    )}
+                                    <button
+                                        onClick={downloadCSV}
+                                        className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                                    >
+                                        <Download className="h-4 w-4 mr-2" />
+                                        Export All
+                                    </button>
+                                </div>
                             </div>
 
                             <div className="grid grid-cols-1 gap-4">
@@ -668,15 +832,33 @@ e.g., 12693300312433459747
                                     return (
                                         <div key={index} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
                                             <button
-                                                onClick={() => handleSelectProduct(product)}
+                                                onClick={(e) => {
+                                                    // note: if checkbox is clicked, we toggled specific selection, handled by stopPropagation
+                                                    handleSelectProduct(product);
+                                                }}
                                                 className="w-full px-6 py-4 bg-gray-50 dark:bg-gray-900/50 flex justify-between items-start hover:bg-gray-100 dark:hover:bg-gray-900/70 transition-colors text-left"
                                             >
+                                                <div className="flex items-center gap-3 mr-4">
+                                                    {searchType === 'brand' && (
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={product.product_id ? selectedProducts.has(product.product_id) : false}
+                                                            onChange={(e) => {
+                                                                e.stopPropagation();
+                                                                if (product.product_id) toggleProductSelection(product.product_id);
+                                                            }}
+                                                            className="h-5 w-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                                        />
+                                                    )}
+                                                </div>
                                                 <div className="flex-1">
                                                     <div className="flex items-start gap-3">
-                                                        <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 mt-1">
+                                                        <div className="flex flex-col gap-1 mt-1 min-w-[3rem]">
+                                                            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+                                                                #{product.rank_absolute || product.rank_group || (index + 1) || '-'}
+                                                            </span>
                                                             {(() => {
                                                                 const sellers = sellerCache[product.product_id!] || [];
-                                                                // Check if we have a target domain match in the sellers
                                                                 if (targetDomain && sellers.length > 0) {
                                                                     const normalizedTarget = targetDomain.toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, '');
                                                                     const matchIndex = sellers.findIndex(s =>
@@ -688,7 +870,7 @@ e.g., 12693300312433459747
                                                                         const rank = matchIndex + 1;
                                                                         const isTop3 = rank <= 3;
                                                                         return (
-                                                                            <span className={`px-2 py-1 rounded-md ${isTop3
+                                                                            <span className={`px-2 py-0.5 text-[10px] rounded-md whitespace-nowrap w-fit ${isTop3
                                                                                 ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
                                                                                 : "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
                                                                                 }`}>
@@ -697,17 +879,15 @@ e.g., 12693300312433459747
                                                                         );
                                                                     } else {
                                                                         return (
-                                                                            <span className="px-2 py-1 rounded-md bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+                                                                            <span className="px-2 py-0.5 text-[10px] rounded-md whitespace-nowrap w-fit bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
                                                                                 Not Ranked
                                                                             </span>
                                                                         );
                                                                     }
                                                                 }
-
-                                                                // Default Fallback
-                                                                return `#${product.rank_absolute || product.rank_group || (index + 1) || '-'}`;
+                                                                return null;
                                                             })()}
-                                                        </span>
+                                                        </div>
                                                         {product.product_images && product.product_images.length > 0 && (
                                                             <img
                                                                 src={typeof product.product_images[0] === 'string' ? product.product_images[0] : product.product_images[0].url}
@@ -760,6 +940,17 @@ e.g., 12693300312433459747
                                                                     View on Shopping
                                                                 </a>
                                                             )}
+                                                            {product.url && product.url !== product.shopping_url && (
+                                                                <a
+                                                                    href={product.url}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="text-sm text-green-600 dark:text-green-400 hover:underline block mt-1"
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                >
+                                                                    Visit Website
+                                                                </a>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -805,7 +996,6 @@ e.g., 12693300312433459747
                                                                                 </span>
                                                                             </div>
                                                                         </th>
-
                                                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                                                                             Offers
                                                                         </th>
@@ -833,10 +1023,8 @@ e.g., 12693300312433459747
                                                                         return sortedSellers.map((seller, idx) => {
                                                                             const price = seller.price ?? seller.base_price ?? 0;
                                                                             const shipping = seller.shipping_price;
-                                                                            // If total_price is missing, calculate it: if shipping is 0/null, total = price
                                                                             const total = seller.total_price ?? ((shipping == null || shipping === 0) ? price : null);
 
-                                                                            // Check if this seller matches the target domain
                                                                             const sellerDomain = seller.domain || seller.url || '';
                                                                             const normalizedTarget = targetDomain.toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, '');
                                                                             const isTargetMatch = normalizedTarget && sellerDomain.toLowerCase().includes(normalizedTarget);
@@ -926,7 +1114,6 @@ e.g., 12693300312433459747
                                                                                     </td>
                                                                                 </tr>
                                                                             );
-
                                                                         })
                                                                     })()}
                                                                 </tbody>
@@ -943,16 +1130,15 @@ e.g., 12693300312433459747
                                                         </div>
                                                     )}
                                                 </div>
-                                            )
-                                            }
+                                            )}
                                         </div>
                                     );
                                 })}
                             </div>
                         </div>
                     )}
-                </div>
-            </main>
+                </div >
+            </main >
         </ThemeProvider >
     );
 }
