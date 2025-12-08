@@ -203,7 +203,7 @@ export default function GscExportPage() {
         setLoading(true);
         setLoadingMessage("Preparing to fetch data...");
         setError("");
-        setData(null);
+        setData([]); // Clear previous data
         setQueryAnalysis(null);
         setCannibalizationData(null);
         setQueryCountData(null);
@@ -257,17 +257,7 @@ export default function GscExportPage() {
                 });
             }
 
-            // Calculate date range for loading message
-            const start = parseISO(startDate);
-            const end = parseISO(endDate);
-            const daysDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-
-            if (daysDiff > 30) {
-                const estimatedBatches = Math.ceil(daysDiff / 30);
-                setLoadingMessage(`Fetching ${daysDiff} days of data in ${estimatedBatches} batches. This may take a few moments...`);
-            } else {
-                setLoadingMessage("Fetching data from Google Search Console...");
-            }
+            setLoadingMessage("Starting data fetch...");
 
             const res = await fetch("/api/gsc/query", {
                 method: "POST",
@@ -306,14 +296,20 @@ export default function GscExportPage() {
                         const message = JSON.parse(line);
 
                         if (message.type === "progress") {
-                            setLoadingMessage(message.message);
-                        } else if (message.type === "complete" || message.type === "data") {
-                            accumulatedRows = message.rows;
+                            setLoadingMessage(message.message || "Fetching data...");
+                        } else if (message.type === "data") {
+                            const newRows = message.rows;
+                            accumulatedRows.push(...newRows);
+                            setData(prev => [...(prev || []), ...newRows]);
+                        } else if (message.type === "complete") {
+                            // Handled at end
                         } else if (message.type === "error") {
                             throw new Error(message.message);
                         }
                     } catch (e) {
-                        console.error("Error parsing stream message", e);
+                        // Ignore incomplete JSON chunks usually
+                        // But console.error might be noisy if we hit it often?
+                        // console.error("Error parsing stream message", e);
                     }
                 }
             }
@@ -322,15 +318,19 @@ export default function GscExportPage() {
             if (buffer.trim()) {
                 try {
                     const message = JSON.parse(buffer);
-                    if (message.type === "complete" || message.type === "data") {
-                        accumulatedRows = message.rows;
+                    if (message.type === "data") {
+                        const newRows = message.rows;
+                        accumulatedRows.push(...newRows);
+                        setData(prev => [...(prev || []), ...newRows]);
                     }
                 } catch (e) {
                     console.error("Error parsing final buffer", e);
                 }
             }
 
-            setData(accumulatedRows);
+            // Final Analysis
+            setLoadingMessage("Analyzing data...");
+            setData(accumulatedRows); // Ensure state is consistent
 
             if (
                 selectedDimensions.includes("query") &&

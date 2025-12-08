@@ -43,9 +43,7 @@ export async function POST(req: Request) {
             const end = parseISO(endDate);
             const totalDays = differenceInDays(end, start);
 
-            let allRows: any[] = [];
-
-            // Helper to fetch data
+            // Helper to fetch data for a specific range
             const fetchData = async (startStr: string, endStr: string) => {
                 const requestBody: any = {
                     startDate: startStr,
@@ -68,58 +66,83 @@ export async function POST(req: Request) {
                     requestBody,
                 });
 
-                return response.data.rows || [];
+                const rows = response.data.rows || [];
+
+                // Process rows to ensure numeric types immediately
+                return rows.map((row) => ({
+                    ...row,
+                    clicks: row.clicks || 0,
+                    impressions: row.impressions || 0,
+                    ctr: row.ctr || 0,
+                    position: row.position || 0,
+                }));
             };
 
             if (totalDays <= 30) {
-                await sendUpdate({ type: 'progress', current: 1, total: 1, message: "Fetching single batch..." });
-                allRows = await fetchData(startDate, endDate);
+                await sendUpdate({ type: 'progress', current: 1, total: 1, message: "Fetching data..." });
+                const rows = await fetchData(startDate, endDate);
+                await sendUpdate({ type: 'data', rows });
             } else {
-                // Batching logic with rate limiting
+                // Batching logic with PARALLEL requests
+                // Create all batch intervals first
+                const batches: { start: Date; end: Date }[] = [];
                 let currentStart = start;
-                let batchNumber = 0;
-                const totalBatches = Math.ceil(totalDays / 30);
 
                 while (currentStart <= end) {
                     let currentEnd = addDays(currentStart, 29); // 30 day chunks
                     if (currentEnd > end) {
                         currentEnd = end;
                     }
-
-                    const startStr = format(currentStart, "yyyy-MM-dd");
-                    const endStr = format(currentEnd, "yyyy-MM-dd");
-
-                    batchNumber++;
-                    await sendUpdate({
-                        type: 'progress',
-                        current: batchNumber,
-                        total: totalBatches,
-                        message: `Fetching batch ${batchNumber}/${totalBatches}: ${startStr} to ${endStr}`
-                    });
-
-                    const rows = await fetchData(startStr, endStr);
-                    allRows = [...allRows, ...rows];
-
+                    batches.push({ start: currentStart, end: currentEnd });
                     currentStart = addDays(currentEnd, 1);
+                }
 
-                    // Add delay between requests to respect rate limits (1,200 QPM)
-                    // 500ms delay = ~120 requests per minute, well under the limit
-                    if (currentStart <= end) {
-                        await new Promise(resolve => setTimeout(resolve, 500));
-                    }
+                const totalBatches = batches.length;
+                let completedBatches = 0;
+                const CONCURRENCY_LIMIT = 3;
+
+                // Process batches with concurrency limit to avoid OOM
+                for (let i = 0; i < batches.length; i += CONCURRENCY_LIMIT) {
+                    const chunk = batches.slice(i, i + CONCURRENCY_LIMIT);
+
+                    await Promise.all(chunk.map(async (batch, chunkIndex) => {
+                        const batchIndex = i + chunkIndex;
+                        const startStr = format(batch.start, "yyyy-MM-dd");
+                        const endStr = format(batch.end, "yyyy-MM-dd");
+
+                        try {
+                            const rows = await fetchData(startStr, endStr);
+
+                            completedBatches++;
+
+                            // Send data immediately
+                            await sendUpdate({
+                                type: 'data',
+                                rows,
+                                batchIndex: batchIndex
+                            });
+
+                            // Send progress update
+                            await sendUpdate({
+                                type: 'progress',
+                                current: completedBatches,
+                                total: totalBatches,
+                                message: `Fetched batch ${completedBatches}/${totalBatches}: ${startStr} to ${endStr}`
+                            });
+
+                        } catch (err: any) {
+                            console.error(`Error fetching batch ${startStr} to ${endStr}:`, err);
+                            await sendUpdate({
+                                type: 'batch_error',
+                                message: `Failed to fetch ${startStr} to ${endStr}`,
+                                error: err.message
+                            });
+                        }
+                    }));
                 }
             }
 
-            // Process rows to ensure numeric types
-            const processedRows = allRows.map((row) => ({
-                ...row,
-                clicks: row.clicks || 0,
-                impressions: row.impressions || 0,
-                ctr: row.ctr || 0,
-                position: row.position || 0,
-            }));
-
-            await sendUpdate({ type: 'complete', rows: processedRows });
+            await sendUpdate({ type: 'complete' });
         } catch (error: any) {
             console.error("Error fetching GSC data:", error);
             await writer.write(encoder.encode(JSON.stringify({ type: 'error', message: error.message || "Failed to fetch data" }) + '\n'));
