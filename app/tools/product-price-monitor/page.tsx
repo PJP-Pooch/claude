@@ -161,8 +161,11 @@ export default function ProductPriceMonitorPage() {
                             const firstSeller = sellerItems[0];
                             // Use details for title if available, otherwise title (which might be seller name sometimes)
                             const productTitle = firstSeller?.details || firstSeller?.title || "Product Found";
-                            // Construct Shopping URL directly to the product page
-                            const googleShoppingUrl = `https://www.google.com/shopping/product/${productId}?gl=${countryCode}&hl=en`;
+
+                            // Use the URL from the API result if available (usually points to the product on Google Shopping)
+                            // Otherwise fallback to a search for the ID
+                            // We use 'q' parameter instead of 'gid:' as it is more robust if the ID is not strictly a GID
+                            const googleShoppingUrl = productInfo?.url || `https://www.google.com/search?tbm=shop&q=${productId}&gl=${countryCode}&hl=en`;
 
                             const syntheticProduct: ProductResult = {
                                 product_id: productId,
@@ -347,9 +350,16 @@ export default function ProductPriceMonitorPage() {
     };
 
     const copySelectedIds = () => {
-        const ids = Array.from(selectedProducts).join('\n');
+        const validIds = Array.from(selectedProducts).filter(id => !id.startsWith('missing-id-'));
+
+        if (validIds.length === 0) {
+            alert("No valid Product IDs to copy.");
+            return;
+        }
+
+        const ids = validIds.join('\n');
         navigator.clipboard.writeText(ids);
-        alert(`${selectedProducts.size} Product IDs copied to clipboard!`);
+        alert(`${validIds.length} valid Product IDs copied to clipboard!${selectedProducts.size > validIds.length ? ` (${selectedProducts.size - validIds.length} generated IDs ignored)` : ''}`);
     };
 
     const downloadSelectedCSV = () => {
