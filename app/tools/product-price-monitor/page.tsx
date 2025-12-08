@@ -31,6 +31,7 @@ type ProductResult = {
     xpath?: string;
     available?: boolean;
     shopping_url?: string;
+    specs?: { name: string; value: string }[];
 };
 
 
@@ -55,6 +56,30 @@ type SellerInfo = {
     price_tag?: string;
     product_condition?: string;
 };
+
+// ... (existing code)
+
+// Inside fetchSellers for Product ID Search (approx line 170 in updated file positions)
+// need to locate where syntheticProduct is created
+
+// Inside fetchSellers (in search loop) and handleSearch (for product ids)
+
+// Let's modify the ProductResult type first
+// Then find where mapping happens.
+
+/* In handleSearch (Product ID logic) */
+// const syntheticProduct: ProductResult = {
+//     ...
+//     specs: productInfo?.specs || [],
+// };
+
+
+/* In fetchSellers (Expansion logic) */
+// We need to update the product in state with the newly fetched specs from productInfo
+// The current fetchSellers only updates 'sellerCache'. It doesn't update 'products' state for the specs.
+// We should update 'products' state if productInfo is available.
+
+
 
 export default function ProductPriceMonitorPage() {
     const [keyword, setKeyword] = useState("");
@@ -175,7 +200,8 @@ export default function ProductPriceMonitorPage() {
                                 shop_name: "Various Sellers",
                                 product_images: productInfo?.images || [], // Use images from the main item object
                                 available: true,
-                                shopping_url: googleShoppingUrl
+                                shopping_url: googleShoppingUrl,
+                                specs: productInfo?.specs_info || [] // Use specs_info from the main item object
                             };
 
                             return { productId, error: null, sellers: sellerItems, product: syntheticProduct };
@@ -418,7 +444,10 @@ export default function ProductPriceMonitorPage() {
             const data = await res.json();
 
             if (data.tasks && data.tasks[0]?.result?.[0]?.items) {
-                const items = data.tasks[0].result[0].items;
+                const resultObj = data.tasks[0].result[0];
+                const items = resultObj.items;
+                const productInfo = resultObj.item;
+
                 // Take top 5 items in original order (no sorting)
                 const topItems = items.slice(0, 5);
 
@@ -427,6 +456,15 @@ export default function ProductPriceMonitorPage() {
                     ...prev,
                     [product.product_id!]: topItems
                 }));
+
+                // If we also got specs_info, update the main product in the products list
+                if (productInfo?.specs_info) {
+                    setProducts(prev => prev.map(p =>
+                        p.product_id === product.product_id
+                            ? { ...p, specs: productInfo.specs_info }
+                            : p
+                    ));
+                }
             } else if (data.tasks && data.tasks[0]?.status_message) {
                 throw new Error(`DataForSEO Error: ${data.tasks[0].status_message}`);
             }
@@ -955,6 +993,15 @@ e.g., 12693300312433459747
                                                                         {product.available ? "In Stock" : "Out of Stock"}
                                                                     </span>
                                                                 )}
+                                                                {product.specs && (
+                                                                    <span className="text-gray-500 dark:text-gray-400 border-l border-gray-300 dark:border-gray-600 pl-3 ml-1">
+                                                                        {product.specs.find(s => s.name === 'Size')?.value && (
+                                                                            <span className="font-medium text-gray-700 dark:text-gray-300 mr-2">
+                                                                                Size: {product.specs.find(s => s.name === 'Size')?.value}
+                                                                            </span>
+                                                                        )}
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                         </div>
                                                         <div className="text-right flex flex-col items-end">
@@ -1096,25 +1143,35 @@ e.g., 12693300312433459747
                                                                                         }`}
                                                                                 >
                                                                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                                                                                        <div className="flex items-center gap-2">
-                                                                                            {isTopPosition ? (
-                                                                                                <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-bold text-white bg-gradient-to-r from-yellow-500 to-amber-500 rounded-full shadow-sm">
-                                                                                                    🏆 #1
+                                                                                        <div className="flex flex-col">
+                                                                                            <div className="flex items-center gap-2">
+                                                                                                {isTopPosition ? (
+                                                                                                    <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-bold text-white bg-gradient-to-r from-yellow-500 to-amber-500 rounded-full shadow-sm">
+                                                                                                        🏆 #1
+                                                                                                    </span>
+                                                                                                ) : isTargetMatch ? (
+                                                                                                    <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-bold text-white bg-green-500 rounded-full">
+                                                                                                        #{position}
+                                                                                                    </span>
+                                                                                                ) : null}
+                                                                                                <span className={
+                                                                                                    isTopPosition
+                                                                                                        ? 'text-amber-700 dark:text-amber-400 font-bold'
+                                                                                                        : isTargetMatch
+                                                                                                            ? 'text-green-700 dark:text-green-400 font-semibold'
+                                                                                                            : ''
+                                                                                                }>
+                                                                                                    {seller.title || seller.seller_name || seller.domain || "Unknown Seller"}
                                                                                                 </span>
-                                                                                            ) : isTargetMatch ? (
-                                                                                                <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-bold text-white bg-green-500 rounded-full">
-                                                                                                    #{position}
-                                                                                                </span>
-                                                                                            ) : null}
-                                                                                            <span className={
-                                                                                                isTopPosition
-                                                                                                    ? 'text-amber-700 dark:text-amber-400 font-bold'
-                                                                                                    : isTargetMatch
-                                                                                                        ? 'text-green-700 dark:text-green-400 font-semibold'
-                                                                                                        : ''
-                                                                                            }>
-                                                                                                {seller.title || seller.seller_name || seller.domain || "Unknown Seller"}
-                                                                                            </span>
+                                                                                            </div>
+                                                                                            {seller.availability && (
+                                                                                                <div className={`text-xs mt-1 ${seller.availability.toLowerCase().includes('out of stock')
+                                                                                                    ? 'text-red-500 font-medium'
+                                                                                                    : 'text-green-600 dark:text-green-400'
+                                                                                                    }`}>
+                                                                                                    {seller.availability}
+                                                                                                </div>
+                                                                                            )}
                                                                                         </div>
                                                                                     </td>
                                                                                     <td className={`px-6 py-4 whitespace-nowrap text-sm ${isTopPosition ? 'text-amber-700 dark:text-amber-400' : isTargetMatch ? 'text-green-700 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
