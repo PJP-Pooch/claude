@@ -708,3 +708,33 @@ export async function fetchSerpEnrichmentBatch(
 
   return results;
 }
+
+/**
+ * Generic DataForSEO API fetcher
+ */
+export async function fetchDataForSEO(endpoint: string, payload: any, login?: string, password?: string) {
+  const apiLogin = login || process.env.DATAFORSEO_LOGIN;
+  const apiPassword = password || process.env.DATAFORSEO_PASSWORD;
+
+  if (!apiLogin || !apiPassword) {
+    throw new Error("Missing DataForSEO credentials");
+  }
+
+  const auth = Buffer.from(`${apiLogin}:${apiPassword}`).toString('base64');
+
+  const response = await fetch(`${DATAFORSEO_API_BASE}/${endpoint}`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Basic ${auth}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`DataForSEO API Error (${response.status}): ${errorText}`);
+  }
+
+  return response.json();
+}
