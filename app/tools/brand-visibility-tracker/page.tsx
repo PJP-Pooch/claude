@@ -457,6 +457,47 @@ export default function BrandVisibilityPage() {
                                 </div>
                             </div>
 
+                            {/* Prompt Details (Raw Response) */}
+                            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+                                <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">Analysis Details</h3>
+                                </div>
+                                <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                                    {data.results.map((result, idx) => (
+                                        <div key={idx} className="p-6">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <h4 className="font-medium text-gray-900 dark:text-gray-100">{result.prompt}</h4>
+                                                <span className={`px-2 py-1 text-xs rounded-full ${result.status === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                                    {result.status}
+                                                </span>
+                                            </div>
+                                            {result.brand_entities && result.brand_entities.length > 0 ? (
+                                                <div className="mb-2">
+                                                    <span className="text-sm text-gray-500">Brands found: </span>
+                                                    <span className="text-sm font-medium text-gray-900 dark:text-white">
+                                                        {result.brand_entities.map(e => e.title).join(", ")}
+                                                    </span>
+                                                </div>
+                                            ) : (
+                                                <div className="mb-2 text-sm text-yellow-600 dark:text-yellow-400">
+                                                    No brands detected in this response.
+                                                </div>
+                                            )}
+
+                                            <div className="mt-4 bg-gray-50 dark:bg-gray-900 p-4 rounded-md">
+                                                <p className="text-xs uppercase text-gray-500 mb-1 font-semibold">ChatGPT Response Snippet</p>
+                                                <p className="text-sm text-gray-700 dark:text-gray-300 font-mono whitespace-pre-wrap">
+                                                    {result.text_snippet || "No text content available."}
+                                                </p>
+                                                {result.error && (
+                                                    <p className="mt-2 text-sm text-red-600 font-semibold">Error: {result.error}</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
                         </div>
                     )}
                 </div>
