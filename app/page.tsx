@@ -109,6 +109,27 @@ export default function Home() {
         'CSV export functionality',
       ],
     },
+    {
+      id: 'brand-visibility',
+      title: 'Brand Visibility Tracker',
+      description: 'Analyze brand mentions and share of voice in ChatGPT responses. Identify competitors and track brand presence in AI-generated content.',
+      icon: (
+        <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
+        </svg>
+      ),
+      href: '/tools/brand-visibility-tracker',
+      color: 'from-cyan-500 to-blue-600',
+      apiType: 'dataforseo',
+      features: [
+        'Share of Voice Analysis',
+        'Competitor Tracking',
+        'ChatGPT Response Analysis',
+        'Aggregated Brand Mentions',
+        'Data Export',
+      ],
+    },
     /*
     {
       id: 'merchant-price',
