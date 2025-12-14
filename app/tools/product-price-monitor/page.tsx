@@ -289,12 +289,24 @@ export default function ProductPriceMonitorPage() {
 
                     const updatedItems = items.slice(0, depth).map((item: ProductResult, idx: number) => {
                         let shoppingUrl = item.shopping_url;
+                        let extractedId = item.product_id;
+
+                        // Try to extract ID from URL if missing
+                        if (!extractedId && (item.shopping_url || item.url)) {
+                            const urlToCheck = item.shopping_url || item.url || '';
+                            // Match common patterns for Google Shopping IDs
+                            const pidMatch = urlToCheck.match(/(?:pid:|productid:|product\/)(\d+)/);
+                            if (pidMatch) {
+                                extractedId = pidMatch[1];
+                            }
+                        }
+
                         // Encapsulate ID generation to ensure every item has one
-                        const finalId = item.product_id || `missing-id-${idx}-${Date.now()}`;
+                        const finalId = extractedId || `missing-id-${idx}-${Date.now()}`;
 
                         // Use the URL from API as-is, or construct a simple one if missing
-                        if (!shoppingUrl && item.product_id) {
-                            shoppingUrl = `https://www.google.com/shopping/product/${item.product_id}`;
+                        if (!shoppingUrl && extractedId) {
+                            shoppingUrl = `https://www.google.com/shopping/product/${extractedId}`;
                         }
 
                         return {

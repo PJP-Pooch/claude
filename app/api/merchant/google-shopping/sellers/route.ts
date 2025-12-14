@@ -69,8 +69,8 @@ export async function POST(req: Request) {
             let attempts = 0;
             let results = null;
 
-            // Try for up to 30 seconds (10 attempts * 3 seconds)
-            while (attempts < 10 && !results) {
+            // Try for up to 90 seconds (30 attempts * 3 seconds)
+            while (attempts < 30 && !results) {
                 attempts++;
                 await new Promise(resolve => setTimeout(resolve, 3000));
 
@@ -95,7 +95,7 @@ export async function POST(req: Request) {
                 return NextResponse.json(results);
             } else {
                 return NextResponse.json(
-                    { error: 'Task created but results not ready after 30 seconds. Please try again.' },
+                    { error: 'Task created but results not ready after 90 seconds. Please try again.' },
                     { status: 504 }
                 );
             }
