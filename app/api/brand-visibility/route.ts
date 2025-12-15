@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
                     while ((match = headerRegex.exec(fullText)) !== null) {
                         if (match && match[1] && match[1].length < 100) { // Safety check on length
                             // Clean up the brand name (remove extra details after ' - ' or ':')
-                            const captured = match && match[1];
+                            const captured = match?.[1];
                             if (captured) {
                                 let cleanName = captured.split(' - ')[0].split(':')[0].trim();
 
@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
                         // We must filter out common structural headers like "Why it's good", "Key Features"
                         const listRegex = /-\s*\*\*(.*?)\*\*/g;
                         while ((match = listRegex.exec(fullText)) !== null) {
-                            const captured = match && match[1];
+                            const captured = match?.[1];
                             if (captured && captured.length < 100) {
                                 const lower = captured.toLowerCase();
                                 // Exclude common description keys found in your example
