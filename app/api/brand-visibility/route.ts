@@ -77,7 +77,13 @@ export async function POST(req: NextRequest) {
 
                         // Extract brand entities
                         if (item.brand_entities) {
-                            brandEntities = [...brandEntities, ...item.brand_entities];
+                            // Safely map API entities to our interface, handling null URLs
+                            const apiEntities = item.brand_entities.map((e: any) => ({
+                                title: e.title,
+                                category: e.category,
+                                urls: Array.isArray(e.urls) ? e.urls : []
+                            }));
+                            brandEntities = [...brandEntities, ...apiEntities];
                         }
                     }
                 }
@@ -222,26 +228,27 @@ export async function POST(req: NextRequest) {
                 });
 
                 aggregates.total_prompts++;
+            } // End if(response.tasks)
             } catch (error) {
-                console.error(`Error processing prompt "${prompt}":`, error);
-                results.push({
-                    prompt: prompt,
-                    status: "error",
-                    error: error instanceof Error ? error.message : "Unknown error"
-                });
-            }
+            console.error(`Error processing prompt "${prompt}":`, error);
+            results.push({
+                prompt: prompt,
+                status: "error",
+                error: error instanceof Error ? error.message : "Unknown error"
+            });
         }
+    }
 
         return NextResponse.json({
-            results,
-            aggregates
-        });
+        results,
+        aggregates
+    });
 
-    } catch (error) {
-        console.error("API Error:", error);
-        return NextResponse.json(
-            { error: "Internal Server Error" },
-            { status: 500 }
-        );
-    }
+} catch (error) {
+    console.error("API Error:", error);
+    return NextResponse.json(
+        { error: "Internal Server Error" },
+        { status: 500 }
+    );
+}
 }
