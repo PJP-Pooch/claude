@@ -143,16 +143,36 @@ export async function POST(req: NextRequest) {
 
                 // Pattern 2: Bold list items (e.g. "- **Royal Canin**:")
                 const listRegex = /-\s*\*\*(.*?)\*\*/g;
+
+                // Comprehensive list of generic terms to exclude from manual brand extraction
+                const excludedTerms = [
+                    "features", "key features", "best for", "ideal for", "why it's", "why we like", "why it's great",
+                    "pros", "cons", "verdict", "summary", "bottom line",
+                    "price", "cost", "pricing", "value",
+                    "specifications", "specs", "tech specs",
+                    "ease of use", "setup", "installation",
+                    "support", "customer service", "customer support",
+                    "automation", "customization", "integrations",
+                    "security", "privacy", "compliance",
+                    "mobile app", "platform", "dashboard",
+                    "performance", "design", "build quality",
+                    "rating", "review",
+                    "introduction", "conclusion",
+                    "alternatives", "competitors"
+                ];
+
                 while ((match = listRegex.exec(fullText)) !== null) {
                     const captured = match?.[1];
                     if (captured && captured.length < 100) {
                         const lower = captured.toLowerCase();
-                        if (!lower.includes("why it's good") &&
-                            !lower.includes("key features") && // structural
-                            !lower.includes("pros") &&
-                            !lower.includes("cons") &&
-                            !lower.includes("best for")) {
 
+                        // Check if the captured text contains any of the excluded terms
+                        // We check if the term is present at the START of the string or is the entire string
+                        // to avoid false positives (e.g. "Best for Nike" vs "Nike Best For Running")
+                        // Actually, most noise is "Features", "Why It's Great", etc. strict includes check is safer for noise reduction.
+                        const isExcluded = excludedTerms.some(term => lower.includes(term));
+
+                        if (!isExcluded) {
                             let cleanName = (captured.split(' - ')[0] || "").split(':')[0]?.trim() || "";
 
                             if (cleanName && !manualBrands.has(cleanName)) {
