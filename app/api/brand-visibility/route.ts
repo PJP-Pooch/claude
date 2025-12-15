@@ -95,7 +95,8 @@ export async function POST(req: NextRequest) {
                             // Clean up the brand name (remove extra details after ' - ' or ':')
                             const captured = match?.[1];
                             if (captured) {
-                                let cleanName = captured.split(' - ')[0].split(':')[0].trim();
+                                let cleanName = (captured.split(' - ')[0] || "").split(':')[0]?.trim() || "";
+                                if (!cleanName) continue;
 
                                 // If the result looks like a brand (not a generic term), add it
                                 brandEntities.push({
@@ -120,7 +121,8 @@ export async function POST(req: NextRequest) {
                                     !lower.includes("cons") &&
                                     !lower.includes("best for")) {
 
-                                    let cleanName = captured.split(' - ')[0].split(':')[0].trim();
+                                    let cleanName = (captured.split(' - ')[0] || "").split(':')[0]?.trim() || "";
+                                    if (!cleanName) continue;
 
                                     // Avoid duplicates from previous regex
                                     if (!brandEntities.find(e => e.title && e.title === cleanName)) {
