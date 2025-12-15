@@ -41,6 +41,7 @@ export default function BrandVisibilityPage() {
     const [prompts, setPrompts] = useState("");
     const [targetBrands, setTargetBrands] = useState("");
     const [location, setLocation] = useState("United States");
+    const [model, setModel] = useState("chat_gpt");
     const [apiLogin, setApiLogin] = useState("");
     const [apiPassword, setApiPassword] = useState("");
     const [loading, setLoading] = useState(false);
@@ -68,6 +69,7 @@ export default function BrandVisibilityPage() {
                 body: JSON.stringify({
                     prompts: promptList,
                     location,
+                    model,
                     login: apiLogin || undefined,
                     password: apiPassword || undefined
                 })
@@ -165,7 +167,7 @@ export default function BrandVisibilityPage() {
                             Brand Visibility Tracker
                         </h1>
                         <p className="text-lg text-gray-600 dark:text-gray-300 max-w-3xl">
-                            Analyze brand mentions and share of voice in AI-generated responses (ChatGPT).
+                            Analyze brand mentions and share of voice in AI-generated responses (ChatGPT, Gemini, Claude, Perplexity).
                             Identify competitors and authority sources across your topic clusters.
                         </p>
                     </div>
@@ -221,6 +223,22 @@ export default function BrandVisibilityPage() {
                                             <option value="Australia">Australia</option>
                                             <option value="Germany">Germany</option>
                                             <option value="France">France</option>
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            AI Model
+                                        </label>
+                                        <select
+                                            value={model}
+                                            onChange={(e) => setModel(e.target.value)}
+                                            className="block w-full rounded-lg border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-blue-500 focus:border-blue-500 p-3"
+                                        >
+                                            <option value="chat_gpt">ChatGPT</option>
+                                            <option value="gemini">Google Gemini</option>
+                                            <option value="claude">Anthropic Claude</option>
+                                            <option value="perplexity">Perplexity</option>
                                         </select>
                                     </div>
 
@@ -485,7 +503,7 @@ export default function BrandVisibilityPage() {
                                             )}
 
                                             <div className="mt-4 bg-gray-50 dark:bg-gray-900 p-4 rounded-md">
-                                                <p className="text-xs uppercase text-gray-500 mb-1 font-semibold">ChatGPT Response Snippet</p>
+                                                <p className="text-xs uppercase text-gray-500 mb-1 font-semibold">{model === 'chat_gpt' ? 'ChatGPT' : model.charAt(0).toUpperCase() + model.slice(1)} Response Snippet</p>
                                                 <p className="text-sm text-gray-700 dark:text-gray-300 font-mono whitespace-pre-wrap">
                                                     {result.text_snippet || "No text content available."}
                                                 </p>

@@ -13,7 +13,7 @@ interface BrandEntity {
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
-        const { prompts, location = "United States", language = "English", login, password, targetBrands } = body;
+        const { prompts, location = "United States", language = "English", login, password, targetBrands, model = "chat_gpt" } = body;
 
         if (!prompts || !Array.isArray(prompts) || prompts.length === 0) {
             return NextResponse.json({ error: "No prompts provided" }, { status: 400 });
@@ -21,6 +21,16 @@ export async function POST(req: NextRequest) {
 
         const locationCode = getLocationCode(location);
         const languageCode = getLanguageCode(language);
+
+        // Map model to DataForSEO endpoint
+        const modelEndpoints: Record<string, string> = {
+            "chat_gpt": "ai_optimization/chat_gpt/llm_scraper/live/advanced",
+            "gemini": "ai_optimization/gemini/llm_scraper/live/advanced",
+            "claude": "ai_optimization/claude/llm_scraper/live/advanced",
+            "perplexity": "ai_optimization/perplexity/llm_scraper/live/advanced"
+        };
+
+        const targetEndpoint = modelEndpoints[model] || modelEndpoints["chat_gpt"];
 
         const results = [];
         const aggregates = {
@@ -45,7 +55,7 @@ export async function POST(req: NextRequest) {
 
                 // Using the generic fetcher we added
                 const response = await fetchDataForSEO(
-                    'ai_optimization/chat_gpt/llm_scraper/live/advanced',
+                    targetEndpoint,
                     payload,
                     login,
                     password
@@ -60,18 +70,29 @@ export async function POST(req: NextRequest) {
                     // Extract data from valid results
                     for (const item of resultItems) {
                         // Concatenate text for context
-                        // The API might return 'markdown' or 'chat_gpt_text'.
-                        // Also check for 'items' array if the main object doesn't have the text directly.
-                        if (item.chat_gpt_text) {
-                            fullText += item.chat_gpt_text + "\n";
-                        } else if (item.markdown) {
+                        // The API might return 'markdown' or specific text fields like 'chat_gpt_text', 'gemini_text', etc.
+                        if (item.markdown) {
                             fullText += item.markdown + "\n";
+                        } else if (item.chat_gpt_text) {
+                            fullText += item.chat_gpt_text + "\n";
+                        } else if (item.gemini_text) {
+                            fullText += item.gemini_text + "\n";
+                        } else if (item.claude_text) {
+                            fullText += item.claude_text + "\n";
+                        } else if (item.perplexity_text) {
+                            fullText += item.perplexity_text + "\n";
+                        } else if (item.text) {
+                            fullText += item.text + "\n";
                         }
 
                         if (item.items && Array.isArray(item.items)) {
                             for (const subItem of item.items) {
                                 if (subItem.markdown) fullText += subItem.markdown + "\n";
                                 if (subItem.chat_gpt_text) fullText += subItem.chat_gpt_text + "\n";
+                                if (subItem.gemini_text) fullText += subItem.gemini_text + "\n";
+                                if (subItem.claude_text) fullText += subItem.claude_text + "\n";
+                                if (subItem.perplexity_text) fullText += subItem.perplexity_text + "\n";
+                                if (subItem.text) fullText += subItem.text + "\n";
                             }
                         }
 
