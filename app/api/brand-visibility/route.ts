@@ -228,27 +228,26 @@ export async function POST(req: NextRequest) {
                 });
 
                 aggregates.total_prompts++;
-            } // End if(response.tasks)
             } catch (error) {
-            console.error(`Error processing prompt "${prompt}":`, error);
-            results.push({
-                prompt: prompt,
-                status: "error",
-                error: error instanceof Error ? error.message : "Unknown error"
-            });
+                console.error(`Error processing prompt "${prompt}":`, error);
+                results.push({
+                    prompt: prompt,
+                    status: "error",
+                    error: error instanceof Error ? error.message : "Unknown error"
+                });
+            }
         }
-    }
 
         return NextResponse.json({
-        results,
-        aggregates
-    });
+            results,
+            aggregates
+        });
 
-} catch (error) {
-    console.error("API Error:", error);
-    return NextResponse.json(
-        { error: "Internal Server Error" },
-        { status: 500 }
-    );
-}
+    } catch (error) {
+        console.error("API Error:", error);
+        return NextResponse.json(
+            { error: "Internal Server Error" },
+            { status: 500 }
+        );
+    }
 }
