@@ -188,9 +188,10 @@ export default function ProductPriceMonitorPage() {
                             const productTitle = firstSeller?.details || firstSeller?.title || "Product Found";
 
                             // Use the URL from the API result if available (usually points to the product on Google Shopping)
-                            // Otherwise fallback to a search for the ID
-                            // We use 'q' parameter instead of 'gid:' as it is more robust if the ID is not strictly a GID
-                            const googleShoppingUrl = productInfo?.url || `https://www.google.com/search?tbm=shop&q=${productId}&gl=${countryCode}&hl=en`;
+                            // Construct a reliable Google Shopping URL using the Product ID
+                            // The API sometimes returns a generic search URL or one with udm=28 (image search)
+                            // We prefer the direct shopping/product endpoint
+                            const googleShoppingUrl = `https://www.google.com/shopping/product/${productId}?gl=${countryCode}&hl=en`;
 
                             const syntheticProduct: ProductResult = {
                                 product_id: productId,
@@ -866,7 +867,7 @@ e.g., 12693300312433459747
                                 <div>
                                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Results</h2>
                                     <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">
-                                        {searchType === 'brand' && (
+                                        {(searchType === 'brand' || searchType === 'keyword') && (
                                             <span className="block mt-1 text-xs text-gray-500">
                                                 {selectedProducts.size} selected for bulk action
                                             </span>
@@ -913,15 +914,15 @@ e.g., 12693300312433459747
                                     return (
                                         <div key={product.product_id || index} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden relative group">
 
-                                            <button
+                                            <div
                                                 onClick={(e) => {
                                                     // note: if checkbox is clicked, we toggled specific selection, handled by stopPropagation
                                                     handleSelectProduct(product);
                                                 }}
-                                                className="w-full px-6 py-4 bg-gray-50 dark:bg-gray-900/50 flex justify-between items-start hover:bg-gray-100 dark:hover:bg-gray-900/70 transition-colors text-left"
+                                                className="w-full px-6 py-4 bg-gray-50 dark:bg-gray-900/50 flex justify-between items-start hover:bg-gray-100 dark:hover:bg-gray-900/70 transition-colors text-left cursor-pointer select-text"
                                             >
                                                 <div className="flex items-center gap-3 mr-4">
-                                                    {searchType === 'brand' && (
+                                                    {(searchType === 'brand' || searchType === 'keyword') && (
                                                         <input
                                                             type="checkbox"
                                                             checked={product.product_id ? selectedProducts.has(product.product_id) : false}
@@ -983,7 +984,7 @@ e.g., 12693300312433459747
                                                             />
                                                         )}
                                                         <div className="flex-1">
-                                                            <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2">
+                                                            <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2 selection:bg-blue-200 dark:selection:bg-blue-800">
                                                                 {product.title}
                                                             </h3>
                                                             <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600 dark:text-gray-400">
@@ -992,7 +993,7 @@ e.g., 12693300312433459747
                                                                         {product.shop_name}
                                                                     </span>
                                                                 )}
-                                                                {product.product_rating && (
+                                                                {product.product_rating && (product.product_rating.votes_count || 0) > 0 && (
                                                                     <span>
                                                                         ⭐ {product.product_rating.value} ({product.product_rating.votes_count} reviews)
                                                                     </span>
@@ -1064,7 +1065,7 @@ e.g., 12693300312433459747
                                                 >
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                                 </svg>
-                                            </button>
+                                            </div>
 
                                             {/* Seller Information */}
                                             {isExpanded && (

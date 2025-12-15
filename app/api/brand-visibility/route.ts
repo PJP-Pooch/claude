@@ -4,10 +4,16 @@ import { fetchDataForSEO, getLocationCode, getLanguageCode } from '@/lib/datafor
 
 export const maxDuration = 60; // Extend timeout for Vercel/Next.js
 
+interface BrandEntity {
+    title: string;
+    category?: string;
+    urls?: string[];
+}
+
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
-        const { prompts, location = "United States", language = "English", login, password } = body;
+        const { prompts, location = "United States", language = "English", login, password, targetBrands } = body;
 
         if (!prompts || !Array.isArray(prompts) || prompts.length === 0) {
             return NextResponse.json({ error: "No prompts provided" }, { status: 400 });
@@ -31,8 +37,8 @@ export async function POST(req: NextRequest) {
 
             try {
                 const payload = [{
-                    model: "gpt-4o", // Defaulting to a modern model
-                    prompt: prompt,
+                    // model: "gpt-4o", // Defaulting to a modern model
+                    keyword: prompt,
                     location_code: locationCode,
                     language_code: languageCode,
                 }];
@@ -45,7 +51,7 @@ export async function POST(req: NextRequest) {
                     password
                 );
 
-                let brandEntities: any[] = [];
+                let brandEntities: BrandEntity[] = [];
                 let fullText = "";
 
                 if (response.tasks && response.tasks[0]?.result) {
@@ -53,8 +59,21 @@ export async function POST(req: NextRequest) {
 
                     // Extract data from valid results
                     for (const item of resultItems) {
-                        // Concatenate text for context if needed
-                        if (item.chat_gpt_text) fullText += item.chat_gpt_text + "\n";
+                        // Concatenate text for context
+                        // The API might return 'markdown' or 'chat_gpt_text'.
+                        // Also check for 'items' array if the main object doesn't have the text directly.
+                        if (item.chat_gpt_text) {
+                            fullText += item.chat_gpt_text + "\n";
+                        } else if (item.markdown) {
+                            fullText += item.markdown + "\n";
+                        }
+
+                        if (item.items && Array.isArray(item.items)) {
+                            for (const subItem of item.items) {
+                                if (subItem.markdown) fullText += subItem.markdown + "\n";
+                                if (subItem.chat_gpt_text) fullText += subItem.chat_gpt_text + "\n";
+                            }
+                        }
 
                         // Extract brand entities
                         if (item.brand_entities) {
@@ -64,54 +83,121 @@ export async function POST(req: NextRequest) {
                 }
 
                 // Process entities for this prompt
-                const brandsInThisPrompt = new Set();
+                // Manual Fallback for Brand Detection
+                // If API returns no brands, search for common ChatGPT listing patterns
+                if (brandEntities.length === 0 && fullText) {
+                    // Pattern 1: Bold headers in numeric lists (e.g. "### 1. **Hill's Science Diet**")
+                    // Matches: ### N. **Brand Name** or **N. Brand Name**
+                    const headerRegex = /###\s*\d+\.\s*\*\*(.*?)\*\*/g;
+                    let match;
+                    while ((match = headerRegex.exec(fullText)) !== null) {
+                        if (match && match[1] && match[1].length < 100) { // Safety check on length
+                            // Clean up the brand name (remove extra details after ' - ' or ':')
+                            const captured = match && match[1];
+                            if (captured) {
+                                let cleanName = captured.split(' - ')[0].split(':')[0].trim();
 
-                brandEntities.forEach(entity => {
-                    if (entity.title) {
-                        const brandName = entity.title;
-
-                        // Count for aggregation (unique per prompt? or total mentions? 
-                        // "Count how often each brand is mentioned" usually means total mentions across all prompts.
-                        // But if a brand is mentioned 5 times in ONE prompt, is that 5 or 1?
-                        // Usually share of voice is based on "presence in response". 
-                        // I'll count it once per prompt for "Share of Voice" calculation to avoid skewing by repetition in one text.
-                        // However, simply incrementing aggregated counts here.
-
-                        if (!aggregates.brand_counts[brandName]) {
-                            aggregates.brand_counts[brandName] = 0;
-                            aggregates.brand_categories[brandName] = entity.category || "Unknown";
-                            aggregates.associated_urls[brandName] = [];
+                                // If the result looks like a brand (not a generic term), add it
+                                brandEntities.push({
+                                    title: cleanName,
+                                    category: "Manual Extraction",
+                                    urls: []
+                                });
+                            }
                         }
 
-                        // Collect URLs
-                        if (entity.urls && Array.isArray(entity.urls)) {
-                            // Ensure the array exists (though handled in init block above, explicit check satisfies TS)
-                            const currentUrls = aggregates.associated_urls[brandName] || [];
-                            aggregates.associated_urls[brandName] = currentUrls;
+                        // Pattern 2: Bold list items (e.g. "- **Royal Canin**:")
+                        // We must filter out common structural headers like "Why it's good", "Key Features"
+                        const listRegex = /-\s*\*\*(.*?)\*\*/g;
+                        while ((match = listRegex.exec(fullText)) !== null) {
+                            const captured = match && match[1];
+                            if (captured && captured.length < 100) {
+                                const lower = captured.toLowerCase();
+                                // Exclude common description keys found in your example
+                                if (!lower.includes("why it's good") &&
+                                    !lower.includes("key features") &&
+                                    !lower.includes("pros") &&
+                                    !lower.includes("cons") &&
+                                    !lower.includes("best for")) {
 
-                            entity.urls.forEach((u: string) => {
-                                if (!currentUrls.includes(u)) {
-                                    currentUrls.push(u);
+                                    let cleanName = captured.split(' - ')[0].split(':')[0].trim();
+
+                                    // Avoid duplicates from previous regex
+                                    if (!brandEntities.find(e => e.title && e.title === cleanName)) {
+                                        brandEntities.push({
+                                            title: cleanName,
+                                            category: "Manual Extraction",
+                                            urls: []
+                                        });
+                                    }
                                 }
-                            });
+                            }
                         }
 
-                        // We only count a brand once per prompt for the aggregate stats to represent "Prompt Coverage"
-                        // Or should we count every mention? "Share of Voice" usually implies frequency.
-                        // Let's count every entity occurrence provided by the API.
-                        aggregates.brand_counts[brandName]++;
                     }
-                });
 
-                results.push({
-                    prompt: prompt,
-                    status: "success",
-                    brand_entities: brandEntities,
-                    text_snippet: fullText.substring(0, 200) + "..."
-                });
+                    // Check for User-defined Target Brands (Always check to supplement API results)
+                    if (targetBrands && typeof targetBrands === 'string') {
+                        const targets = targetBrands.split(',').map((t: string) => t.trim()).filter((t: string) => t.length > 0);
+                        targets.forEach((target: string) => {
+                            const regex = new RegExp(`\\b${target.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+                            if (regex.test(fullText)) {
+                                // Only add if not already caught
+                                const existingEntity = brandEntities.find(e => e.title && e.title.toLowerCase() === target.toLowerCase());
+                                if (!existingEntity) {
+                                    brandEntities.push({
+                                        title: target,
+                                        category: "Target Brand Match",
+                                        urls: []
+                                    });
+                                }
+                            }
+                        });
+                    }
 
-                aggregates.total_prompts++;
+                    const brandsInThisPrompt = new Set<string>();
+                    brandEntities.forEach(entity => {
+                        if (entity.title) {
+                            const brandName = entity.title;
 
+                            // Prevent double counting the same brand in a single prompt
+                            if (brandsInThisPrompt.has(brandName)) return;
+                            brandsInThisPrompt.add(brandName);
+
+                            if (!aggregates.brand_counts[brandName]) {
+                                aggregates.brand_counts[brandName] = 0;
+                                aggregates.brand_categories[brandName] = entity.category || "Unknown";
+                                aggregates.associated_urls[brandName] = [];
+                            }
+                            if (entity.urls && Array.isArray(entity.urls)) {
+                                const currentUrls = aggregates.associated_urls[brandName] || [];
+                                aggregates.associated_urls[brandName] = currentUrls;
+                                entity.urls.forEach((u: string) => {
+                                    if (!currentUrls.includes(u)) {
+                                        currentUrls.push(u);
+                                    }
+                                });
+                            }
+                            aggregates.brand_counts[brandName]++;
+                        }
+                    });
+
+                    // Generate snippet or debug info
+                    let snippet = fullText;
+                    if (!snippet.trim()) {
+                        const taskInfo = response.tasks?.[0];
+                        snippet = `No text content returned.\nDebug Info:\nStatus: ${taskInfo?.status_code} (${taskInfo?.status_message})\nResult Count: ${taskInfo?.result_count}\nCost: ${taskInfo?.cost}\n\nFull Task Response: ${JSON.stringify(taskInfo, null, 2)}`;
+                    }
+
+                    results.push({
+                        prompt: prompt,
+                        status: (brandEntities.length === 0 && !fullText.trim()) ? "error" : "success",
+                        brand_entities: brandEntities,
+                        text_snippet: snippet
+                    });
+
+                    aggregates.total_prompts++;
+                } // End if(response.tasks)
             } catch (error) {
                 console.error(`Error processing prompt "${prompt}":`, error);
                 results.push({
