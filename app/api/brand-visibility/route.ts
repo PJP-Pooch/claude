@@ -241,9 +241,10 @@ export async function POST(req: NextRequest) {
 
                         // Collect URLs from sources and annotations for these filtered brands
                         if (!aggregates.associated_urls[brand]) aggregates.associated_urls[brand] = [];
+                        const brandUrls = aggregates.associated_urls[brand];
                         [...extractedSources, ...extractedAnnotations].forEach(s => {
-                            if (s.url && !aggregates.associated_urls[brand].includes(s.url)) {
-                                aggregates.associated_urls[brand].push(s.url);
+                            if (s.url && brandUrls && !brandUrls.includes(s.url)) {
+                                brandUrls.push(s.url);
                             }
                         });
                     }
