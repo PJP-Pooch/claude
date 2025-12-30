@@ -107,7 +107,7 @@ const Form = ({ onSubmit, isLoading }: FormProps) => {
               Test with realistic sample data showing <strong>3 distinct clusters, AI overviews, and cannibalization scenarios</strong>. No API keys needed!
             </p>
             <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
-              💡 Enable this, add a query + URL, then click "Start Analysis" to see instant results
+              💡 Enable this, add a query + URL, then click &quot;Start Analysis&quot; to see instant results
             </p>
           </div>
         </label>

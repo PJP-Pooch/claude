@@ -123,7 +123,7 @@ export default function SeasonalityInput({ onSubmit, isLoading, initialValues }:
                         </div>
                     </div>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                        Optional: Add category with pipe, e.g. "keyword | category"
+                        Optional: Add category with pipe, e.g. &quot;keyword | category&quot;
                     </p>
                     <textarea
                         value={input}

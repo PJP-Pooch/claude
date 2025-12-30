@@ -1,0 +1,79 @@
+
+const https = require('https');
+const fs = require('fs');
+
+function postData(endpoint, data, login, password) {
+    return new Promise((resolve, reject) => {
+        const auth = Buffer.from(`${login}:${password}`).toString('base64');
+        const options = {
+            hostname: 'api.dataforseo.com',
+            path: `/v3/${endpoint}`,
+            method: 'POST',
+            headers: {
+                'Authorization': `Basic ${auth}`,
+                'Content-Type': 'application/json'
+            }
+        };
+
+        const req = https.request(options, (res) => {
+            let body = '';
+            res.on('data', (chunk) => body += chunk);
+            res.on('end', () => {
+                try {
+                    const parsed = JSON.parse(body);
+                    resolve(parsed);
+                } catch (e) {
+                    resolve({ error: body });
+                }
+            });
+        });
+        req.on('error', (e) => reject(e));
+        req.write(JSON.stringify(data));
+        req.end();
+    });
+}
+
+function getCreds() {
+    let login = process.env.DATAFORSEO_LOGIN;
+    let password = process.env.DATAFORSEO_PASSWORD;
+    if (!login || !password) {
+        try {
+            const envData = fs.readFileSync('.env', 'utf8');
+            const lines = envData.split('\n');
+            login = lines.find(l => l.trim().startsWith('DATAFORSEO_LOGIN='))?.split('=')[1].trim().replace(/"/g, '');
+            password = lines.find(l => l.trim().startsWith('DATAFORSEO_PASSWORD='))?.split('=')[1].trim().replace(/"/g, '');
+        } catch (e) { }
+    }
+    return { login, password };
+}
+
+async function run() {
+    const { login, password } = getCreds();
+    if (!login) return;
+
+    console.log("--- Probing Scraper ---");
+
+    // Test 1: llm_scraper/live (no advanced)
+    try {
+        console.log("\n1. llm_scraper/live");
+        const res = await postData('ai_optimization/gemini/llm_scraper/live', [{
+            keyword: "Hello",
+            location_code: 2840,
+            language_code: "en"
+        }], login, password);
+        console.log("Result:", JSON.stringify(res.tasks?.[0] || res, null, 2));
+    } catch (e) { console.error(e); }
+
+    // Test 2: llm_scraper/task_post
+    try {
+        console.log("\n2. llm_scraper/task_post");
+        const res = await postData('ai_optimization/gemini/llm_scraper/task_post', [{
+            keyword: "Hello",
+            location_code: 2840,
+            language_code: "en"
+        }], login, password);
+        console.log("Result:", JSON.stringify(res.tasks?.[0] || res, null, 2));
+    } catch (e) { console.error(e); }
+}
+
+run();

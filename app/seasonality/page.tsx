@@ -342,7 +342,7 @@ export default function SeasonalityPage() {
                                     </div>
                                     <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">Ready to Analyze</h3>
                                     <p className="text-gray-600 dark:text-gray-400">
-                                        Fill in the form and click "Get Seasonal Search Volumes" to begin.
+                                        Fill in the form and click &quot;Get Seasonal Search Volumes&quot; to begin.
                                     </p>
                                 </div>
                             )}

@@ -13,7 +13,7 @@ interface BrandEntity {
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
-        const { prompts, location = "United States", language = "English", login, password, targetBrands, model = "chat_gpt" } = body;
+        const { prompts, location = "United States", language = "English", login, password, targetBrands, competitorBrands, model = "chat_gpt" } = body;
 
         if (!prompts || !Array.isArray(prompts) || prompts.length === 0) {
             return NextResponse.json({ error: "No prompts provided" }, { status: 400 });
@@ -25,12 +25,12 @@ export async function POST(req: NextRequest) {
         // Map model to DataForSEO endpoint
         const modelEndpoints: Record<string, string> = {
             "chat_gpt": "ai_optimization/chat_gpt/llm_scraper/live/advanced",
-            "gemini": "ai_optimization/gemini/llm_scraper/live/advanced",
-            "claude": "ai_optimization/claude/llm_scraper/live/advanced",
-            "perplexity": "ai_optimization/perplexity/llm_scraper/live/advanced"
+            "gemini": "ai_optimization/gemini/llm_responses/live",
+            "claude": "ai_optimization/claude/llm_responses/live",
+            "perplexity": "ai_optimization/perplexity/llm_responses/live"
         };
 
-        const targetEndpoint = modelEndpoints[model] || modelEndpoints["chat_gpt"];
+        const targetEndpoint = modelEndpoints[model] || "ai_optimization/chat_gpt/llm_scraper/live/advanced";
 
         const results = [];
         const aggregates = {
@@ -40,18 +40,40 @@ export async function POST(req: NextRequest) {
             associated_urls: {} as Record<string, string[]> // Collect URLs per brand
         };
 
+        // Specific model names to use for LLM Responses API
+        const specificModelNames: Record<string, string> = {
+            "gemini": "gemini-2.0-flash",
+            "claude": "claude-3-7-sonnet-latest",
+            "perplexity": "sonar-pro"
+        };
+
         // Process prompts sequentially to ensure we don't hit rate limits abruptly
         // and can handle failures gracefully per prompt
         for (const prompt of prompts) {
             if (!prompt.trim()) continue;
 
             try {
-                const payload = [{
-                    // model: "gpt-4o", // Defaulting to a modern model
-                    keyword: prompt,
-                    location_code: locationCode,
-                    language_code: languageCode,
-                }];
+                let payload: any[] = []; // Use generic type to allow different structures
+
+                if (model === "chat_gpt") {
+                    // LLM Scraper Payload (ChatGPT)
+                    payload = [{
+                        keyword: prompt,
+                        location_code: locationCode,
+                        language_code: languageCode,
+                        web_search: true,
+                        force_web_search: true
+                    }];
+                } else {
+                    // LLM Responses Payload (Gemini, Claude, Perplexity)
+                    payload = [{
+                        model_name: specificModelNames[model] || model,
+                        user_prompt: prompt,
+                        location_code: locationCode,
+                        language_code: languageCode,
+                        web_search: true
+                    }];
+                }
 
                 // Using the generic fetcher we added
                 const response = await fetchDataForSEO(
@@ -61,6 +83,9 @@ export async function POST(req: NextRequest) {
                     password
                 );
 
+                let extractedSources: any[] = [];
+                let extractedAnnotations: any[] = [];
+                let extractedFanOutQueries: string[] = [];
                 let brandEntities: BrandEntity[] = [];
                 let fullText = "";
 
@@ -69,8 +94,8 @@ export async function POST(req: NextRequest) {
 
                     // Extract data from valid results
                     for (const item of resultItems) {
-                        // Concatenate text for context
-                        // The API might return 'markdown' or specific text fields like 'chat_gpt_text', 'gemini_text', etc.
+                        // 1. Extract Text content (handles both Scraper and Responses API)
+                        // Use prioritized selection to avoid duplication
                         if (item.markdown) {
                             fullText += item.markdown + "\n";
                         } else if (item.chat_gpt_text) {
@@ -83,22 +108,35 @@ export async function POST(req: NextRequest) {
                             fullText += item.perplexity_text + "\n";
                         } else if (item.text) {
                             fullText += item.text + "\n";
-                        }
-
-                        if (item.items && Array.isArray(item.items)) {
+                        } else if (item.items && Array.isArray(item.items)) {
                             for (const subItem of item.items) {
-                                if (subItem.markdown) fullText += subItem.markdown + "\n";
-                                if (subItem.chat_gpt_text) fullText += subItem.chat_gpt_text + "\n";
-                                if (subItem.gemini_text) fullText += subItem.gemini_text + "\n";
-                                if (subItem.claude_text) fullText += subItem.claude_text + "\n";
-                                if (subItem.perplexity_text) fullText += subItem.perplexity_text + "\n";
-                                if (subItem.text) fullText += subItem.text + "\n";
+                                // Sub-item level text
+                                if (subItem.markdown) {
+                                    fullText += subItem.markdown + "\n";
+                                } else if (subItem.chat_gpt_text) {
+                                    fullText += subItem.chat_gpt_text + "\n";
+                                } else if (subItem.gemini_text) {
+                                    fullText += subItem.gemini_text + "\n";
+                                } else if (subItem.claude_text) {
+                                    fullText += subItem.claude_text + "\n";
+                                } else if (subItem.perplexity_text) {
+                                    fullText += subItem.perplexity_text + "\n";
+                                } else if (subItem.text) {
+                                    fullText += subItem.text + "\n";
+                                }
+
+                                // Deeply nested sections (Gemini/Claude Responses API)
+                                // Only add section text if we didn't already get it from a subItem level field
+                                if (!(subItem.markdown || subItem.text || subItem.chat_gpt_text) && subItem.sections && Array.isArray(subItem.sections)) {
+                                    for (const section of subItem.sections) {
+                                        if (section.text) fullText += section.text + "\n";
+                                    }
+                                }
                             }
                         }
 
-                        // Extract brand entities
+                        // 2. Extract Brand Entities (Scraper API mainly)
                         if (item.brand_entities) {
-                            // Safely map API entities to our interface, handling null URLs
                             const apiEntities = item.brand_entities.map((e: any) => ({
                                 title: e.title,
                                 category: e.category,
@@ -106,151 +144,108 @@ export async function POST(req: NextRequest) {
                             }));
                             brandEntities = [...brandEntities, ...apiEntities];
                         }
-                    }
-                }
 
-                // Process entities for this prompt
-                // Manual Fallback/Enhancement for Brand Detection
-                // Always run manual extraction to supplement API results
+                        // 3. Extract Sources (both Scraper and Responses API)
+                        if (item.sources && Array.isArray(item.sources)) {
+                            const mappedSources = item.sources.map((s: any) => ({
+                                title: s.title,
+                                url: s.url,
+                                domain: s.domain,
+                                source_name: s.source_name
+                            }));
+                            extractedSources = [...extractedSources, ...mappedSources];
+                        }
 
-                // Pattern 1: Bold headers
-                // Support formats: 
-                // ### 1. **Brand** (Original)
-                // ### **1. Brand** (User Case)
-                // **1. Brand** (Plain bold list)
+                        // Annotations can be on top level, inside items, or inside sections
+                        const processAnnotations = (annArray: any[]) => {
+                            return annArray.map((s: any) => {
+                                let domain = undefined;
+                                if (s.url) {
+                                    try {
+                                        domain = new URL(s.url).hostname;
+                                    } catch (e) {
+                                        // Ignore invalid URLs
+                                    }
+                                }
+                                return {
+                                    title: s.title,
+                                    url: s.url,
+                                    domain: domain,
+                                    source_name: "Annotation"
+                                };
+                            });
+                        };
 
-                // Unified Regex for Headers:
-                // Looks for:
-                // 1. Optional ###
-                // 2. Space
-                // 3. Optional ** (start bold)
-                // 4. Number + dot (e.g. 1.)
-                // 5. Space
-                // 6. Optional ** (end number bold or start title bold)
-                // 7. Capture Group (The Brand)
-                // 8. ** (closing bold)
+                        if (item.annotations && Array.isArray(item.annotations)) {
+                            extractedAnnotations = [...extractedAnnotations, ...processAnnotations(item.annotations)];
+                        }
 
-                // Simplified strategy: extract anything within ** ** that looks like a title item
-
-                // Regex A: Standard Numbered Headers with Bold Brand: ### 1. **Brand**
-                const headerRegexA = /###\s*\d+\.\s*\*\*(.*?)\*\*/g;
-
-                // Regex B: Bold Numbered Headers: ### **1. Brand** or **1. Brand**
-                const headerRegexB = /(?:###\s*)?\*\*\d+\.\s*(.*?)\*\*/g;
-
-                let match;
-                const manualBrands = new Set<string>(); // avoid dups in this pass
-
-                // Helper to process match
-                const processMatch = (m: RegExpExecArray | null) => {
-                    if (m && m[1] && m[1].length < 100) {
-                        let cleanName = (m[1].split(' - ')[0] || "").split(':')[0]?.trim() || "";
-                        if (cleanName && !manualBrands.has(cleanName)) {
-                            manualBrands.add(cleanName);
-                            // Add if not already in main list
-                            if (!brandEntities.find(e => e.title === cleanName)) {
-                                brandEntities.push({
-                                    title: cleanName,
-                                    category: "Manual Extraction",
-                                    urls: []
-                                });
+                        if (item.items && Array.isArray(item.items)) {
+                            for (const subItem of item.items) {
+                                if (subItem.annotations && Array.isArray(subItem.annotations)) {
+                                    extractedAnnotations = [...extractedAnnotations, ...processAnnotations(subItem.annotations)];
+                                }
+                                if (subItem.sections && Array.isArray(subItem.sections)) {
+                                    for (const section of subItem.sections) {
+                                        if (section.annotations && Array.isArray(section.annotations)) {
+                                            extractedAnnotations = [...extractedAnnotations, ...processAnnotations(section.annotations)];
+                                        }
+                                    }
+                                }
                             }
+                        }
+
+                        // 4. Extract Fan-out queries
+                        if (item.fan_out_queries && Array.isArray(item.fan_out_queries)) {
+                            extractedFanOutQueries = [...extractedFanOutQueries, ...item.fan_out_queries];
                         }
                     }
                 }
 
-                while ((match = headerRegexA.exec(fullText)) !== null) processMatch(match);
-                while ((match = headerRegexB.exec(fullText)) !== null) processMatch(match);
-
-                // Pattern 2: Bold list items (e.g. "- **Royal Canin**:")
-                const listRegex = /-\s*\*\*(.*?)\*\*/g;
-
-                // Comprehensive list of generic terms to exclude from manual brand extraction
-                const excludedTerms = [
-                    "features", "key features", "best for", "ideal for", "why it's", "why we like", "why it's great",
-                    "pros", "cons", "verdict", "summary", "bottom line",
-                    "price", "cost", "pricing", "value",
-                    "specifications", "specs", "tech specs",
-                    "ease of use", "setup", "installation",
-                    "support", "customer service", "customer support",
-                    "automation", "customization", "integrations",
-                    "security", "privacy", "compliance",
-                    "mobile app", "platform", "dashboard",
-                    "performance", "design", "build quality",
-                    "rating", "review",
-                    "introduction", "conclusion",
-                    "alternatives", "competitors"
+                // Manual extraction based on User-defined Target and Competitor Brands
+                // We no longer rely on brand_entities for the analysis aggregates.
+                const allTrackingBrands = [
+                    ...(targetBrands ? targetBrands.split(',').map((t: string) => t.trim()).filter((t: string) => t.length > 0) : []),
+                    ...(competitorBrands ? competitorBrands.split(',').map((t: string) => t.trim()).filter((t: string) => t.length > 0) : [])
                 ];
 
-                while ((match = listRegex.exec(fullText)) !== null) {
-                    const captured = match?.[1];
-                    if (captured && captured.length < 100) {
-                        const lower = captured.toLowerCase();
+                allTrackingBrands.forEach((brand: string) => {
+                    const escapedBrand = brand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    // Improved regex to handle possessives like "Nike's" or plural-ish forms
+                    const regex = new RegExp(`\\b${escapedBrand}(?:'s|s)?\\b`, 'gi');
+                    const matches = fullText.match(regex);
 
-                        // Check if the captured text contains any of the excluded terms
-                        // We check if the term is present at the START of the string or is the entire string
-                        // to avoid false positives (e.g. "Best for Nike" vs "Nike Best For Running")
-                        // Actually, most noise is "Features", "Why It's Great", etc. strict includes check is safer for noise reduction.
-                        const isExcluded = excludedTerms.some(term => lower.includes(term));
+                    if (matches) {
+                        const count = matches.length;
+                        aggregates.brand_counts[brand] = (aggregates.brand_counts[brand] || 0) + count;
 
-                        if (!isExcluded) {
-                            let cleanName = (captured.split(' - ')[0] || "").split(':')[0]?.trim() || "";
+                        // Categorize as Target or Competitor for UI clarity
+                        const isTarget = targetBrands?.split(',').map((t: string) => t.trim().toLowerCase()).includes(brand.toLowerCase());
+                        aggregates.brand_categories[brand] = isTarget ? "Your Brand" : "Competitor";
 
-                            if (cleanName && !manualBrands.has(cleanName)) {
-                                manualBrands.add(cleanName);
-                                if (!brandEntities.find(e => e.title === cleanName)) {
-                                    brandEntities.push({
-                                        title: cleanName,
-                                        category: "Manual Extraction",
-                                        urls: []
-                                    });
-                                }
-                            }
-                        }
-                    }
-                }      // Check for User-defined Target Brands (Always check to supplement API results)
-                if (targetBrands && typeof targetBrands === 'string') {
-                    const targets = targetBrands.split(',').map((t: string) => t.trim()).filter((t: string) => t.length > 0);
-                    targets.forEach((target: string) => {
-                        const regex = new RegExp(`\\b${target.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
-                        if (regex.test(fullText)) {
-                            // Only add if not already caught
-                            const existingEntity = brandEntities.find(e => e.title && e.title.toLowerCase() === target.toLowerCase());
-                            if (!existingEntity) {
-                                brandEntities.push({
-                                    title: target,
-                                    category: "Target Brand Match",
-                                    urls: []
-                                });
-                            }
-                        }
-                    });
-                }
+                        // Normalization: Add manually detected brands to the UI entity list
+                        // This makes Gemini/Claude look just like the ChatGPT Scraper results
+                        const brandLower = brand.toLowerCase();
+                        let existingEntity = brandEntities.find(e => e.title.toLowerCase() === brandLower);
 
-                const brandsInThisPrompt = new Set<string>();
-                brandEntities.forEach(entity => {
-                    if (entity.title) {
-                        const brandName = entity.title;
-
-                        // Prevent double counting the same brand in a single prompt
-                        if (brandsInThisPrompt.has(brandName)) return;
-                        brandsInThisPrompt.add(brandName);
-
-                        if (!aggregates.brand_counts[brandName]) {
-                            aggregates.brand_counts[brandName] = 0;
-                            aggregates.brand_categories[brandName] = entity.category || "Unknown";
-                            aggregates.associated_urls[brandName] = [];
-                        }
-                        if (entity.urls && Array.isArray(entity.urls)) {
-                            const currentUrls = aggregates.associated_urls[brandName] || [];
-                            aggregates.associated_urls[brandName] = currentUrls;
-                            entity.urls.forEach((u: string) => {
-                                if (!currentUrls.includes(u)) {
-                                    currentUrls.push(u);
-                                }
+                        if (!existingEntity) {
+                            brandEntities.push({
+                                title: brand,
+                                category: aggregates.brand_categories[brand],
+                                urls: []
                             });
+                        } else if (!existingEntity.category) {
+                            // Supplement the AI's entity with our specific category if it was missing
+                            existingEntity.category = aggregates.brand_categories[brand];
                         }
-                        aggregates.brand_counts[brandName]++;
+
+                        // Collect URLs from sources and annotations for these filtered brands
+                        if (!aggregates.associated_urls[brand]) aggregates.associated_urls[brand] = [];
+                        [...extractedSources, ...extractedAnnotations].forEach(s => {
+                            if (s.url && !aggregates.associated_urls[brand].includes(s.url)) {
+                                aggregates.associated_urls[brand].push(s.url);
+                            }
+                        });
                     }
                 });
 
@@ -264,8 +259,11 @@ export async function POST(req: NextRequest) {
                 results.push({
                     prompt: prompt,
                     status: (brandEntities.length === 0 && !fullText.trim()) ? "error" : "success",
-                    brand_entities: brandEntities,
-                    text_snippet: snippet
+                    brand_entities: brandEntities, // Still return for UI display
+                    text_snippet: snippet,
+                    sources: extractedSources,
+                    annotations: extractedAnnotations,
+                    fan_out_queries: extractedFanOutQueries
                 });
 
                 aggregates.total_prompts++;
