@@ -1,8 +1,8 @@
 // Test script to fetch DataForSEO results
 // Using native fetch (Node.js 18+)
 
-const DATAFORSEO_LOGIN = 'phillip@poochandmutt.com';
-const DATAFORSEO_PASSWORD = '4830e8936f8a9eae';
+const DATAFORSEO_LOGIN = process.env.DATAFORSEO_LOGIN;
+const DATAFORSEO_PASSWORD = process.env.DATAFORSEO_PASSWORD;
 const KEYWORD = 'benefits of salmon oil for dogs';
 const LOCATION_CODE = 2826; // United Kingdom
 const LANGUAGE_CODE = 'en';

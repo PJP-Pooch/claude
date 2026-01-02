@@ -3,8 +3,8 @@ const https = require('https');
 const fs = require('fs');
 
 async function dumpChatGPTScraper() {
-    const login = 'phillip@poochandmutt.com';
-    const password = '4830e8936f8a9eae';
+    const login = process.env.DATAFORSEO_LOGIN;
+    const password = process.env.DATAFORSEO_PASSWORD;
     const prompt = 'Best running shoes for men';
 
     const payload = [{
