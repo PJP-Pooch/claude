@@ -47,6 +47,45 @@ export async function POST(req: NextRequest) {
             "perplexity": "sonar-pro"
         };
 
+        const countryIsoMap: Record<string, string> = {
+            "United States": "US",
+            "United Kingdom": "GB",
+            "Canada": "CA",
+            "Australia": "AU",
+            "Germany": "DE",
+            "France": "FR",
+            "Spain": "ES",
+            "Italy": "IT",
+            "Netherlands": "NL"
+        };
+
+        // Extraction Helpers
+        const processSources = (srcArray: any[]) => {
+            if (!Array.isArray(srcArray)) return [];
+            return srcArray.map((s: any) => ({
+                title: s.title,
+                url: s.url,
+                domain: s.domain,
+                source_name: s.source_name
+            }));
+        };
+
+        const processAnnotations = (annArray: any[]) => {
+            if (!Array.isArray(annArray)) return [];
+            return annArray.map((s: any) => {
+                let domain = undefined;
+                if (s.url) {
+                    try { domain = new URL(s.url).hostname; } catch (e) { }
+                }
+                return {
+                    title: s.title,
+                    url: s.url,
+                    domain: domain,
+                    source_name: s.source_name || "Annotation"
+                };
+            });
+        };
+
         // Process prompts sequentially to ensure we don't hit rate limits abruptly
         // and can handle failures gracefully per prompt
         for (const prompt of prompts) {
@@ -66,13 +105,22 @@ export async function POST(req: NextRequest) {
                     }];
                 } else {
                     // LLM Responses Payload (Gemini, Claude, Perplexity)
-                    payload = [{
+                    const item: any = {
                         model_name: specificModelNames[model] || model,
                         user_prompt: prompt,
                         location_code: locationCode,
                         language_code: languageCode,
                         web_search: true
-                    }];
+                    };
+
+                    // Model specific overrides
+                    if (model === "claude") {
+                        item.force_web_search = true;
+                    } else if (model === "perplexity") {
+                        item.web_search_country_iso_code = countryIsoMap[location] || "US";
+                    }
+
+                    payload = [item];
                 }
 
                 // Using the generic fetcher we added
@@ -92,50 +140,55 @@ export async function POST(req: NextRequest) {
                 if (response.tasks && response.tasks[0]?.result) {
                     const resultItems = response.tasks[0].result;
 
-                    // Extract data from valid results
-                    for (const item of resultItems) {
-                        // 1. Extract Text content (handles both Scraper and Responses API)
-                        // Use prioritized selection to avoid duplication
-                        if (item.markdown) {
-                            fullText += item.markdown + "\n";
-                        } else if (item.chat_gpt_text) {
-                            fullText += item.chat_gpt_text + "\n";
-                        } else if (item.gemini_text) {
-                            fullText += item.gemini_text + "\n";
-                        } else if (item.claude_text) {
-                            fullText += item.claude_text + "\n";
-                        } else if (item.perplexity_text) {
-                            fullText += item.perplexity_text + "\n";
-                        } else if (item.text) {
-                            fullText += item.text + "\n";
-                        } else if (item.items && Array.isArray(item.items)) {
-                            for (const subItem of item.items) {
-                                // Sub-item level text
-                                if (subItem.markdown) {
-                                    fullText += subItem.markdown + "\n";
-                                } else if (subItem.chat_gpt_text) {
-                                    fullText += subItem.chat_gpt_text + "\n";
-                                } else if (subItem.gemini_text) {
-                                    fullText += subItem.gemini_text + "\n";
-                                } else if (subItem.claude_text) {
-                                    fullText += subItem.claude_text + "\n";
-                                } else if (subItem.perplexity_text) {
-                                    fullText += subItem.perplexity_text + "\n";
-                                } else if (subItem.text) {
-                                    fullText += subItem.text + "\n";
-                                }
+                    // Helper for processing nested items
+                    const processItems = (itms: any[]) => {
+                        for (const subItem of itms) {
+                            // Sub-item level text - check all possible text fields
+                            const text = subItem.markdown || subItem.text || subItem.chat_gpt_text || subItem.gemini_text || subItem.claude_text || subItem.perplexity_text;
+                            if (text) fullText += text + "\n";
 
-                                // Deeply nested sections (Gemini/Claude Responses API)
-                                // Only add section text if we didn't already get it from a subItem level field
-                                if (!(subItem.markdown || subItem.text || subItem.chat_gpt_text) && subItem.sections && Array.isArray(subItem.sections)) {
-                                    for (const section of subItem.sections) {
-                                        if (section.text) fullText += section.text + "\n";
+                            // Deeply nested sections (common in Responses API)
+                            if (subItem.sections && Array.isArray(subItem.sections)) {
+                                for (const section of subItem.sections) {
+                                    const sText = section.markdown || section.text || section.chat_gpt_text || section.gemini_text || section.claude_text || section.perplexity_text;
+                                    if (sText) fullText += sText + "\n";
+
+                                    if (section.annotations) {
+                                        extractedAnnotations = [...extractedAnnotations, ...processAnnotations(section.annotations)];
+                                    }
+                                    if (section.sources) {
+                                        extractedSources = [...extractedSources, ...processSources(section.sources)];
                                     }
                                 }
                             }
-                        }
 
-                        // 2. Extract Brand Entities (Scraper API mainly)
+                            if (subItem.annotations) {
+                                extractedAnnotations = [...extractedAnnotations, ...processAnnotations(subItem.annotations)];
+                            }
+                            if (subItem.sources) {
+                                extractedSources = [...extractedSources, ...processSources(subItem.sources)];
+                            }
+                            if (subItem.fan_out_queries) {
+                                extractedFanOutQueries = [...extractedFanOutQueries, ...subItem.fan_out_queries];
+                            }
+                            if (subItem.brand_entities) {
+                                const apiEntities = subItem.brand_entities.map((e: any) => ({
+                                    title: e.title,
+                                    category: e.category,
+                                    urls: Array.isArray(e.urls) ? e.urls : []
+                                }));
+                                brandEntities = [...brandEntities, ...apiEntities];
+                            }
+                        }
+                    };
+
+
+                    // Process each item in the result
+                    for (const item of resultItems) {
+                        const topText = item.markdown || item.text || item.chat_gpt_text || item.gemini_text || item.claude_text || item.perplexity_text;
+                        if (topText) fullText += topText + "\n";
+
+                        if (item.items) processItems(item.items);
                         if (item.brand_entities) {
                             const apiEntities = item.brand_entities.map((e: any) => ({
                                 title: e.title,
@@ -144,63 +197,18 @@ export async function POST(req: NextRequest) {
                             }));
                             brandEntities = [...brandEntities, ...apiEntities];
                         }
-
-                        // 3. Extract Sources (both Scraper and Responses API)
-                        if (item.sources && Array.isArray(item.sources)) {
-                            const mappedSources = item.sources.map((s: any) => ({
-                                title: s.title,
-                                url: s.url,
-                                domain: s.domain,
-                                source_name: s.source_name
-                            }));
-                            extractedSources = [...extractedSources, ...mappedSources];
+                        if (item.sources) {
+                            extractedSources = [...extractedSources, ...processSources(item.sources)];
                         }
-
-                        // Annotations can be on top level, inside items, or inside sections
-                        const processAnnotations = (annArray: any[]) => {
-                            return annArray.map((s: any) => {
-                                let domain = undefined;
-                                if (s.url) {
-                                    try {
-                                        domain = new URL(s.url).hostname;
-                                    } catch (e) {
-                                        // Ignore invalid URLs
-                                    }
-                                }
-                                return {
-                                    title: s.title,
-                                    url: s.url,
-                                    domain: domain,
-                                    source_name: "Annotation"
-                                };
-                            });
-                        };
-
-                        if (item.annotations && Array.isArray(item.annotations)) {
+                        if (item.annotations) {
                             extractedAnnotations = [...extractedAnnotations, ...processAnnotations(item.annotations)];
                         }
-
-                        if (item.items && Array.isArray(item.items)) {
-                            for (const subItem of item.items) {
-                                if (subItem.annotations && Array.isArray(subItem.annotations)) {
-                                    extractedAnnotations = [...extractedAnnotations, ...processAnnotations(subItem.annotations)];
-                                }
-                                if (subItem.sections && Array.isArray(subItem.sections)) {
-                                    for (const section of subItem.sections) {
-                                        if (section.annotations && Array.isArray(section.annotations)) {
-                                            extractedAnnotations = [...extractedAnnotations, ...processAnnotations(section.annotations)];
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // 4. Extract Fan-out queries
-                        if (item.fan_out_queries && Array.isArray(item.fan_out_queries)) {
+                        if (item.fan_out_queries) {
                             extractedFanOutQueries = [...extractedFanOutQueries, ...item.fan_out_queries];
                         }
                     }
                 }
+
 
                 // Manual extraction based on User-defined Target and Competitor Brands
                 // We no longer rely on brand_entities for the analysis aggregates.
