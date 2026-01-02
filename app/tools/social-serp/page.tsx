@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useDataForSeoCredentials } from "@/hooks/useDataForSeoCredentials";
 import * as XLSX from 'xlsx';
 import { Download, ExternalLink, Search, AlertCircle, CheckCircle2 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
@@ -24,8 +25,7 @@ export default function SocialSerpPage() {
     const [language, setLanguage] = useState('English');
     const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop');
     const [depth, setDepth] = useState(100);
-    const [apiLogin, setApiLogin] = useState('');
-    const [apiPassword, setApiPassword] = useState('');
+    const { apiLogin, setApiLogin, apiPassword, setApiPassword } = useDataForSeoCredentials();
     const [showAdvanced, setShowAdvanced] = useState(false);
 
     // App State

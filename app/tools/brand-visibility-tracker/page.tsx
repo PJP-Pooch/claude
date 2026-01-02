@@ -1,7 +1,8 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useDataForSeoCredentials } from "@/hooks/useDataForSeoCredentials";
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import ThemeToggle from '@/components/ThemeToggle';
 import { ThemeProvider } from '@/components/ThemeProvider';
@@ -85,8 +86,7 @@ export default function BrandVisibilityPage() {
     const [competitorBrands, setCompetitorBrands] = useState("");
     const [location, setLocation] = useState("United States");
     const [selectedModels, setSelectedModels] = useState<string[]>(["chat_gpt"]);
-    const [apiLogin, setApiLogin] = useState("");
-    const [apiPassword, setApiPassword] = useState("");
+    const { apiLogin, setApiLogin, apiPassword, setApiPassword } = useDataForSeoCredentials();
     const [loading, setLoading] = useState(false);
     const [showAdvanced, setShowAdvanced] = useState(false);
     const [data, setData] = useState<Record<string, ApiResponse> | null>(null);

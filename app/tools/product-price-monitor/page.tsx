@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useDataForSeoCredentials } from "@/hooks/useDataForSeoCredentials";
 import { Search, Loader2, Download, ExternalLink, AlertCircle } from "lucide-react";
 import ThemeToggle from '@/components/ThemeToggle';
 import { ThemeProvider } from '@/components/ThemeProvider';
@@ -88,8 +89,7 @@ export default function ProductPriceMonitorPage() {
     const [depth, setDepth] = useState(40);
     const [priceMin, setPriceMin] = useState("");
     const [priceMax, setPriceMax] = useState("");
-    const [apiLogin, setApiLogin] = useState("");
-    const [apiPassword, setApiPassword] = useState("");
+    const { apiLogin, setApiLogin, apiPassword, setApiPassword } = useDataForSeoCredentials();
     const [showAdvanced, setShowAdvanced] = useState(false);
 
     const [searchType, setSearchType] = useState<"keyword" | "url" | "brand">("keyword");
