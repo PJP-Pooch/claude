@@ -300,7 +300,7 @@ export default function GscExportPage() {
                         } else if (message.type === "data") {
                             const newRows = message.rows;
                             accumulatedRows.push(...newRows);
-                            setData(prev => [...(prev || []), ...newRows]);
+                            setData(prev => aggregateData([...(prev || []), ...newRows]));
                         } else if (message.type === "complete") {
                             // Handled at end
                         } else if (message.type === "error") {
@@ -321,7 +321,7 @@ export default function GscExportPage() {
                     if (message.type === "data") {
                         const newRows = message.rows;
                         accumulatedRows.push(...newRows);
-                        setData(prev => [...(prev || []), ...newRows]);
+                        setData(prev => aggregateData([...(prev || []), ...newRows]));
                     }
                 } catch (e) {
                     console.error("Error parsing final buffer", e);
@@ -330,20 +330,23 @@ export default function GscExportPage() {
 
             // Final Analysis
             setLoadingMessage("Analyzing data...");
-            setData(accumulatedRows); // Ensure state is consistent
+
+            // Aggregate data by keys if not already (important for multi-batch fetches)
+            const aggregated = aggregateData(accumulatedRows);
+            setData(aggregated);
 
             if (
                 selectedDimensions.includes("query") &&
                 selectedDimensions.includes("date")
             ) {
-                analyzeQueryPositions(accumulatedRows);
+                analyzeQueryPositions(aggregated);
             }
 
             if (
                 selectedDimensions.includes("query") &&
                 selectedDimensions.includes("page")
             ) {
-                analyzeCannibalization(accumulatedRows);
+                analyzeCannibalization(aggregated);
             }
 
             if (
@@ -351,7 +354,7 @@ export default function GscExportPage() {
                 selectedDimensions.includes("page") &&
                 selectedDimensions.includes("date")
             ) {
-                analyzeQueryCounts(accumulatedRows);
+                analyzeQueryCounts(aggregated);
             }
 
         } catch (err) {
@@ -360,6 +363,34 @@ export default function GscExportPage() {
         } finally {
             setLoading(false);
         }
+    };
+
+    const aggregateData = (rows: GscRow[]) => {
+        const map = new Map<string, GscRow>();
+        rows.forEach(row => {
+            const key = row.keys.join('|||');
+            if (map.has(key)) {
+                const existing = map.get(key)!;
+                const newImpressions = existing.impressions + row.impressions;
+                const newClicks = existing.clicks + row.clicks;
+
+                // Weighted average for position based on impressions
+                const newPosition = newImpressions > 0
+                    ? (existing.position * existing.impressions + row.position * row.impressions) / newImpressions
+                    : (existing.position + row.position) / 2;
+
+                map.set(key, {
+                    keys: row.keys,
+                    clicks: newClicks,
+                    impressions: newImpressions,
+                    ctr: newImpressions > 0 ? newClicks / newImpressions : 0,
+                    position: newPosition
+                });
+            } else {
+                map.set(key, { ...row });
+            }
+        });
+        return Array.from(map.values());
     };
 
     const analyzeQueryPositions = (rows: GscRow[]) => {
