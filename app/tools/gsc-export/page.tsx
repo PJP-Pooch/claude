@@ -629,18 +629,17 @@ export default function GscExportPage() {
     };
 
     // Memoized Chart and Data for Query Counts
-    const { qcData: queryCountData, qcChartData: queryCountChartData, topPagesForChart: queryCountTopPages, overallTotal } = useMemo(() => {
+    const { qcData: queryCountData, qcChartData: queryCountChartData, topPagesForChart: queryCountTopPages } = useMemo(() => {
         if (!filteredData || filteredData.length === 0 || !selectedDimensions.includes("query") || !selectedDimensions.includes("page") || !selectedDimensions.includes("date")) {
-            return { qcData: null, qcChartData: null, topPagesForChart: null, overallTotal: null };
+            return { qcData: null, qcChartData: null, topPagesForChart: null };
         }
 
         const pageMap: { [page: string]: { [month: string]: Set<string> } } = {};
-        const propertyWideMap: { [month: string]: Set<string> } = {};
         const queryIndex = selectedDimensions.indexOf("query");
         const pageIndex = selectedDimensions.indexOf("page");
         const dateIndex = selectedDimensions.indexOf("date");
 
-        if (queryIndex === -1 || pageIndex === -1 || dateIndex === -1) return { qcData: null, qcChartData: null, topPagesForChart: null, overallTotal: null };
+        if (queryIndex === -1 || pageIndex === -1 || dateIndex === -1) return { qcData: null, qcChartData: null, topPagesForChart: null };
 
         const allPeriods = new Set<string>();
         filteredData.forEach(row => {
@@ -654,21 +653,9 @@ export default function GscExportPage() {
             if (!pageMap[page]) pageMap[page] = {};
             if (!pageMap[page][period]) pageMap[page][period] = new Set();
             pageMap[page][period].add(query);
-
-            if (!propertyWideMap[period]) propertyWideMap[period] = new Set();
-            propertyWideMap[period].add(query);
         });
 
         const sortedPeriods = Array.from(allPeriods).sort();
-
-        const overallTotalRow = {
-            page: "OVERALL PROPERTY UNIQUE",
-            counts: sortedPeriods.reduce((acc, p) => {
-                acc[p] = propertyWideMap[p]?.size || 0;
-                return acc;
-            }, {} as { [period: string]: number }),
-            totalQueries: new Set(Object.values(propertyWideMap).flatMap(s => Array.from(s))).size
-        };
 
         const processedData: QueryCountRow[] = Object.entries(pageMap).map(([page, periods]) => {
             const counts: { [period: string]: number } = {};
@@ -686,18 +673,17 @@ export default function GscExportPage() {
 
         const topPagesForChart = selectedQcUrls.length > 0
             ? processedData.filter(p => selectedQcUrls.includes(p.page))
-            : processedData.slice(0, 5);
+            : processedData.slice(0, 1);
 
         const chartData = sortedPeriods.map(period => {
             const entry: any = { month: period };
-            entry["OVERALL"] = propertyWideMap[period]?.size || 0;
             topPagesForChart.forEach(p => {
                 entry[p.page] = p.counts[period] || 0;
             });
             return entry;
         });
 
-        return { qcData: processedData, qcChartData: chartData, topPagesForChart, overallTotal: overallTotalRow };
+        return { qcData: processedData, qcChartData: chartData, topPagesForChart };
     }, [filteredData, selectedDimensions, granularity, selectedQcUrls]);
 
     const downloadCsv = (data: any[], filename: string) => {
@@ -1735,7 +1721,7 @@ export default function GscExportPage() {
                                                             Query Count Analysis
                                                         </h2>
                                                         <p className="text-gray-500 dark:text-gray-400 text-sm">
-                                                            Number of unique ranking queries per page over time vs Property Total
+                                                            Number of unique ranking queries per page over time
                                                         </p>
                                                     </div>
                                                     {selectedQcUrls.length > 0 && (
@@ -1767,16 +1753,6 @@ export default function GscExportPage() {
                                                                 }}
                                                             />
                                                             <Legend />
-                                                            <Line
-                                                                type="monotone"
-                                                                dataKey="OVERALL"
-                                                                name="Property Total (Unique)"
-                                                                stroke="#94a3b8"
-                                                                strokeWidth={3}
-                                                                strokeDasharray="5 5"
-                                                                dot={{ r: 5 }}
-                                                                activeDot={{ r: 8 }}
-                                                            />
                                                             {queryCountTopPages?.map((page, index) => (
                                                                 <Line
                                                                     key={page.page}
@@ -1819,24 +1795,6 @@ export default function GscExportPage() {
                                                             </tr>
                                                         </thead>
                                                         <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                                            {overallTotal && (
-                                                                <tr className="bg-gray-50 dark:bg-gray-900/50 font-bold border-b-2 border-gray-200 dark:border-gray-700">
-                                                                    <td className="px-4 py-4 text-center">
-                                                                        <div className="w-4 h-4 rounded-full bg-gray-400 mx-auto" title="Always shown" />
-                                                                    </td>
-                                                                    <td className="px-6 py-4 text-sm text-blue-600 dark:text-blue-400">
-                                                                        {overallTotal.page}
-                                                                    </td>
-                                                                    {queryCountChartData.map(d => (
-                                                                        <td key={d.month} className="px-6 py-4 whitespace-nowrap text-sm">
-                                                                            {overallTotal.counts[d.month] || 0}
-                                                                        </td>
-                                                                    ))}
-                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                                                        {overallTotal.totalQueries}
-                                                                    </td>
-                                                                </tr>
-                                                            )}
                                                             {queryCountData.map((row, i) => (
                                                                 <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                                                                     <td className="px-4 py-4 text-center">
