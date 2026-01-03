@@ -2,7 +2,7 @@
 
 import { useSession, signIn, signOut } from "next-auth/react";
 import { useState, useEffect, Fragment, useMemo } from "react";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, startOfWeek, startOfMonth } from "date-fns";
 import {
     BarChart,
     Bar,
@@ -91,6 +91,14 @@ export default function GscExportPage() {
 
     // Brand Segmentation State
     const [brandKeywords, setBrandKeywords] = useState("");
+    const [granularity, setGranularity] = useState<"day" | "week" | "month">("month");
+    const [selectedQcUrls, setSelectedQcUrls] = useState<string[]>([]);
+
+    const getPeriodKey = (date: Date, gran: "day" | "week" | "month") => {
+        if (gran === "day") return format(date, "yyyy-MM-dd");
+        if (gran === "week") return format(startOfWeek(date), "yyyy-MM-dd");
+        return format(startOfMonth(date), "yyyy-MM");
+    };
 
     const toggleQueryExpansion = (query: string) => {
         const newExpanded = new Set(expandedQueries);
@@ -147,17 +155,82 @@ export default function GscExportPage() {
         });
     }, [data, wordCountFilterType, wordCountFilterValue]);
 
+    const aggregatedByQuery = useMemo(() => {
+        if (!filteredData || !selectedDimensions.includes("query")) return null;
+        const queryIndex = selectedDimensions.indexOf("query");
+        const map = new Map<string, GscRow>();
+
+        filteredData.forEach(row => {
+            const query = row.keys[queryIndex];
+            if (!query) return;
+
+            if (map.has(query)) {
+                const existing = map.get(query)!;
+                const newImpressions = existing.impressions + row.impressions;
+                const newClicks = existing.clicks + row.clicks;
+                const newPosition = newImpressions > 0
+                    ? (existing.position * existing.impressions + row.position * row.impressions) / newImpressions
+                    : (existing.position + row.position) / 2;
+                map.set(query, {
+                    ...existing,
+                    clicks: newClicks,
+                    impressions: newImpressions,
+                    ctr: newImpressions > 0 ? newClicks / newImpressions : 0,
+                    position: newPosition
+                });
+            } else {
+                map.set(query, { ...row });
+            }
+        });
+        return Array.from(map.values());
+    }, [filteredData, selectedDimensions]);
+
+    const aggregatedByQueryAndPage = useMemo(() => {
+        if (!filteredData || !selectedDimensions.includes("query") || !selectedDimensions.includes("page")) return null;
+        const queryIndex = selectedDimensions.indexOf("query");
+        const pageIndex = selectedDimensions.indexOf("page");
+        const map = new Map<string, GscRow>();
+
+        filteredData.forEach(row => {
+            const query = row.keys[queryIndex];
+            const page = row.keys[pageIndex];
+            if (!query || !page) return;
+
+            const key = `${query}|${page}`;
+            if (map.has(key)) {
+                const existing = map.get(key)!;
+                const newImpressions = existing.impressions + row.impressions;
+                const newClicks = existing.clicks + row.clicks;
+                const newPosition = newImpressions > 0
+                    ? (existing.position * existing.impressions + row.position * row.impressions) / newImpressions
+                    : (existing.position + row.position) / 2;
+                map.set(key, {
+                    ...existing,
+                    clicks: newClicks,
+                    impressions: newImpressions,
+                    ctr: newImpressions > 0 ? newClicks / newImpressions : 0,
+                    position: newPosition
+                });
+            } else {
+                map.set(key, { ...row });
+            }
+        });
+        return Array.from(map.values());
+    }, [filteredData, selectedDimensions]);
+
     // Striking Distance Logic (Position 11-20)
     const strikingDistanceData = useMemo(() => {
-        if (!filteredData || !selectedDimensions.includes("query")) return null;
-        return filteredData
+        const sourceData = aggregatedByQuery || filteredData;
+        if (!sourceData || !selectedDimensions.includes("query")) return null;
+        return sourceData
             .filter(row => row.position > 10 && row.position <= 20)
             .sort((a, b) => b.impressions - a.impressions);
-    }, [filteredData, selectedDimensions]);
+    }, [aggregatedByQuery, filteredData, selectedDimensions]);
 
     // Brand vs Non-Brand Logic
     const brandSegmentData = useMemo(() => {
-        if (!filteredData || !selectedDimensions.includes("query")) return null;
+        const sourceData = aggregatedByQuery || filteredData;
+        if (!sourceData || !selectedDimensions.includes("query")) return null;
         const brandTerms = brandKeywords.split(',').map(t => t.trim().toLowerCase()).filter(t => t !== "");
 
         const summary = {
@@ -166,7 +239,7 @@ export default function GscExportPage() {
         };
 
         const queryIndex = selectedDimensions.indexOf("query");
-        filteredData.forEach(row => {
+        sourceData.forEach(row => {
             const query = row.keys[queryIndex]?.toLowerCase() || "";
             const isBrand = brandTerms.some(term => query.includes(term));
 
@@ -182,16 +255,47 @@ export default function GscExportPage() {
         });
 
         return summary;
-    }, [filteredData, selectedDimensions, brandKeywords]);
+    }, [aggregatedByQuery, filteredData, selectedDimensions, brandKeywords]);
+
+    const brandTrendData = useMemo(() => {
+        if (!filteredData || !selectedDimensions.includes("query") || !selectedDimensions.includes("date")) return null;
+        const brandTerms = brandKeywords.split(',').map(t => t.trim().toLowerCase()).filter(t => t !== "");
+        const queryIndex = selectedDimensions.indexOf("query");
+        const dateIndex = selectedDimensions.indexOf("date");
+
+        const trendMap: { [date: string]: { period: string, brandClicks: number, nonBrandClicks: number } } = {};
+
+        filteredData.forEach(row => {
+            const dateStr = row.keys[dateIndex];
+            if (!dateStr) return;
+            const date = parseISO(dateStr);
+            const period = getPeriodKey(date, granularity);
+
+            if (!trendMap[period]) {
+                trendMap[period] = { period, brandClicks: 0, nonBrandClicks: 0 };
+            }
+
+            const query = row.keys[queryIndex]?.toLowerCase() || "";
+            const isBrand = brandTerms.some(term => query.includes(term));
+
+            if (isBrand) {
+                trendMap[period].brandClicks += row.clicks;
+            } else {
+                trendMap[period].nonBrandClicks += row.clicks;
+            }
+        });
+
+        return Object.values(trendMap).sort((a, b) => a.period.localeCompare(b.period));
+    }, [filteredData, selectedDimensions, brandKeywords, granularity]);
 
     // CTR Opportunity Logic (High Impr, High Rank, Low CTR)
     const ctrOpportunityData = useMemo(() => {
-        if (!filteredData) return null;
-        // Simple heuristic: Rank < 5, Impr > average, CTR < 2% (or below expected for position)
-        return filteredData
-            .filter(row => row.position <= 10 && row.ctr < 0.03) // simplified threshold
+        const sourceData = aggregatedByQuery || filteredData;
+        if (!sourceData) return null;
+        return sourceData
+            .filter(row => row.position <= 10 && row.ctr < 0.03)
             .sort((a, b) => b.impressions - a.impressions);
-    }, [filteredData]);
+    }, [aggregatedByQuery, filteredData]);
 
     const queryAnalysis = useMemo(() => {
         if (!filteredData || !selectedDimensions.includes("query") || !selectedDimensions.includes("date")) return null;
@@ -205,11 +309,11 @@ export default function GscExportPage() {
             if (!dateStr) return;
 
             const date = parseISO(dateStr);
-            const month = format(date, "yyyy-MM");
+            const period = getPeriodKey(date, granularity);
 
-            if (!buckets[month]) {
-                buckets[month] = {
-                    month,
+            if (!buckets[period]) {
+                buckets[period] = {
+                    month: period, // keep key as 'month' for compatibility or rename if needed
                     positions_1_3: 0,
                     positions_4_10: 0,
                     positions_11_20: 0,
@@ -219,26 +323,27 @@ export default function GscExportPage() {
             }
 
             const pos = row.position;
-            if (pos <= 3) buckets[month].positions_1_3++;
-            else if (pos <= 10) buckets[month].positions_4_10++;
-            else if (pos <= 20) buckets[month].positions_11_20++;
-            else buckets[month].positions_20_plus++;
+            if (pos <= 3) buckets[period].positions_1_3++;
+            else if (pos <= 10) buckets[period].positions_4_10++;
+            else if (pos <= 20) buckets[period].positions_11_20++;
+            else buckets[period].positions_20_plus++;
 
-            buckets[month].totalQueries++;
+            buckets[period].totalQueries++;
         });
 
         return Object.values(buckets).sort((a, b) => a.month.localeCompare(b.month));
-    }, [filteredData, selectedDimensions]);
+    }, [filteredData, selectedDimensions, granularity]);
 
     const cannibalizationData = useMemo(() => {
-        if (!filteredData || !selectedDimensions.includes("query") || !selectedDimensions.includes("page")) return null;
+        const sourceData = aggregatedByQueryAndPage || filteredData;
+        if (!sourceData || !selectedDimensions.includes("query") || !selectedDimensions.includes("page")) return null;
         const queryMap: { [key: string]: CannibalizationRow } = {};
         const queryIndex = selectedDimensions.indexOf("query");
         const pageIndex = selectedDimensions.indexOf("page");
 
         if (queryIndex === -1 || pageIndex === -1) return null;
 
-        filteredData.forEach(row => {
+        sourceData.forEach(row => {
             const query = row.keys[queryIndex];
             const page = row.keys[pageIndex];
 
@@ -269,7 +374,7 @@ export default function GscExportPage() {
         return Object.values(queryMap)
             .filter(item => item.pageCount > 1 && item.totalClicks > 0)
             .sort((a, b) => b.totalClicks - a.totalClicks);
-    }, [filteredData, selectedDimensions]);
+    }, [aggregatedByQueryAndPage, filteredData, selectedDimensions]);
 
     const sortedCannibalizationData = useMemo(() => {
         if (!cannibalizationData) return null;
@@ -524,58 +629,76 @@ export default function GscExportPage() {
     };
 
     // Memoized Chart and Data for Query Counts
-    const { qcData, qcChartData } = useMemo(() => {
+    const { qcData: queryCountData, qcChartData: queryCountChartData, topPagesForChart: queryCountTopPages, overallTotal } = useMemo(() => {
         if (!filteredData || filteredData.length === 0 || !selectedDimensions.includes("query") || !selectedDimensions.includes("page") || !selectedDimensions.includes("date")) {
-            return { qcData: null, qcChartData: null };
+            return { qcData: null, qcChartData: null, topPagesForChart: null, overallTotal: null };
         }
 
         const pageMap: { [page: string]: { [month: string]: Set<string> } } = {};
+        const propertyWideMap: { [month: string]: Set<string> } = {};
         const queryIndex = selectedDimensions.indexOf("query");
         const pageIndex = selectedDimensions.indexOf("page");
         const dateIndex = selectedDimensions.indexOf("date");
 
-        if (queryIndex === -1 || pageIndex === -1 || dateIndex === -1) return { qcData: null, qcChartData: null };
+        if (queryIndex === -1 || pageIndex === -1 || dateIndex === -1) return { qcData: null, qcChartData: null, topPagesForChart: null, overallTotal: null };
 
-        const allMonths = new Set<string>();
+        const allPeriods = new Set<string>();
         filteredData.forEach(row => {
             const query = row.keys[queryIndex];
             const page = row.keys[pageIndex];
             const dateStr = row.keys[dateIndex];
             if (!query || !page || !dateStr) return;
-            const month = format(parseISO(dateStr), "yyyy-MM");
-            allMonths.add(month);
+            const period = getPeriodKey(parseISO(dateStr), granularity);
+            allPeriods.add(period);
+
             if (!pageMap[page]) pageMap[page] = {};
-            if (!pageMap[page][month]) pageMap[page][month] = new Set();
-            pageMap[page][month].add(query);
+            if (!pageMap[page][period]) pageMap[page][period] = new Set();
+            pageMap[page][period].add(query);
+
+            if (!propertyWideMap[period]) propertyWideMap[period] = new Set();
+            propertyWideMap[period].add(query);
         });
 
-        const sortedMonths = Array.from(allMonths).sort();
-        const processedData: QueryCountRow[] = Object.entries(pageMap).map(([page, months]) => {
-            const counts: { [month: string]: number } = {};
-            let totalQueries = 0;
-            sortedMonths.forEach(month => {
-                const count = months[month] ? months[month].size : 0;
-                counts[month] = count;
-                totalQueries += count;
-            });
-            return { page, counts, totalQueries };
-        }).sort((a, b) => b.totalQueries - a.totalQueries).slice(0, 50);
+        const sortedPeriods = Array.from(allPeriods).sort();
 
-        const top5Pages = processedData.slice(0, 5);
-        const chartData = sortedMonths.map(month => {
-            const point: any = { month };
-            top5Pages.forEach(p => {
-                point[p.page] = p.counts[month];
+        const overallTotalRow = {
+            page: "OVERALL PROPERTY UNIQUE",
+            counts: sortedPeriods.reduce((acc, p) => {
+                acc[p] = propertyWideMap[p]?.size || 0;
+                return acc;
+            }, {} as { [period: string]: number }),
+            totalQueries: new Set(Object.values(propertyWideMap).flatMap(s => Array.from(s))).size
+        };
+
+        const processedData: QueryCountRow[] = Object.entries(pageMap).map(([page, periods]) => {
+            const counts: { [period: string]: number } = {};
+            let totalUnique = new Set<string>();
+            sortedPeriods.forEach(p => {
+                counts[p] = periods[p]?.size || 0;
+                if (periods[p]) periods[p].forEach(q => totalUnique.add(q));
             });
-            return point;
+            return {
+                page,
+                counts,
+                totalQueries: totalUnique.size
+            };
+        }).sort((a, b) => b.totalQueries - a.totalQueries);
+
+        const topPagesForChart = selectedQcUrls.length > 0
+            ? processedData.filter(p => selectedQcUrls.includes(p.page))
+            : processedData.slice(0, 5);
+
+        const chartData = sortedPeriods.map(period => {
+            const entry: any = { month: period };
+            entry["OVERALL"] = propertyWideMap[period]?.size || 0;
+            topPagesForChart.forEach(p => {
+                entry[p.page] = p.counts[period] || 0;
+            });
+            return entry;
         });
 
-        return { qcData: processedData, qcChartData: chartData };
-    }, [filteredData, selectedDimensions]);
-
-    // Use these in the UI
-    const queryCountData = qcData;
-    const queryCountChartData = qcChartData;
+        return { qcData: processedData, qcChartData: chartData, topPagesForChart, overallTotal: overallTotalRow };
+    }, [filteredData, selectedDimensions, granularity, selectedQcUrls]);
 
     const downloadCsv = (data: any[], filename: string) => {
         if (!data || data.length === 0) return;
@@ -893,28 +1016,53 @@ export default function GscExportPage() {
                                                     </button>
                                                 ))}
                                             </div>
-                                            {(!selectedDimensions.includes("query") ||
-                                                !selectedDimensions.includes("date")) && (
-                                                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center">
-                                                        <AlertCircle className="w-3 h-3 mr-1" />
-                                                        Select both &apos;query&apos; and &apos;date&apos; for Position Analysis.
-                                                    </p>
-                                                )}
-                                            {(!selectedDimensions.includes("query") ||
-                                                !selectedDimensions.includes("page")) && (
-                                                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center">
-                                                        <AlertCircle className="w-3 h-3 mr-1" />
-                                                        Select both &apos;query&apos; and &apos;page&apos; for Cannibalization Analysis.
-                                                    </p>
-                                                )}
-                                            {(!selectedDimensions.includes("query") ||
-                                                !selectedDimensions.includes("page") ||
-                                                !selectedDimensions.includes("date")) && (
-                                                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center">
-                                                        <AlertCircle className="w-3 h-3 mr-1" />
-                                                        Select &apos;query&apos;, &apos;page&apos;, and &apos;date&apos; for Query Counting.
-                                                    </p>
-                                                )}
+                                            <div className="space-y-2 col-span-full border-t border-gray-200 dark:border-gray-700 pt-4 mt-2">
+                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                    Chart Granularity
+                                                </label>
+                                                <div className="flex gap-2">
+                                                    {(["day", "week", "month"] as const).map((g) => (
+                                                        <button
+                                                            key={g}
+                                                            onClick={() => setGranularity(g)}
+                                                            className={`flex-1 px-3 py-1 rounded-lg text-sm font-medium transition-colors border ${granularity === g
+                                                                ? "bg-blue-600 text-white border-blue-600"
+                                                                : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
+                                                                }`}
+                                                        >
+                                                            {g.charAt(0).toUpperCase() + g.slice(1)}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                                <p className="text-xs text-gray-500 mt-1 italic">
+                                                    Affects Query Position, Brand Trend, and Query Count charts.
+                                                </p>
+                                            </div>
+
+                                            <div className="space-y-2 col-span-full border-t border-gray-200 dark:border-gray-700 pt-4 mt-2">
+                                                {(!selectedDimensions.includes("query") ||
+                                                    !selectedDimensions.includes("date")) && (
+                                                        <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center">
+                                                            <AlertCircle className="w-3 h-3 mr-1" />
+                                                            Select both &apos;query&apos; and &apos;date&apos; for Position Analysis.
+                                                        </p>
+                                                    )}
+                                                {(!selectedDimensions.includes("query") ||
+                                                    !selectedDimensions.includes("page")) && (
+                                                        <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center">
+                                                            <AlertCircle className="w-3 h-3 mr-1" />
+                                                            Select both &apos;query&apos; and &apos;page&apos; for Cannibalization Analysis.
+                                                        </p>
+                                                    )}
+                                                {(!selectedDimensions.includes("query") ||
+                                                    !selectedDimensions.includes("page") ||
+                                                    !selectedDimensions.includes("date")) && (
+                                                        <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center">
+                                                            <AlertCircle className="w-3 h-3 mr-1" />
+                                                            Select &apos;query&apos;, &apos;page&apos;, and &apos;date&apos; for Query Counting.
+                                                        </p>
+                                                    )}
+                                            </div>
                                         </div>
                                     </div>
 
@@ -1140,41 +1288,69 @@ export default function GscExportPage() {
 
                                         {/* Brand Segment Summary Widgets */}
                                         {brandSegmentData && brandKeywords && (
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                                                <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-                                                    <h3 className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-2">Non-Brand Performance</h3>
-                                                    <div className="flex justify-between items-end">
-                                                        <div>
-                                                            <p className="text-2xl font-bold text-gray-900 dark:text-white">{brandSegmentData.nonBrand.clicks.toLocaleString()}</p>
-                                                            <p className="text-sm text-gray-500">Clicks</p>
+                                            <div className="space-y-6 mb-6">
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+                                                        <h3 className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-2">Non-Brand Performance</h3>
+                                                        <div className="flex justify-between items-end">
+                                                            <div>
+                                                                <p className="text-2xl font-bold text-gray-900 dark:text-white">{brandSegmentData.nonBrand.clicks.toLocaleString()}</p>
+                                                                <p className="text-sm text-gray-500">Clicks</p>
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <p className="text-lg font-semibold text-gray-700 dark:text-gray-300">
+                                                                    {brandSegmentData.nonBrand.impressions > 0
+                                                                        ? ((brandSegmentData.nonBrand.clicks / brandSegmentData.nonBrand.impressions) * 100).toFixed(2)
+                                                                        : 0}%
+                                                                </p>
+                                                                <p className="text-xs text-gray-500 hover:text-gray-400">Avg. CTR</p>
+                                                            </div>
                                                         </div>
-                                                        <div className="text-right">
-                                                            <p className="text-lg font-semibold text-gray-700 dark:text-gray-300">
-                                                                {brandSegmentData.nonBrand.impressions > 0
-                                                                    ? ((brandSegmentData.nonBrand.clicks / brandSegmentData.nonBrand.impressions) * 100).toFixed(2)
-                                                                    : 0}%
-                                                            </p>
-                                                            <p className="text-xs text-gray-500 hover:text-gray-400">Avg. CTR</p>
+                                                    </div>
+                                                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+                                                        <h3 className="text-xs font-semibold text-green-600 dark:text-green-400 uppercase tracking-wider mb-2">Brand Performance</h3>
+                                                        <div className="flex justify-between items-end">
+                                                            <div>
+                                                                <p className="text-2xl font-bold text-gray-900 dark:text-white">{brandSegmentData.brand.clicks.toLocaleString()}</p>
+                                                                <p className="text-sm text-gray-500">Clicks</p>
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <p className="text-lg font-semibold text-gray-700 dark:text-gray-300">
+                                                                    {brandSegmentData.brand.impressions > 0
+                                                                        ? ((brandSegmentData.brand.clicks / brandSegmentData.brand.impressions) * 100).toFixed(2)
+                                                                        : 0}%
+                                                                </p>
+                                                                <p className="text-xs text-gray-500 hover:text-gray-400">Avg. CTR</p>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-                                                    <h3 className="text-xs font-semibold text-green-600 dark:text-green-400 uppercase tracking-wider mb-2">Brand Performance</h3>
-                                                    <div className="flex justify-between items-end">
-                                                        <div>
-                                                            <p className="text-2xl font-bold text-gray-900 dark:text-white">{brandSegmentData.brand.clicks.toLocaleString()}</p>
-                                                            <p className="text-sm text-gray-500">Clicks</p>
-                                                        </div>
-                                                        <div className="text-right">
-                                                            <p className="text-lg font-semibold text-gray-700 dark:text-gray-300">
-                                                                {brandSegmentData.brand.impressions > 0
-                                                                    ? ((brandSegmentData.brand.clicks / brandSegmentData.brand.impressions) * 100).toFixed(2)
-                                                                    : 0}%
-                                                            </p>
-                                                            <p className="text-xs text-gray-500 hover:text-gray-400">Avg. CTR</p>
+
+                                                {brandTrendData && selectedDimensions.includes("date") && (
+                                                    <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+                                                        <h3 className="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wider mb-6">Brand vs Non-Brand Click Trend</h3>
+                                                        <div className="h-[300px] w-full">
+                                                            <ResponsiveContainer width="100%" height="100%">
+                                                                <LineChart data={brandTrendData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#374151" opacity={0.1} />
+                                                                    <XAxis dataKey="period" stroke="#9CA3AF" fontSize={12} tickLine={false} axisLine={false} />
+                                                                    <YAxis stroke="#9CA3AF" fontSize={12} tickLine={false} axisLine={false} />
+                                                                    <Tooltip
+                                                                        contentStyle={{
+                                                                            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                                                                            borderRadius: '8px',
+                                                                            border: 'none',
+                                                                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                                                                        }}
+                                                                    />
+                                                                    <Legend iconType="circle" />
+                                                                    <Line type="monotone" dataKey="brandClicks" name="Brand Clicks" stroke="#22c55e" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                                                                    <Line type="monotone" dataKey="nonBrandClicks" name="Non-Brand Clicks" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                                                                </LineChart>
+                                                            </ResponsiveContainer>
                                                         </div>
                                                     </div>
-                                                </div>
+                                                )}
                                             </div>
                                         )}
 
@@ -1412,9 +1588,17 @@ export default function GscExportPage() {
                                                         <h2 className="text-xl font-bold text-gray-900 dark:text-white">
                                                             Cannibalization Analysis
                                                         </h2>
-                                                        <p className="text-gray-500 dark:text-gray-400 text-sm">
-                                                            Queries where multiple pages are competing for rankings
-                                                        </p>
+                                                        <div className="flex items-center gap-2 mt-1">
+                                                            <p className="text-gray-500 dark:text-gray-400 text-sm">
+                                                                Queries where multiple pages are competing for rankings
+                                                            </p>
+                                                            {selectedDimensions.includes("date") && (
+                                                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                                                                    <RefreshCw className="w-3 h-3 mr-1 animate-spin-slow" />
+                                                                    Aggregated across dates
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </div>
 
@@ -1439,8 +1623,8 @@ export default function GscExportPage() {
                                                                     className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
                                                                     onClick={() => handleSort("pageCount")}
                                                                 >
-                                                                    <div className="flex items-center">
-                                                                        Pages
+                                                                    <div className="flex items-center" title="Number of unique pages ranking for this query">
+                                                                        Unique Pages
                                                                         {sortConfig?.key === "pageCount" ? (
                                                                             sortConfig.direction === "asc" ? <ArrowUp className="w-4 h-4 ml-1" /> : <ArrowDown className="w-4 h-4 ml-1" />
                                                                         ) : (
@@ -1551,9 +1735,18 @@ export default function GscExportPage() {
                                                             Query Count Analysis
                                                         </h2>
                                                         <p className="text-gray-500 dark:text-gray-400 text-sm">
-                                                            Number of unique ranking queries per page over time
+                                                            Number of unique ranking queries per page over time vs Property Total
                                                         </p>
                                                     </div>
+                                                    {selectedQcUrls.length > 0 && (
+                                                        <button
+                                                            onClick={() => setSelectedQcUrls([])}
+                                                            className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center"
+                                                        >
+                                                            <RefreshCw className="w-3 h-3 mr-1" />
+                                                            Clear Chart Selection
+                                                        </button>
+                                                    )}
                                                 </div>
 
                                                 <div className="h-[400px] w-full mb-8">
@@ -1574,11 +1767,22 @@ export default function GscExportPage() {
                                                                 }}
                                                             />
                                                             <Legend />
-                                                            {queryCountData.slice(0, 5).map((page, index) => (
+                                                            <Line
+                                                                type="monotone"
+                                                                dataKey="OVERALL"
+                                                                name="Property Total (Unique)"
+                                                                stroke="#94a3b8"
+                                                                strokeWidth={3}
+                                                                strokeDasharray="5 5"
+                                                                dot={{ r: 5 }}
+                                                                activeDot={{ r: 8 }}
+                                                            />
+                                                            {queryCountTopPages?.map((page, index) => (
                                                                 <Line
                                                                     key={page.page}
                                                                     type="monotone"
                                                                     dataKey={page.page}
+                                                                    name={page.page.length > 30 ? page.page.substring(0, 30) + '...' : page.page}
                                                                     stroke={[
                                                                         "#3b82f6", // blue
                                                                         "#ef4444", // red
@@ -1598,6 +1802,9 @@ export default function GscExportPage() {
                                                     <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                                                         <thead className="bg-gray-50 dark:bg-gray-900/30">
                                                             <tr>
+                                                                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-10">
+                                                                    Chart
+                                                                </th>
                                                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                                                                     Page
                                                                 </th>
@@ -1612,9 +1819,41 @@ export default function GscExportPage() {
                                                             </tr>
                                                         </thead>
                                                         <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                                            {overallTotal && (
+                                                                <tr className="bg-gray-50 dark:bg-gray-900/50 font-bold border-b-2 border-gray-200 dark:border-gray-700">
+                                                                    <td className="px-4 py-4 text-center">
+                                                                        <div className="w-4 h-4 rounded-full bg-gray-400 mx-auto" title="Always shown" />
+                                                                    </td>
+                                                                    <td className="px-6 py-4 text-sm text-blue-600 dark:text-blue-400">
+                                                                        {overallTotal.page}
+                                                                    </td>
+                                                                    {queryCountChartData.map(d => (
+                                                                        <td key={d.month} className="px-6 py-4 whitespace-nowrap text-sm">
+                                                                            {overallTotal.counts[d.month] || 0}
+                                                                        </td>
+                                                                    ))}
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                                                        {overallTotal.totalQueries}
+                                                                    </td>
+                                                                </tr>
+                                                            )}
                                                             {queryCountData.map((row, i) => (
-                                                                <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                                                    <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white max-w-md truncate" title={row.page}>
+                                                                <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                                                    <td className="px-4 py-4 text-center">
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            checked={selectedQcUrls.includes(row.page)}
+                                                                            onChange={() => {
+                                                                                if (selectedQcUrls.includes(row.page)) {
+                                                                                    setSelectedQcUrls(selectedQcUrls.filter(u => u !== row.page));
+                                                                                } else {
+                                                                                    setSelectedQcUrls([...selectedQcUrls, row.page]);
+                                                                                }
+                                                                            }}
+                                                                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                                                                        />
+                                                                    </td>
+                                                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white max-w-md truncate" title={row.page}>
                                                                         {row.page}
                                                                     </td>
                                                                     {queryCountChartData.map(d => (
@@ -1641,9 +1880,16 @@ export default function GscExportPage() {
                                                         <h2 className="text-xl font-bold text-gray-900 dark:text-white">
                                                             Striking Distance Report
                                                         </h2>
-                                                        <p className="text-gray-500 dark:text-gray-400 text-sm">
-                                                            Queries ranking in positions 11-20. High potential for quick wins.
-                                                        </p>
+                                                        <div className="flex items-center gap-2 mt-1">
+                                                            <p className="text-gray-500 dark:text-gray-400 text-sm">
+                                                                Queries ranking in positions 11-20. High potential for quick wins.
+                                                            </p>
+                                                            {selectedDimensions.includes("date") && (
+                                                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                                                                    Aggregated across dates
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                     <button
                                                         onClick={() => downloadCsv(strikingDistanceData, `striking_distance_${selectedProperty}.csv`)}
@@ -1689,9 +1935,16 @@ export default function GscExportPage() {
                                                         <h2 className="text-xl font-bold text-gray-900 dark:text-white">
                                                             CTR Opportunity Analysis
                                                         </h2>
-                                                        <p className="text-gray-500 dark:text-gray-400 text-sm">
-                                                            High ranking queries (Pos &lt; 10) with lower than expected CTR (&lt; 3%).
-                                                        </p>
+                                                        <div className="flex items-center gap-2 mt-1">
+                                                            <p className="text-gray-500 dark:text-gray-400 text-sm">
+                                                                High ranking queries (Pos &lt; 10) with lower than expected CTR (&lt; 3%).
+                                                            </p>
+                                                            {selectedDimensions.includes("date") && (
+                                                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                                                                    Aggregated across dates
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                     <button
                                                         onClick={() => downloadCsv(ctrOpportunityData, `ctr_opportunities_${selectedProperty}.csv`)}
@@ -1731,11 +1984,10 @@ export default function GscExportPage() {
                                     </div>
                                 )}
                             </>
-                        )
-                        }
-                    </div >
-                </main >
-            </div >
-        </ThemeProvider >
+                        )}
+                    </div>
+                </main>
+            </div>
+        </ThemeProvider>
     );
 }
