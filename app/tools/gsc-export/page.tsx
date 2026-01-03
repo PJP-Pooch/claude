@@ -84,11 +84,13 @@ export default function GscExportPage() {
     const [loadingMessage, setLoadingMessage] = useState("");
     const [data, setData] = useState<GscRow[] | null>(null);
     const [error, setError] = useState("");
-    const [activeTab, setActiveTab] = useState<"raw" | "analysis" | "cannibalization" | "query_counts">("raw");
+    const [activeTab, setActiveTab] = useState<"raw" | "analysis" | "cannibalization" | "query_counts" | "striking_distance" | "ctr_opportunity">("raw");
     const [expandedQueries, setExpandedQueries] = useState<Set<string>>(new Set());
     const [sortConfig, setSortConfig] = useState<{ key: string; direction: "asc" | "desc" } | null>(null);
-    // Separate sort config for child rows (pages) in the pivot table
     const [childSortConfig, setChildSortConfig] = useState<{ key: string; direction: "asc" | "desc" } | null>(null);
+
+    // Brand Segmentation State
+    const [brandKeywords, setBrandKeywords] = useState("");
 
     const toggleQueryExpansion = (query: string) => {
         const newExpanded = new Set(expandedQueries);
@@ -144,6 +146,52 @@ export default function GscExportPage() {
             return true;
         });
     }, [data, wordCountFilterType, wordCountFilterValue]);
+
+    // Striking Distance Logic (Position 11-20)
+    const strikingDistanceData = useMemo(() => {
+        if (!filteredData || !selectedDimensions.includes("query")) return null;
+        return filteredData
+            .filter(row => row.position > 10 && row.position <= 20)
+            .sort((a, b) => b.impressions - a.impressions);
+    }, [filteredData, selectedDimensions]);
+
+    // Brand vs Non-Brand Logic
+    const brandSegmentData = useMemo(() => {
+        if (!filteredData || !selectedDimensions.includes("query")) return null;
+        const brandTerms = brandKeywords.split(',').map(t => t.trim().toLowerCase()).filter(t => t !== "");
+
+        const summary = {
+            brand: { clicks: 0, impressions: 0, count: 0 },
+            nonBrand: { clicks: 0, impressions: 0, count: 0 }
+        };
+
+        const queryIndex = selectedDimensions.indexOf("query");
+        filteredData.forEach(row => {
+            const query = row.keys[queryIndex]?.toLowerCase() || "";
+            const isBrand = brandTerms.some(term => query.includes(term));
+
+            if (isBrand) {
+                summary.brand.clicks += row.clicks;
+                summary.brand.impressions += row.impressions;
+                summary.brand.count++;
+            } else {
+                summary.nonBrand.clicks += row.clicks;
+                summary.nonBrand.impressions += row.impressions;
+                summary.nonBrand.count++;
+            }
+        });
+
+        return summary;
+    }, [filteredData, selectedDimensions, brandKeywords]);
+
+    // CTR Opportunity Logic (High Impr, High Rank, Low CTR)
+    const ctrOpportunityData = useMemo(() => {
+        if (!filteredData) return null;
+        // Simple heuristic: Rank < 5, Impr > average, CTR < 2% (or below expected for position)
+        return filteredData
+            .filter(row => row.position <= 10 && row.ctr < 0.03) // simplified threshold
+            .sort((a, b) => b.impressions - a.impressions);
+    }, [filteredData]);
 
     const queryAnalysis = useMemo(() => {
         if (!filteredData || !selectedDimensions.includes("query") || !selectedDimensions.includes("date")) return null;
@@ -576,6 +624,7 @@ export default function GscExportPage() {
         setWordCountFilterType("all");
         setWordCountFilterValue("");
         setDeviceFilter("all");
+        setBrandKeywords("");
     };
 
     if (status === "loading") {
@@ -970,6 +1019,22 @@ export default function GscExportPage() {
                                                     </div>
                                                 </div>
                                             )}
+
+                                            {/* Brand Keywords Filter */}
+                                            {selectedDimensions.includes("query") && (
+                                                <div className="space-y-2">
+                                                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                                                        Brand Keywords (comma separated)
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="brand, brandname, etc..."
+                                                        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                                                        value={brandKeywords}
+                                                        onChange={(e) => setBrandKeywords(e.target.value)}
+                                                    />
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 
@@ -1049,7 +1114,69 @@ export default function GscExportPage() {
                                                     Query Counts
                                                 </button>
                                             )}
+                                            {strikingDistanceData && (
+                                                <button
+                                                    onClick={() => setActiveTab("striking_distance")}
+                                                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === "striking_distance"
+                                                        ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
+                                                        : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                                                        }`}
+                                                >
+                                                    Striking Distance
+                                                </button>
+                                            )}
+                                            {ctrOpportunityData && (
+                                                <button
+                                                    onClick={() => setActiveTab("ctr_opportunity")}
+                                                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === "ctr_opportunity"
+                                                        ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
+                                                        : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                                                        }`}
+                                                >
+                                                    CTR Opps
+                                                </button>
+                                            )}
                                         </div>
+
+                                        {/* Brand Segment Summary Widgets */}
+                                        {brandSegmentData && brandKeywords && (
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                                                <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+                                                    <h3 className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-2">Non-Brand Performance</h3>
+                                                    <div className="flex justify-between items-end">
+                                                        <div>
+                                                            <p className="text-2xl font-bold text-gray-900 dark:text-white">{brandSegmentData.nonBrand.clicks.toLocaleString()}</p>
+                                                            <p className="text-sm text-gray-500">Clicks</p>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <p className="text-lg font-semibold text-gray-700 dark:text-gray-300">
+                                                                {brandSegmentData.nonBrand.impressions > 0
+                                                                    ? ((brandSegmentData.nonBrand.clicks / brandSegmentData.nonBrand.impressions) * 100).toFixed(2)
+                                                                    : 0}%
+                                                            </p>
+                                                            <p className="text-xs text-gray-500 hover:text-gray-400">Avg. CTR</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+                                                    <h3 className="text-xs font-semibold text-green-600 dark:text-green-400 uppercase tracking-wider mb-2">Brand Performance</h3>
+                                                    <div className="flex justify-between items-end">
+                                                        <div>
+                                                            <p className="text-2xl font-bold text-gray-900 dark:text-white">{brandSegmentData.brand.clicks.toLocaleString()}</p>
+                                                            <p className="text-sm text-gray-500">Clicks</p>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <p className="text-lg font-semibold text-gray-700 dark:text-gray-300">
+                                                                {brandSegmentData.brand.impressions > 0
+                                                                    ? ((brandSegmentData.brand.clicks / brandSegmentData.brand.impressions) * 100).toFixed(2)
+                                                                    : 0}%
+                                                            </p>
+                                                            <p className="text-xs text-gray-500 hover:text-gray-400">Avg. CTR</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
 
                                         {/* Raw Data Tab */}
                                         {activeTab === "raw" && (
@@ -1416,97 +1543,191 @@ export default function GscExportPage() {
                                         }
 
                                         {/* Query Counts Tab */}
-                                        {
-                                            activeTab === "query_counts" && queryCountData && queryCountChartData && (
-                                                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                                                    <div className="flex justify-between items-center mb-6">
-                                                        <div>
-                                                            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                                                                Query Count Analysis
-                                                            </h2>
-                                                            <p className="text-gray-500 dark:text-gray-400 text-sm">
-                                                                Number of unique ranking queries per page over time
-                                                            </p>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="h-[400px] w-full mb-8">
-                                                        <ResponsiveContainer width="100%" height="100%">
-                                                            <LineChart
-                                                                data={queryCountChartData}
-                                                                margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                                                            >
-                                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#374151" opacity={0.2} />
-                                                                <XAxis dataKey="month" stroke="#9CA3AF" />
-                                                                <YAxis stroke="#9CA3AF" />
-                                                                <Tooltip
-                                                                    contentStyle={{
-                                                                        backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                                                                        borderRadius: '8px',
-                                                                        border: 'none',
-                                                                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                                                                    }}
-                                                                />
-                                                                <Legend />
-                                                                {queryCountData.slice(0, 5).map((page, index) => (
-                                                                    <Line
-                                                                        key={page.page}
-                                                                        type="monotone"
-                                                                        dataKey={page.page}
-                                                                        stroke={[
-                                                                            "#3b82f6", // blue
-                                                                            "#ef4444", // red
-                                                                            "#10b981", // green
-                                                                            "#f59e0b", // amber
-                                                                            "#8b5cf6"  // violet
-                                                                        ][index % 5]}
-                                                                        strokeWidth={2}
-                                                                        dot={{ r: 4 }}
-                                                                    />
-                                                                ))}
-                                                            </LineChart>
-                                                        </ResponsiveContainer>
-                                                    </div>
-
-                                                    <div className="overflow-x-auto border rounded-lg border-gray-200 dark:border-gray-700">
-                                                        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                                                            <thead className="bg-gray-50 dark:bg-gray-900/30">
-                                                                <tr>
-                                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                                                        Page
-                                                                    </th>
-                                                                    {queryCountChartData.map(d => (
-                                                                        <th key={d.month} className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                                                            {d.month}
-                                                                        </th>
-                                                                    ))}
-                                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                                                        Total Queries
-                                                                    </th>
-                                                                </tr>
-                                                            </thead>
-                                                            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                                                {queryCountData.map((row, i) => (
-                                                                    <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                                                        <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white max-w-md truncate" title={row.page}>
-                                                                            {row.page}
-                                                                        </td>
-                                                                        {queryCountChartData.map(d => (
-                                                                            <td key={d.month} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                                                                {row.counts[d.month] || 0}
-                                                                            </td>
-                                                                        ))}
-                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 dark:text-white">
-                                                                            {row.totalQueries}
-                                                                        </td>
-                                                                    </tr>
-                                                                ))}
-                                                            </tbody>
-                                                        </table>
+                                        {activeTab === "query_counts" && queryCountData && queryCountChartData && (
+                                            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                                                <div className="flex justify-between items-center mb-6">
+                                                    <div>
+                                                        <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                                                            Query Count Analysis
+                                                        </h2>
+                                                        <p className="text-gray-500 dark:text-gray-400 text-sm">
+                                                            Number of unique ranking queries per page over time
+                                                        </p>
                                                     </div>
                                                 </div>
-                                            )
-                                        }
+
+                                                <div className="h-[400px] w-full mb-8">
+                                                    <ResponsiveContainer width="100%" height="100%">
+                                                        <LineChart
+                                                            data={queryCountChartData}
+                                                            margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                                                        >
+                                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#374151" opacity={0.2} />
+                                                            <XAxis dataKey="month" stroke="#9CA3AF" />
+                                                            <YAxis stroke="#9CA3AF" />
+                                                            <Tooltip
+                                                                contentStyle={{
+                                                                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                                                                    borderRadius: '8px',
+                                                                    border: 'none',
+                                                                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                                                                }}
+                                                            />
+                                                            <Legend />
+                                                            {queryCountData.slice(0, 5).map((page, index) => (
+                                                                <Line
+                                                                    key={page.page}
+                                                                    type="monotone"
+                                                                    dataKey={page.page}
+                                                                    stroke={[
+                                                                        "#3b82f6", // blue
+                                                                        "#ef4444", // red
+                                                                        "#10b981", // green
+                                                                        "#f59e0b", // amber
+                                                                        "#8b5cf6"  // violet
+                                                                    ][index % 5]}
+                                                                    strokeWidth={2}
+                                                                    dot={{ r: 4 }}
+                                                                />
+                                                            ))}
+                                                        </LineChart>
+                                                    </ResponsiveContainer>
+                                                </div>
+
+                                                <div className="overflow-x-auto border rounded-lg border-gray-200 dark:border-gray-700">
+                                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                                        <thead className="bg-gray-50 dark:bg-gray-900/30">
+                                                            <tr>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                                    Page
+                                                                </th>
+                                                                {queryCountChartData.map(d => (
+                                                                    <th key={d.month} className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                                        {d.month}
+                                                                    </th>
+                                                                ))}
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                                    Total Queries
+                                                                </th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                                            {queryCountData.map((row, i) => (
+                                                                <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                                                    <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white max-w-md truncate" title={row.page}>
+                                                                        {row.page}
+                                                                    </td>
+                                                                    {queryCountChartData.map(d => (
+                                                                        <td key={d.month} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                                            {row.counts[d.month] || 0}
+                                                                        </td>
+                                                                    ))}
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 dark:text-white">
+                                                                        {row.totalQueries}
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Striking Distance Tab */}
+                                        {activeTab === "striking_distance" && strikingDistanceData && (
+                                            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                                                <div className="flex justify-between items-center mb-6">
+                                                    <div>
+                                                        <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                                                            Striking Distance Report
+                                                        </h2>
+                                                        <p className="text-gray-500 dark:text-gray-400 text-sm">
+                                                            Queries ranking in positions 11-20. High potential for quick wins.
+                                                        </p>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => downloadCsv(strikingDistanceData, `striking_distance_${selectedProperty}.csv`)}
+                                                        className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+                                                    >
+                                                        <Download className="h-4 w-4 mr-2" />
+                                                        Download CSV
+                                                    </button>
+                                                </div>
+
+                                                <div className="overflow-x-auto border rounded-lg border-gray-200 dark:border-gray-700">
+                                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                                        <thead className="bg-gray-50 dark:bg-gray-900/30">
+                                                            <tr>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Query</th>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Impr.</th>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Pos.</th>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">CTR</th>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Clicks</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                                            {strikingDistanceData.slice(0, 100).map((row, i) => (
+                                                                <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                                                    <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">{row.keys[selectedDimensions.indexOf("query")]}</td>
+                                                                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">{row.impressions.toLocaleString()}</td>
+                                                                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">{row.position.toFixed(1)}</td>
+                                                                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">{(row.ctr * 100).toFixed(2)}%</td>
+                                                                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">{row.clicks}</td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* CTR Opportunity Tab */}
+                                        {activeTab === "ctr_opportunity" && ctrOpportunityData && (
+                                            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                                                <div className="flex justify-between items-center mb-6">
+                                                    <div>
+                                                        <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                                                            CTR Opportunity Analysis
+                                                        </h2>
+                                                        <p className="text-gray-500 dark:text-gray-400 text-sm">
+                                                            High ranking queries (Pos &lt; 10) with lower than expected CTR (&lt; 3%).
+                                                        </p>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => downloadCsv(ctrOpportunityData, `ctr_opportunities_${selectedProperty}.csv`)}
+                                                        className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+                                                    >
+                                                        <Download className="h-4 w-4 mr-2" />
+                                                        Download CSV
+                                                    </button>
+                                                </div>
+
+                                                <div className="overflow-x-auto border rounded-lg border-gray-200 dark:border-gray-700">
+                                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                                        <thead className="bg-gray-50 dark:bg-gray-900/30">
+                                                            <tr>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Query</th>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Pos.</th>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Impr.</th>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">CTR</th>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Clicks</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                                            {ctrOpportunityData.slice(0, 100).map((row, i) => (
+                                                                <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                                                    <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">{row.keys[selectedDimensions.indexOf("query")]}</td>
+                                                                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">{row.position.toFixed(1)}</td>
+                                                                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">{row.impressions.toLocaleString()}</td>
+                                                                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">{(row.ctr * 100).toFixed(2)}%</td>
+                                                                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">{row.clicks}</td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </>
