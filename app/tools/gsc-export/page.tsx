@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession, signIn, signOut } from "next-auth/react";
-import { useState, useEffect, Fragment } from "react";
+import { useState, useEffect, Fragment, useMemo } from "react";
 import { format, parseISO } from "date-fns";
 import {
     BarChart,
@@ -26,6 +26,7 @@ type GscRow = {
     impressions: number;
     ctr: number;
     position: number;
+    wordCount?: number;
 };
 
 type QueryPositionRow = {
@@ -76,14 +77,12 @@ export default function GscExportPage() {
     const [pageFilterValue, setPageFilterValue] = useState("");
     const [queryFilterType, setQueryFilterType] = useState("contains");
     const [queryFilterValue, setQueryFilterValue] = useState("");
+    const [wordCountFilterType, setWordCountFilterType] = useState<"all" | "gt" | "lt" | "eq">("all");
+    const [wordCountFilterValue, setWordCountFilterValue] = useState("");
 
     const [loading, setLoading] = useState(false);
     const [loadingMessage, setLoadingMessage] = useState("");
     const [data, setData] = useState<GscRow[] | null>(null);
-    const [queryAnalysis, setQueryAnalysis] = useState<QueryPositionRow[] | null>(null);
-    const [cannibalizationData, setCannibalizationData] = useState<CannibalizationRow[] | null>(null);
-    const [queryCountData, setQueryCountData] = useState<QueryCountRow[] | null>(null);
-    const [queryCountChartData, setQueryCountChartData] = useState<any[] | null>(null);
     const [error, setError] = useState("");
     const [activeTab, setActiveTab] = useState<"raw" | "analysis" | "cannibalization" | "query_counts">("raw");
     const [expandedQueries, setExpandedQueries] = useState<Set<string>>(new Set());
@@ -119,17 +118,118 @@ export default function GscExportPage() {
         setChildSortConfig({ key, direction });
     };
 
+    // Sort child rows for a given query (used in Cannibalization)
+    const getSortedPages = (pages: { url: string; clicks: number; impressions: number; ctr: number; position: number }[]) => {
+        if (!childSortConfig) return pages;
+        return [...pages].sort((a, b) => {
+            const aValue = (a as any)[childSortConfig.key];
+            const bValue = (b as any)[childSortConfig.key];
+            if (aValue < bValue) return childSortConfig.direction === "asc" ? -1 : 1;
+            if (aValue > bValue) return childSortConfig.direction === "asc" ? 1 : -1;
+            return 0;
+        });
+    };
 
-    const getSortedCannibalizationData = () => {
+    const filteredData = useMemo(() => {
+        if (!data) return null;
+        return data.filter(row => {
+            if (wordCountFilterType === "all" || !wordCountFilterValue) return true;
+            const count = row.wordCount || 0;
+            const target = parseInt(wordCountFilterValue);
+            if (isNaN(target)) return true;
+
+            if (wordCountFilterType === "gt") return count > target;
+            if (wordCountFilterType === "lt") return count < target;
+            if (wordCountFilterType === "eq") return count === target;
+            return true;
+        });
+    }, [data, wordCountFilterType, wordCountFilterValue]);
+
+    const queryAnalysis = useMemo(() => {
+        if (!filteredData || !selectedDimensions.includes("query") || !selectedDimensions.includes("date")) return null;
+        const buckets: { [key: string]: QueryPositionRow } = {};
+
+        filteredData.forEach((row) => {
+            const dateIndex = selectedDimensions.indexOf("date");
+            if (dateIndex === -1) return;
+
+            const dateStr = row.keys[dateIndex];
+            if (!dateStr) return;
+
+            const date = parseISO(dateStr);
+            const month = format(date, "yyyy-MM");
+
+            if (!buckets[month]) {
+                buckets[month] = {
+                    month,
+                    positions_1_3: 0,
+                    positions_4_10: 0,
+                    positions_11_20: 0,
+                    positions_20_plus: 0,
+                    totalQueries: 0,
+                };
+            }
+
+            const pos = row.position;
+            if (pos <= 3) buckets[month].positions_1_3++;
+            else if (pos <= 10) buckets[month].positions_4_10++;
+            else if (pos <= 20) buckets[month].positions_11_20++;
+            else buckets[month].positions_20_plus++;
+
+            buckets[month].totalQueries++;
+        });
+
+        return Object.values(buckets).sort((a, b) => a.month.localeCompare(b.month));
+    }, [filteredData, selectedDimensions]);
+
+    const cannibalizationData = useMemo(() => {
+        if (!filteredData || !selectedDimensions.includes("query") || !selectedDimensions.includes("page")) return null;
+        const queryMap: { [key: string]: CannibalizationRow } = {};
+        const queryIndex = selectedDimensions.indexOf("query");
+        const pageIndex = selectedDimensions.indexOf("page");
+
+        if (queryIndex === -1 || pageIndex === -1) return null;
+
+        filteredData.forEach(row => {
+            const query = row.keys[queryIndex];
+            const page = row.keys[pageIndex];
+
+            if (!query || !page) return;
+
+            if (!queryMap[query]) {
+                queryMap[query] = {
+                    query,
+                    pageCount: 0,
+                    totalClicks: 0,
+                    totalImpressions: 0,
+                    pages: []
+                };
+            }
+
+            queryMap[query].totalClicks += row.clicks;
+            queryMap[query].totalImpressions += row.impressions;
+            queryMap[query].pages.push({
+                url: page,
+                clicks: row.clicks,
+                impressions: row.impressions,
+                position: row.position,
+                ctr: row.ctr
+            });
+            queryMap[query].pageCount = queryMap[query].pages.length;
+        });
+
+        return Object.values(queryMap)
+            .filter(item => item.pageCount > 1 && item.totalClicks > 0)
+            .sort((a, b) => b.totalClicks - a.totalClicks);
+    }, [filteredData, selectedDimensions]);
+
+    const sortedCannibalizationData = useMemo(() => {
         if (!cannibalizationData) return null;
         if (!sortConfig) return cannibalizationData;
 
         return [...cannibalizationData].sort((a, b) => {
             let aValue: any = a[sortConfig.key as keyof CannibalizationRow];
             let bValue: any = b[sortConfig.key as keyof CannibalizationRow];
-
-            // Handle nested properties or special cases if needed
-            // For now, top-level properties are sufficient based on the type definition
 
             if (aValue < bValue) {
                 return sortConfig.direction === "asc" ? -1 : 1;
@@ -139,17 +239,18 @@ export default function GscExportPage() {
             }
             return 0;
         });
-    };
-
-    const sortedCannibalizationData = getSortedCannibalizationData();
+    }, [cannibalizationData, sortConfig]);
 
     const getSortedData = () => {
-        if (!data) return null;
-        if (!sortConfig) return data;
-        return [...data].sort((a, b) => {
+        if (!filteredData) return null;
+        if (!sortConfig) return filteredData;
+        return [...filteredData].sort((a, b) => {
             let aValue: any;
             let bValue: any;
-            if (selectedDimensions.includes(sortConfig.key)) {
+            if (sortConfig.key === "wordCount") {
+                aValue = a.wordCount || 0;
+                bValue = b.wordCount || 0;
+            } else if (selectedDimensions.includes(sortConfig.key)) {
                 const index = selectedDimensions.indexOf(sortConfig.key);
                 aValue = a.keys[index];
                 bValue = b.keys[index];
@@ -159,18 +260,6 @@ export default function GscExportPage() {
             }
             if (aValue < bValue) return sortConfig.direction === "asc" ? -1 : 1;
             if (aValue > bValue) return sortConfig.direction === "asc" ? 1 : -1;
-            return 0;
-        });
-    };
-
-    // Sort child rows for a given query
-    const getSortedPages = (pages: { url: string; clicks: number; impressions: number; ctr: number; position: number }[]) => {
-        if (!childSortConfig) return pages;
-        return [...pages].sort((a, b) => {
-            const aValue = (a as any)[childSortConfig.key];
-            const bValue = (b as any)[childSortConfig.key];
-            if (aValue < bValue) return childSortConfig.direction === "asc" ? -1 : 1;
-            if (aValue > bValue) return childSortConfig.direction === "asc" ? 1 : -1;
             return 0;
         });
     };
@@ -204,9 +293,6 @@ export default function GscExportPage() {
         setLoadingMessage("Preparing to fetch data...");
         setError("");
         setData([]); // Clear previous data
-        setQueryAnalysis(null);
-        setCannibalizationData(null);
-        setQueryCountData(null);
 
         try {
             let startDate = "";
@@ -298,18 +384,27 @@ export default function GscExportPage() {
                         if (message.type === "progress") {
                             setLoadingMessage(message.message || "Fetching data...");
                         } else if (message.type === "data") {
-                            const newRows = message.rows;
+                            const newRows = message.rows || [];
                             accumulatedRows.push(...newRows);
-                            setData(prev => aggregateData([...(prev || []), ...newRows]));
+
+                            // Group by 1000 rows for UI updates to maintain performance
+                            if (accumulatedRows.length % 1000 < newRows.length || accumulatedRows.length < 1000) {
+                                const currentAggregated = aggregateData(accumulatedRows);
+                                setData(currentAggregated);
+                            }
                         } else if (message.type === "complete") {
-                            // Handled at end
+                            // Done
+                        } else if (message.type === "batch_error") {
+                            console.error("Batch error:", message.message);
+                            // We don't throw to allow other batches to succeed, but we could notify
+                            setLoadingMessage(`Warning: ${message.message}`);
                         } else if (message.type === "error") {
                             throw new Error(message.message);
                         }
                     } catch (e) {
-                        // Ignore incomplete JSON chunks usually
-                        // But console.error might be noisy if we hit it often?
-                        // console.error("Error parsing stream message", e);
+                        if (e instanceof Error && e.message !== "Unexpected end of JSON input") {
+                            console.error("Error parsing stream message", e);
+                        }
                     }
                 }
             }
@@ -319,12 +414,13 @@ export default function GscExportPage() {
                 try {
                     const message = JSON.parse(buffer);
                     if (message.type === "data") {
-                        const newRows = message.rows;
+                        const newRows = message.rows || [];
                         accumulatedRows.push(...newRows);
-                        setData(prev => aggregateData([...(prev || []), ...newRows]));
+                    } else if (message.type === "error") {
+                        throw new Error(message.message);
                     }
                 } catch (e) {
-                    console.error("Error parsing final buffer", e);
+                    // Final buffer might be incomplete, ignore
                 }
             }
 
@@ -335,28 +431,6 @@ export default function GscExportPage() {
             const aggregated = aggregateData(accumulatedRows);
             setData(aggregated);
 
-            if (
-                selectedDimensions.includes("query") &&
-                selectedDimensions.includes("date")
-            ) {
-                analyzeQueryPositions(aggregated);
-            }
-
-            if (
-                selectedDimensions.includes("query") &&
-                selectedDimensions.includes("page")
-            ) {
-                analyzeCannibalization(aggregated);
-            }
-
-            if (
-                selectedDimensions.includes("query") &&
-                selectedDimensions.includes("page") &&
-                selectedDimensions.includes("date")
-            ) {
-                analyzeQueryCounts(aggregated);
-            }
-
         } catch (err) {
             setError("Failed to fetch data. Please try again.");
             console.error(err);
@@ -366,156 +440,68 @@ export default function GscExportPage() {
     };
 
     const aggregateData = (rows: GscRow[]) => {
+        if (!rows || rows.length === 0) return [];
+        const queryIndex = selectedDimensions.indexOf("query");
         const map = new Map<string, GscRow>();
         rows.forEach(row => {
+            if (!row.keys) return;
             const key = row.keys.join('|||');
             if (map.has(key)) {
                 const existing = map.get(key)!;
-                const newImpressions = existing.impressions + row.impressions;
-                const newClicks = existing.clicks + row.clicks;
+                const newImpressions = (existing.impressions || 0) + (row.impressions || 0);
+                const newClicks = (existing.clicks || 0) + (row.clicks || 0);
 
                 // Weighted average for position based on impressions
                 const newPosition = newImpressions > 0
-                    ? (existing.position * existing.impressions + row.position * row.impressions) / newImpressions
-                    : (existing.position + row.position) / 2;
+                    ? ((existing.position || 0) * (existing.impressions || 0) + (row.position || 0) * (row.impressions || 0)) / newImpressions
+                    : ((existing.position || 0) + (row.position || 0)) / 2;
 
                 map.set(key, {
-                    keys: row.keys,
+                    ...existing,
                     clicks: newClicks,
                     impressions: newImpressions,
                     ctr: newImpressions > 0 ? newClicks / newImpressions : 0,
                     position: newPosition
                 });
             } else {
-                map.set(key, { ...row });
+                let wordCount: number | undefined;
+                if (queryIndex !== -1 && row.keys[queryIndex]) {
+                    const query = row.keys[queryIndex];
+                    wordCount = query.trim().split(/\s+/).filter(word => word.length > 0).length;
+                }
+                map.set(key, { ...row, wordCount });
             }
         });
         return Array.from(map.values());
     };
 
-    const analyzeQueryPositions = (rows: GscRow[]) => {
-        const buckets: { [key: string]: QueryPositionRow } = {};
+    // Memoized Chart and Data for Query Counts
+    const { qcData, qcChartData } = useMemo(() => {
+        if (!filteredData || filteredData.length === 0 || !selectedDimensions.includes("query") || !selectedDimensions.includes("page") || !selectedDimensions.includes("date")) {
+            return { qcData: null, qcChartData: null };
+        }
 
-        rows.forEach((row) => {
-            const dateIndex = selectedDimensions.indexOf("date");
-            if (dateIndex === -1) return;
-
-            const dateStr = row.keys[dateIndex];
-            if (!dateStr) return;
-
-            const date = parseISO(dateStr);
-            const month = format(date, "yyyy-MM");
-
-            if (!buckets[month]) {
-                buckets[month] = {
-                    month,
-                    positions_1_3: 0,
-                    positions_4_10: 0,
-                    positions_11_20: 0,
-                    positions_20_plus: 0,
-                    totalQueries: 0,
-                };
-            }
-
-            const pos = row.position;
-            if (pos <= 3) buckets[month].positions_1_3++;
-            else if (pos <= 10) buckets[month].positions_4_10++;
-            else if (pos <= 20) buckets[month].positions_11_20++;
-            else buckets[month].positions_20_plus++;
-
-            buckets[month].totalQueries++;
-        });
-
-        setQueryAnalysis(Object.values(buckets).sort((a, b) => a.month.localeCompare(b.month)));
-    };
-
-    const analyzeCannibalization = (rows: GscRow[]) => {
-        const queryMap: { [key: string]: CannibalizationRow } = {};
-        const queryIndex = selectedDimensions.indexOf("query");
-        const pageIndex = selectedDimensions.indexOf("page");
-
-        if (queryIndex === -1 || pageIndex === -1) return;
-
-        rows.forEach(row => {
-            const query = row.keys[queryIndex];
-            const page = row.keys[pageIndex];
-
-            if (!query || !page) return;
-
-            if (!queryMap[query]) {
-                queryMap[query] = {
-                    query,
-                    pageCount: 0,
-                    totalClicks: 0,
-                    totalImpressions: 0,
-                    pages: []
-                };
-            }
-
-            const existingPage = queryMap[query].pages.find(p => p.url === page);
-            if (existingPage) {
-                existingPage.clicks += row.clicks;
-                existingPage.impressions += row.impressions;
-                existingPage.position = (existingPage.position + row.position) / 2;
-                existingPage.ctr = existingPage.impressions > 0 ? existingPage.clicks / existingPage.impressions : 0;
-            } else {
-                queryMap[query].pages.push({
-                    url: page,
-                    clicks: row.clicks,
-                    impressions: row.impressions,
-                    position: row.position,
-                    ctr: row.ctr
-                });
-            }
-
-            queryMap[query].totalClicks += row.clicks;
-            queryMap[query].totalImpressions += row.impressions;
-        });
-
-        const cannibalizedQueries = Object.values(queryMap)
-            .map(item => ({
-                ...item,
-                pageCount: item.pages.length,
-                pages: item.pages.sort((a, b) => b.clicks - a.clicks)
-            }))
-            .filter(item => item.pageCount > 1 && item.totalClicks > 0)
-            .sort((a, b) => b.totalClicks - a.totalClicks);
-
-        setCannibalizationData(cannibalizedQueries);
-    };
-
-    const analyzeQueryCounts = (rows: GscRow[]) => {
         const pageMap: { [page: string]: { [month: string]: Set<string> } } = {};
         const queryIndex = selectedDimensions.indexOf("query");
         const pageIndex = selectedDimensions.indexOf("page");
         const dateIndex = selectedDimensions.indexOf("date");
 
-        if (queryIndex === -1 || pageIndex === -1 || dateIndex === -1) return;
+        if (queryIndex === -1 || pageIndex === -1 || dateIndex === -1) return { qcData: null, qcChartData: null };
 
         const allMonths = new Set<string>();
-
-        rows.forEach(row => {
+        filteredData.forEach(row => {
             const query = row.keys[queryIndex];
             const page = row.keys[pageIndex];
             const dateStr = row.keys[dateIndex];
-
-            // Skip if any required value is undefined
             if (!query || !page || !dateStr) return;
-
             const month = format(parseISO(dateStr), "yyyy-MM");
             allMonths.add(month);
-
-            if (!pageMap[page]) {
-                pageMap[page] = {};
-            }
-            if (!pageMap[page][month]) {
-                pageMap[page][month] = new Set();
-            }
+            if (!pageMap[page]) pageMap[page] = {};
+            if (!pageMap[page][month]) pageMap[page][month] = new Set();
             pageMap[page][month].add(query);
         });
 
         const sortedMonths = Array.from(allMonths).sort();
-
         const processedData: QueryCountRow[] = Object.entries(pageMap).map(([page, months]) => {
             const counts: { [month: string]: number } = {};
             let totalQueries = 0;
@@ -525,11 +511,8 @@ export default function GscExportPage() {
                 totalQueries += count;
             });
             return { page, counts, totalQueries };
-        }).sort((a, b) => b.totalQueries - a.totalQueries).slice(0, 50); // Top 50 pages
+        }).sort((a, b) => b.totalQueries - a.totalQueries).slice(0, 50);
 
-        setQueryCountData(processedData);
-
-        // Prepare chart data (Top 5 pages)
         const top5Pages = processedData.slice(0, 5);
         const chartData = sortedMonths.map(month => {
             const point: any = { month };
@@ -538,8 +521,13 @@ export default function GscExportPage() {
             });
             return point;
         });
-        setQueryCountChartData(chartData);
-    };
+
+        return { qcData: processedData, qcChartData: chartData };
+    }, [filteredData, selectedDimensions]);
+
+    // Use these in the UI
+    const queryCountData = qcData;
+    const queryCountChartData = qcChartData;
 
     const downloadCsv = (data: any[], filename: string) => {
         if (!data || data.length === 0) return;
@@ -554,6 +542,9 @@ export default function GscExportPage() {
                 flatRow.impressions = row.impressions;
                 flatRow.ctr = row.ctr;
                 flatRow.position = row.position;
+                if (row.wordCount !== undefined) {
+                    flatRow.wordCount = row.wordCount;
+                }
                 return flatRow;
             }
             return row;
@@ -582,6 +573,8 @@ export default function GscExportPage() {
         setPageFilterValue("");
         setQueryFilterType("contains");
         setQueryFilterValue("");
+        setWordCountFilterType("all");
+        setWordCountFilterValue("");
         setDeviceFilter("all");
     };
 
@@ -947,6 +940,36 @@ export default function GscExportPage() {
                                                     />
                                                 </div>
                                             </div>
+
+                                            {/* Word Count Filter */}
+                                            {selectedDimensions.includes("query") && (
+                                                <div className="space-y-2">
+                                                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                                                        Word Count Filter
+                                                    </label>
+                                                    <div className="flex space-x-2">
+                                                        <select
+                                                            className="w-1/2 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                                                            value={wordCountFilterType}
+                                                            onChange={(e) => setWordCountFilterType(e.target.value as any)}
+                                                        >
+                                                            <option value="all">Any Words</option>
+                                                            <option value="gt">Greater Than (&gt;)</option>
+                                                            <option value="lt">Less Than (&lt;)</option>
+                                                            <option value="eq">Equal To (=)</option>
+                                                        </select>
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            placeholder="Words..."
+                                                            className="w-1/2 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                                                            value={wordCountFilterValue}
+                                                            onChange={(e) => setWordCountFilterValue(e.target.value)}
+                                                            disabled={wordCountFilterType === "all"}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 
@@ -1068,6 +1091,21 @@ export default function GscExportPage() {
                                                                         </div>
                                                                     </th>
                                                                 ))}
+                                                                {selectedDimensions.includes("query") && (
+                                                                    <th
+                                                                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                                                                        onClick={() => handleSort("wordCount")}
+                                                                    >
+                                                                        <div className="flex items-center">
+                                                                            Words
+                                                                            {sortConfig?.key === "wordCount" ? (
+                                                                                sortConfig.direction === "asc" ? <ArrowUp className="w-4 h-4 ml-1" /> : <ArrowDown className="w-4 h-4 ml-1" />
+                                                                            ) : (
+                                                                                <ArrowUpDown className="w-4 h-4 ml-1 opacity-50" />
+                                                                            )}
+                                                                        </div>
+                                                                    </th>
+                                                                )}
                                                                 <th
                                                                     className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
                                                                     onClick={() => handleSort("clicks")}
@@ -1135,6 +1173,11 @@ export default function GscExportPage() {
                                                                                 {k}
                                                                             </td>
                                                                         ))}
+                                                                    {selectedDimensions.includes("query") && (
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                                            {row.wordCount}
+                                                                        </td>
+                                                                    )}
                                                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                                                         {row.clicks}
                                                                     </td>

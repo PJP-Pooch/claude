@@ -48,8 +48,8 @@ export async function POST(req: NextRequest) {
         };
 
         const countryIsoMap: Record<string, string> = {
-            "United States": "US",
             "United Kingdom": "GB",
+            "United States": "US",
             "Canada": "CA",
             "Australia": "AU",
             "Germany": "DE",
