@@ -117,6 +117,8 @@ export default function GscExportPage() {
     const [brandKeywords, setBrandKeywords] = useState("");
     const [granularity, setGranularity] = useState<"day" | "week" | "month">("month");
     const [selectedQcUrls, setSelectedQcUrls] = useState<string[]>([]);
+    const [urlDisplayMode, setUrlDisplayMode] = useState<"full" | "path">("full");
+    const [hasManuallyClearedQc, setHasManuallyClearedQc] = useState(false);
 
     const getPeriodKey = (date: Date, gran: "day" | "week" | "month") => {
         if (gran === "day") return format(date, "yyyy-MM-dd");
@@ -639,6 +641,8 @@ export default function GscExportPage() {
         setLoadingMessage("Preparing to fetch data...");
         setError("");
         setData([]); // Clear previous data
+        setSelectedQcUrls([]);
+        setHasManuallyClearedQc(false);
 
         try {
             let startDate = "";
@@ -866,7 +870,7 @@ export default function GscExportPage() {
 
         const topPagesForChart = selectedQcUrls.length > 0
             ? processedData.filter(p => selectedQcUrls.includes(p.page))
-            : processedData.slice(0, 1);
+            : (hasManuallyClearedQc ? [] : processedData.slice(0, 1));
 
         const chartData = sortedPeriods.map(period => {
             const entry: any = { month: period };
@@ -877,7 +881,17 @@ export default function GscExportPage() {
         });
 
         return { qcData: processedData, qcChartData: chartData, topPagesForChart };
-    }, [filteredData, selectedDimensions, granularity, selectedQcUrls]);
+    }, [filteredData, selectedDimensions, granularity, selectedQcUrls, hasManuallyClearedQc]);
+
+    const formatUrl = (url: string) => {
+        if (urlDisplayMode === "full") return url;
+        try {
+            const parsed = new URL(url);
+            return parsed.pathname + parsed.search;
+        } catch (e) {
+            return url;
+        }
+    };
 
     const downloadCsv = (data: any[], filename: string) => {
         if (!data || data.length === 0) return;
@@ -1953,15 +1967,34 @@ export default function GscExportPage() {
                                                             Number of unique ranking queries per page over time
                                                         </p>
                                                     </div>
-                                                    {selectedQcUrls.length > 0 && (
-                                                        <button
-                                                            onClick={() => setSelectedQcUrls([])}
-                                                            className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center"
-                                                        >
-                                                            <RefreshCw className="w-3 h-3 mr-1" />
-                                                            Clear Chart Selection
-                                                        </button>
-                                                    )}
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+                                                            <button
+                                                                onClick={() => setUrlDisplayMode("full")}
+                                                                className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${urlDisplayMode === "full" ? "bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm" : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"}`}
+                                                            >
+                                                                Full URL
+                                                            </button>
+                                                            <button
+                                                                onClick={() => setUrlDisplayMode("path")}
+                                                                className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${urlDisplayMode === "path" ? "bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm" : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"}`}
+                                                            >
+                                                                Path Only
+                                                            </button>
+                                                        </div>
+                                                        {selectedQcUrls.length > 0 && (
+                                                            <button
+                                                                onClick={() => {
+                                                                    setSelectedQcUrls([]);
+                                                                    setHasManuallyClearedQc(true);
+                                                                }}
+                                                                className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center"
+                                                            >
+                                                                <RefreshCw className="w-3 h-3 mr-1" />
+                                                                Clear Chart Selection
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 </div>
 
                                                 <div className="h-[400px] w-full mb-8">
@@ -1987,7 +2020,10 @@ export default function GscExportPage() {
                                                                     key={page.page}
                                                                     type="monotone"
                                                                     dataKey={page.page}
-                                                                    name={page.page.length > 30 ? page.page.substring(0, 30) + '...' : page.page}
+                                                                    name={(() => {
+                                                                        const formatted = formatUrl(page.page);
+                                                                        return formatted.length > 50 ? formatted.substring(0, 50) + '...' : formatted;
+                                                                    })()}
                                                                     stroke={[
                                                                         "#3b82f6", // blue
                                                                         "#ef4444", // red
@@ -2024,35 +2060,51 @@ export default function GscExportPage() {
                                                             </tr>
                                                         </thead>
                                                         <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                                            {queryCountData.map((row, i) => (
-                                                                <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                                                                    <td className="px-4 py-4 text-center">
-                                                                        <input
-                                                                            type="checkbox"
-                                                                            checked={selectedQcUrls.includes(row.page)}
-                                                                            onChange={() => {
-                                                                                if (selectedQcUrls.includes(row.page)) {
-                                                                                    setSelectedQcUrls(selectedQcUrls.filter(u => u !== row.page));
-                                                                                } else {
-                                                                                    setSelectedQcUrls([...selectedQcUrls, row.page]);
-                                                                                }
-                                                                            }}
-                                                                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
-                                                                        />
-                                                                    </td>
-                                                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white max-w-md truncate" title={row.page}>
-                                                                        {row.page}
-                                                                    </td>
-                                                                    {queryCountChartData.map(d => (
-                                                                        <td key={d.month} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                                                            {row.counts[d.month] || 0}
+                                                            {queryCountData.map((row, i) => {
+                                                                const isImplicitlySelected = selectedQcUrls.length === 0 && !hasManuallyClearedQc && i === 0;
+                                                                const isSelected = selectedQcUrls.includes(row.page) || isImplicitlySelected;
+
+                                                                return (
+                                                                    <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                                                        <td className="px-4 py-4 text-center">
+                                                                            <input
+                                                                                type="checkbox"
+                                                                                checked={isSelected}
+                                                                                onChange={() => {
+                                                                                    if (isSelected) {
+                                                                                        // If it was explicitly selected, remove it.
+                                                                                        // If it was implicitly selected (fallback), we are now manually interacting, so "unselect" means add nothing but set manual flag.
+                                                                                        if (selectedQcUrls.includes(row.page)) {
+                                                                                            const newSelection = selectedQcUrls.filter(u => u !== row.page);
+                                                                                            setSelectedQcUrls(newSelection);
+                                                                                            if (newSelection.length === 0) setHasManuallyClearedQc(true);
+                                                                                        } else {
+                                                                                            // Was implicit, now explicit remove
+                                                                                            setHasManuallyClearedQc(true);
+                                                                                        }
+                                                                                    } else {
+                                                                                        // Add to selection
+                                                                                        setSelectedQcUrls([...selectedQcUrls, row.page]);
+                                                                                        setHasManuallyClearedQc(true);
+                                                                                    }
+                                                                                }}
+                                                                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                                                                            />
                                                                         </td>
-                                                                    ))}
-                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 dark:text-white">
-                                                                        {row.totalQueries}
-                                                                    </td>
-                                                                </tr>
-                                                            ))}
+                                                                        <td className="px-6 py-4 text-sm text-gray-900 dark:text-white max-w-md truncate" title={row.page}>
+                                                                            {formatUrl(row.page)}
+                                                                        </td>
+                                                                        {queryCountChartData.map(d => (
+                                                                            <td key={d.month} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                                                {row.counts[d.month] || 0}
+                                                                            </td>
+                                                                        ))}
+                                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 dark:text-white">
+                                                                            {row.totalQueries}
+                                                                        </td>
+                                                                    </tr>
+                                                                )
+                                                            })}
                                                         </tbody>
                                                     </table>
                                                 </div>
