@@ -2333,7 +2333,7 @@ export default function GscExportPage() {
                                                                     cx="50%"
                                                                     cy="50%"
                                                                     outerRadius={80}
-                                                                    label={(entry) => `${entry.intent}: ${entry.clicks}`}
+                                                                    label={(entry: any) => `${entry.intent}: ${entry.clicks}`}
                                                                 >
                                                                     {intentAnalysis.map((entry, index) => (
                                                                         <Cell key={`cell-${index}`} fill={[
