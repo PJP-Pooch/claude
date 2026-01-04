@@ -455,7 +455,10 @@ export default function GscExportPage() {
         }).filter(t => t > 0).sort();
         if (dates.length < 2) return null;
 
-        const mid = (dates[0] + dates[dates.length - 1]) / 2;
+        const firstDate = dates[0];
+        const lastDate = dates[dates.length - 1];
+        if (firstDate === undefined || lastDate === undefined) return null;
+        const mid = (firstDate + lastDate) / 2;
 
         const currentPeriodMap: { [key: string]: { clicks: number, impressions: number, pos: number, count: number } } = {};
         const prevPeriodMap: { [key: string]: { clicks: number, impressions: number, pos: number, count: number } } = {};
@@ -523,7 +526,10 @@ export default function GscExportPage() {
         }).filter(t => t > 0).sort();
         if (dates.length < 2) return null;
 
-        const mid = (dates[0] + dates[dates.length - 1]) / 2;
+        const firstDate = dates[0];
+        const lastDate = dates[dates.length - 1];
+        if (firstDate === undefined || lastDate === undefined) return null;
+        const mid = (firstDate + lastDate) / 2;
 
         const pageMetrics: { [page: string]: { firstHalf: { clicks: number, impr: number }, secondHalf: { clicks: number, impr: number } } } = {};
 
