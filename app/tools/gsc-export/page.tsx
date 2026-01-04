@@ -325,39 +325,57 @@ export default function GscExportPage() {
 
     const queryAnalysis = useMemo(() => {
         if (!filteredData || !selectedDimensions.includes("query") || !selectedDimensions.includes("date")) return null;
-        const buckets: { [key: string]: QueryPositionRow } = {};
+        const buckets: { [key: string]: { queries: Map<string, number>, positions_1_3: number, positions_4_10: number, positions_11_20: number, positions_20_plus: number } } = {};
+
+        const queryIndex = selectedDimensions.indexOf("query");
+        const dateIndex = selectedDimensions.indexOf("date");
+        if (queryIndex === -1 || dateIndex === -1) return null;
 
         filteredData.forEach((row) => {
-            const dateIndex = selectedDimensions.indexOf("date");
-            if (dateIndex === -1) return;
-
             const dateStr = row.keys[dateIndex];
-            if (!dateStr) return;
+            const query = row.keys[queryIndex];
+            if (!dateStr || !query) return;
 
             const date = parseISO(dateStr);
             const period = getPeriodKey(date, granularity);
 
             if (!buckets[period]) {
                 buckets[period] = {
-                    month: period, // keep key as 'month' for compatibility or rename if needed
+                    queries: new Map(),
                     positions_1_3: 0,
                     positions_4_10: 0,
                     positions_11_20: 0,
                     positions_20_plus: 0,
-                    totalQueries: 0,
                 };
             }
 
-            const pos = row.position;
-            if (pos <= 3) buckets[period].positions_1_3++;
-            else if (pos <= 10) buckets[period].positions_4_10++;
-            else if (pos <= 20) buckets[period].positions_11_20++;
-            else buckets[period].positions_20_plus++;
-
-            buckets[period].totalQueries++;
+            // Track best position for each unique query in this period
+            const currentBest = buckets[period].queries.get(query);
+            if (currentBest === undefined || row.position < currentBest) {
+                buckets[period].queries.set(query, row.position);
+            }
         });
 
-        return Object.values(buckets).sort((a, b) => a.month.localeCompare(b.month));
+        // Convert to final format by counting unique queries by position
+        return Object.entries(buckets).map(([period, data]) => {
+            const result: QueryPositionRow = {
+                month: period,
+                positions_1_3: 0,
+                positions_4_10: 0,
+                positions_11_20: 0,
+                positions_20_plus: 0,
+                totalQueries: data.queries.size,
+            };
+
+            data.queries.forEach((pos) => {
+                if (pos <= 3) result.positions_1_3++;
+                else if (pos <= 10) result.positions_4_10++;
+                else if (pos <= 20) result.positions_11_20++;
+                else result.positions_20_plus++;
+            });
+
+            return result;
+        }).sort((a, b) => a.month.localeCompare(b.month));
     }, [filteredData, selectedDimensions, granularity]);
 
     const cannibalizationData = useMemo(() => {
@@ -1767,50 +1785,65 @@ export default function GscExportPage() {
                                                     </button>
                                                 </div>
 
-                                                <div className="h-[400px] w-full mb-8">
-                                                    <ResponsiveContainer width="100%" height="100%">
-                                                        <BarChart
-                                                            data={queryAnalysis}
-                                                            margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                                                        >
-                                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#374151" opacity={0.2} />
-                                                            <XAxis dataKey="month" stroke="#9CA3AF" />
-                                                            <YAxis stroke="#9CA3AF" />
-                                                            <Tooltip
-                                                                contentStyle={{
-                                                                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                                                                    borderRadius: '8px',
-                                                                    border: 'none',
-                                                                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                                                                }}
-                                                            />
-                                                            <Legend />
-                                                            <Bar
-                                                                dataKey="positions_1_3"
-                                                                name="Pos 1-3"
-                                                                stackId="a"
-                                                                fill="#22c55e"
-                                                            />
-                                                            <Bar
-                                                                dataKey="positions_4_10"
-                                                                name="Pos 4-10"
-                                                                stackId="a"
-                                                                fill="#3b82f6"
-                                                            />
-                                                            <Bar
-                                                                dataKey="positions_11_20"
-                                                                name="Pos 11-20"
-                                                                stackId="a"
-                                                                fill="#f59e0b"
-                                                            />
-                                                            <Bar
-                                                                dataKey="positions_20_plus"
-                                                                name="Pos 20+"
-                                                                stackId="a"
-                                                                fill="#94a3b8"
-                                                            />
-                                                        </BarChart>
-                                                    </ResponsiveContainer>
+                                                <div className="h-[400px] w-full mb-8 overflow-x-auto">
+                                                    <div style={{ minWidth: `${Math.max(800, (queryAnalysis?.length || 0) * 60)}px`, height: '100%' }}>
+                                                        <ResponsiveContainer width="100%" height="100%">
+                                                            <BarChart
+                                                                data={queryAnalysis}
+                                                                margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                                                            >
+                                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#374151" opacity={0.2} />
+                                                                <XAxis dataKey="month" stroke="#9CA3AF" />
+                                                                <YAxis stroke="#9CA3AF" />
+                                                                <Tooltip
+                                                                    content={({ active, payload }) => {
+                                                                        if (!active || !payload || !payload.length) return null;
+                                                                        const data = payload[0].payload;
+                                                                        const total = data.totalQueries || 0;
+                                                                        return (
+                                                                            <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
+                                                                                <p className="font-semibold text-gray-900 dark:text-white mb-2">{data.month}</p>
+                                                                                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Total: {total} queries</p>
+                                                                                {payload.map((entry: any, index: number) => (
+                                                                                    <div key={index} className="flex items-center justify-between gap-4 text-sm">
+                                                                                        <span style={{ color: entry.color }}>{entry.name}:</span>
+                                                                                        <span className="font-medium text-gray-900 dark:text-white">
+                                                                                            {entry.value} ({total > 0 ? ((entry.value / total) * 100).toFixed(1) : 0}%)
+                                                                                        </span>
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                        );
+                                                                    }}
+                                                                />
+                                                                <Legend />
+                                                                <Bar
+                                                                    dataKey="positions_1_3"
+                                                                    name="Pos 1-3"
+                                                                    stackId="a"
+                                                                    fill="#22c55e"
+                                                                />
+                                                                <Bar
+                                                                    dataKey="positions_4_10"
+                                                                    name="Pos 4-10"
+                                                                    stackId="a"
+                                                                    fill="#3b82f6"
+                                                                />
+                                                                <Bar
+                                                                    dataKey="positions_11_20"
+                                                                    name="Pos 11-20"
+                                                                    stackId="a"
+                                                                    fill="#f59e0b"
+                                                                />
+                                                                <Bar
+                                                                    dataKey="positions_20_plus"
+                                                                    name="Pos 20+"
+                                                                    stackId="a"
+                                                                    fill="#94a3b8"
+                                                                />
+                                                            </BarChart>
+                                                        </ResponsiveContainer>
+                                                    </div>
                                                 </div>
                                             </div>
                                         )}
@@ -1834,6 +1867,20 @@ export default function GscExportPage() {
                                                                 </span>
                                                             )}
                                                         </div>
+                                                    </div>
+                                                    <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+                                                        <button
+                                                            onClick={() => setUrlDisplayMode("full")}
+                                                            className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${urlDisplayMode === "full" ? "bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm" : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"}`}
+                                                        >
+                                                            Full URL
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setUrlDisplayMode("path")}
+                                                            className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${urlDisplayMode === "path" ? "bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm" : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"}`}
+                                                        >
+                                                            Path Only
+                                                        </button>
                                                     </div>
                                                 </div>
 
@@ -1908,12 +1955,12 @@ export default function GscExportPage() {
                                                                         </td>
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                                                             <span className="max-w-xs truncate inline-block align-bottom" title={item.pages[0]?.url}>
-                                                                                {item.pages[0]?.url}
+                                                                                {formatUrl(item.pages[0]?.url || "")}
                                                                             </span>
                                                                         </td>
                                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                                                             <span className="max-w-xs truncate inline-block align-bottom" title={item.pages[1]?.url}>
-                                                                                {item.pages[1]?.url}
+                                                                                {formatUrl(item.pages[1]?.url || "")}
                                                                             </span>
                                                                         </td>
                                                                     </tr>
