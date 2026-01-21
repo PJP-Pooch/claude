@@ -129,6 +129,10 @@ export default function GscExportPage() {
     const [granularity, setGranularity] = useState<"day" | "week" | "month">("month");
     const [selectedQcUrls, setSelectedQcUrls] = useState<string[]>([]);
     const [urlDisplayMode, setUrlDisplayMode] = useState<"full" | "path">("full");
+    const [minCannibalizationThreshold, setMinCannibalizationThreshold] = useState<number>(10);
+    const [fetchedCompareType, setFetchedCompareType] = useState<"previous_period" | "previous_year" | "custom" | null>(null);
+    const [decayFilter, setDecayFilter] = useState<"all" | "high_risk">("all");
+    const [pageAnalysisFilterValue, setPageAnalysisFilterValue] = useState("");
     const [hasManuallyClearedQc, setHasManuallyClearedQc] = useState(false);
 
     const getPeriodKey = (date: Date, gran: "day" | "week" | "month") => {
@@ -480,10 +484,30 @@ export default function GscExportPage() {
             queryMap[query].pageCount = queryMap[query].pages.length;
         });
 
+        // Filter pages by impression share threshold
         return Object.values(queryMap)
-            .filter(item => item.pageCount > 1 && item.totalClicks > 0)
+            .map(item => {
+                const topImpression = Math.max(...item.pages.map(p => p.impressions));
+                const filteredPages = item.pages.filter(p => {
+                    if (topImpression === 0) return true;
+                    return (p.impressions / topImpression) * 100 >= minCannibalizationThreshold;
+                });
+
+                // Recalculate totals for the filtered set
+                const newTotalClicks = filteredPages.reduce((sum, p) => sum + p.clicks, 0);
+                const newTotalImpressions = filteredPages.reduce((sum, p) => sum + p.impressions, 0);
+
+                return {
+                    ...item,
+                    pages: filteredPages,
+                    pageCount: filteredPages.length,
+                    totalClicks: newTotalClicks,
+                    totalImpressions: newTotalImpressions
+                };
+            })
+            .filter(item => item.pageCount > 1 && item.totalImpressions > 0)
             .sort((a, b) => b.totalClicks - a.totalClicks);
-    }, [aggregatedByQueryAndPage, filteredData, selectedDimensions]);
+    }, [aggregatedByQueryAndPage, filteredData, selectedDimensions, minCannibalizationThreshold]);
 
     // Intent Clustering Logic
     const intentAnalysis = useMemo(() => {
@@ -837,6 +861,7 @@ export default function GscExportPage() {
         setError("");
         setData([]); // Clear previous data
         setComparisonData(null);
+        setFetchedCompareType(null);
         setActiveComparison(null);
         setSelectedQcUrls([]);
         setHasManuallyClearedQc(false);
@@ -1002,6 +1027,7 @@ export default function GscExportPage() {
                 setLoadingMessage("Fetching comparison period data...");
                 const compareRows = await fetchPeriodData(compareStart, compareEnd, setLoadingMessage);
                 setComparisonData(aggregateData(compareRows));
+                setFetchedCompareType(compareType);
             }
 
             setLoadingMessage("Data processing complete.");
@@ -1107,6 +1133,20 @@ export default function GscExportPage() {
 
         return { qcData: processedData, qcChartData: chartData, topPagesForChart };
     }, [filteredData, selectedDimensions, granularity, selectedQcUrls, hasManuallyClearedQc]);
+
+    const globalStats = useMemo(() => {
+        if (!data || data.length === 0) return null;
+        const clicks = data.reduce((sum, row) => sum + row.clicks, 0);
+        const impressions = data.reduce((sum, row) => sum + row.impressions, 0);
+        const totalWeightedPos = data.reduce((sum, row) => sum + (row.position * row.impressions), 0);
+        const position = impressions > 0 ? totalWeightedPos / impressions : 0;
+        return {
+            clicks,
+            impressions,
+            ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
+            position
+        };
+    }, [data]);
 
     const formatUrl = (url: string) => {
         if (urlDisplayMode === "full") return url;
@@ -1525,28 +1565,30 @@ export default function GscExportPage() {
                                                     </button>
                                                 ))}
                                             </div>
-                                            <div className="space-y-2 col-span-full border-t border-gray-200 dark:border-gray-700 pt-4 mt-2">
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                    Chart Granularity
-                                                </label>
-                                                <div className="flex gap-2">
-                                                    {(["day", "week", "month"] as const).map((g) => (
-                                                        <button
-                                                            key={g}
-                                                            onClick={() => setGranularity(g)}
-                                                            className={`flex-1 px-3 py-1 rounded-lg text-sm font-medium transition-colors border ${granularity === g
-                                                                ? "bg-blue-600 text-white border-blue-600"
-                                                                : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
-                                                                }`}
-                                                        >
-                                                            {g.charAt(0).toUpperCase() + g.slice(1)}
-                                                        </button>
-                                                    ))}
+                                            {selectedDimensions.includes("date") && (
+                                                <div className="space-y-2 col-span-full border-t border-gray-200 dark:border-gray-700 pt-4 mt-2">
+                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                        Chart Granularity
+                                                    </label>
+                                                    <div className="flex gap-2">
+                                                        {(["day", "week", "month"] as const).map((g) => (
+                                                            <button
+                                                                key={g}
+                                                                onClick={() => setGranularity(g)}
+                                                                className={`flex-1 px-3 py-1 rounded-lg text-sm font-medium transition-colors border ${granularity === g
+                                                                    ? "bg-blue-600 text-white border-blue-600"
+                                                                    : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
+                                                                    }`}
+                                                            >
+                                                                {g.charAt(0).toUpperCase() + g.slice(1)}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                    <p className="text-xs text-gray-500 mt-1 italic">
+                                                        Affects Query Position, Brand Trend, and Query Count charts.
+                                                    </p>
                                                 </div>
-                                                <p className="text-xs text-gray-500 mt-1 italic">
-                                                    Affects Query Position, Brand Trend, and Query Count charts.
-                                                </p>
-                                            </div>
+                                            )}
 
                                             <div className="space-y-2 col-span-full border-t border-gray-200 dark:border-gray-700 pt-4 mt-2">
                                                 {(!selectedDimensions.includes("query") ||
@@ -1744,6 +1786,107 @@ export default function GscExportPage() {
                                 )}
                                 {data && (
                                     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                        {/* Global KPI Summary */}
+                                        {globalStats && (
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                                <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+                                                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Total Clicks</p>
+                                                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{globalStats.clicks.toLocaleString()}</p>
+                                                </div>
+                                                <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+                                                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Total Impressions</p>
+                                                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{globalStats.impressions.toLocaleString()}</p>
+                                                </div>
+                                                <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+                                                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Avg. CTR</p>
+                                                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{globalStats.ctr.toFixed(2)}%</p>
+                                                </div>
+                                                <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+                                                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Avg. Position</p>
+                                                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{globalStats.position.toFixed(1)}</p>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {!selectedDimensions.includes("date") && (
+                                            <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-lg flex items-start text-blue-800 dark:text-blue-300 border border-blue-100 dark:border-blue-900/30">
+                                                <Brain className="w-5 h-5 mr-3 mt-0.5 flex-shrink-0" />
+                                                <p className="text-sm">
+                                                    <span className="font-bold">Pro Tip:</span> Select the <span className="font-mono bg-blue-100 dark:bg-blue-800 px-1 rounded">date</span> dimension in the filters to unlock trend graphs and performance comparisons.
+                                                </p>
+                                            </div>
+                                        )}
+
+                                        {/* Global Performance Overview (Moved from Query Analysis) */}
+                                        {brandSegmentData && brandKeywords && (
+                                            <div className="space-y-6">
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+                                                        <h3 className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-2 font-mono">Non-Brand Performance</h3>
+                                                        <div className="flex justify-between items-end">
+                                                            <div>
+                                                                <p className="text-2xl font-bold text-gray-900 dark:text-white">{brandSegmentData.nonBrand.clicks.toLocaleString()}</p>
+                                                                <p className="text-sm text-gray-500">Clicks</p>
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <p className="text-lg font-semibold text-gray-700 dark:text-gray-300">
+                                                                    {brandSegmentData.nonBrand.impressions > 0
+                                                                        ? ((brandSegmentData.nonBrand.clicks / brandSegmentData.nonBrand.impressions) * 100).toFixed(2)
+                                                                        : 0}%
+                                                                </p>
+                                                                <p className="text-xs text-gray-500">Avg. CTR</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+                                                        <h3 className="text-xs font-semibold text-green-600 dark:text-green-400 uppercase tracking-wider mb-2 font-mono">Brand Performance</h3>
+                                                        <div className="flex justify-between items-end">
+                                                            <div>
+                                                                <p className="text-2xl font-bold text-gray-900 dark:text-white">{brandSegmentData.brand.clicks.toLocaleString()}</p>
+                                                                <p className="text-sm text-gray-500">Clicks</p>
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <p className="text-lg font-semibold text-gray-700 dark:text-gray-300">
+                                                                    {brandSegmentData.brand.impressions > 0
+                                                                        ? ((brandSegmentData.brand.clicks / brandSegmentData.brand.impressions) * 100).toFixed(2)
+                                                                        : 0}%
+                                                                </p>
+                                                                <p className="text-xs text-gray-500">Avg. CTR</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {brandTrendData && selectedDimensions.includes("date") && !compareMode && (
+                                                    <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+                                                        <h3 className="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wider mb-6 flex items-center">
+                                                            <PieChartIcon className="w-4 h-4 mr-2 text-blue-500" />
+                                                            Brand vs Non-Brand Click Trend
+                                                        </h3>
+                                                        <div className="h-[300px] w-full">
+                                                            <ResponsiveContainer width="100%" height="100%">
+                                                                <LineChart data={brandTrendData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#374151" opacity={0.1} />
+                                                                    <XAxis dataKey="period" stroke="#9CA3AF" fontSize={12} tickLine={false} axisLine={false} />
+                                                                    <YAxis stroke="#9CA3AF" fontSize={12} tickLine={false} axisLine={false} />
+                                                                    <Tooltip
+                                                                        contentStyle={{
+                                                                            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                                                                            borderRadius: '8px',
+                                                                            border: 'none',
+                                                                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                                                                        }}
+                                                                    />
+                                                                    <Legend iconType="circle" />
+                                                                    <Line type="monotone" dataKey="brandClicks" name="Brand Clicks" stroke="#22c55e" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                                                                    <Line type="monotone" dataKey="nonBrandClicks" name="Non-Brand Clicks" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                                                                </LineChart>
+                                                            </ResponsiveContainer>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
                                         {/* Tabs */}
                                         <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg w-fit overflow-x-auto">
                                             <button
@@ -1756,15 +1899,26 @@ export default function GscExportPage() {
                                                 Raw Data
                                             </button>
                                             {queryAnalysis && (
-                                                <button
-                                                    onClick={() => setActiveTab("analysis")}
-                                                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === "analysis"
-                                                        ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
-                                                        : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-                                                        }`}
-                                                >
-                                                    Query Analysis
-                                                </button>
+                                                <>
+                                                    <button
+                                                        onClick={() => setActiveTab("analysis")}
+                                                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === "analysis"
+                                                            ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
+                                                            : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                                                            }`}
+                                                    >
+                                                        Query Analysis
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setActiveTab("page_analysis")}
+                                                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === "page_analysis"
+                                                            ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
+                                                            : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                                                            }`}
+                                                    >
+                                                        Page Analysis
+                                                    </button>
+                                                </>
                                             )}
                                             {cannibalizationData && (
                                                 <button
@@ -1813,7 +1967,11 @@ export default function GscExportPage() {
                                             <button
                                                 onClick={() => {
                                                     setActiveTab("pop");
-                                                    if (compareType !== "previous_period") setCompareType("previous_period");
+                                                    setCompareType("previous_period");
+                                                    if (comparisonData && fetchedCompareType && fetchedCompareType !== "previous_period") {
+                                                        setComparisonData(null);
+                                                        setFetchedCompareType(null);
+                                                    }
                                                 }}
                                                 className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap flex items-center ${activeTab === "pop"
                                                     ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
@@ -1826,7 +1984,11 @@ export default function GscExportPage() {
                                             <button
                                                 onClick={() => {
                                                     setActiveTab("yoy");
-                                                    if (compareType !== "previous_year") setCompareType("previous_year");
+                                                    setCompareType("previous_year");
+                                                    if (comparisonData && fetchedCompareType && fetchedCompareType !== "previous_year") {
+                                                        setComparisonData(null);
+                                                        setFetchedCompareType(null);
+                                                    }
                                                 }}
                                                 className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap flex items-center ${activeTab === "yoy"
                                                     ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
@@ -1874,73 +2036,13 @@ export default function GscExportPage() {
                                             )}
                                         </div>
 
-                                        {/* Brand Segment Summary Widgets */}
-                                        {brandSegmentData && brandKeywords && (
-                                            <div className="space-y-6 mb-6">
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-                                                        <h3 className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-2">Non-Brand Performance</h3>
-                                                        <div className="flex justify-between items-end">
-                                                            <div>
-                                                                <p className="text-2xl font-bold text-gray-900 dark:text-white">{brandSegmentData.nonBrand.clicks.toLocaleString()}</p>
-                                                                <p className="text-sm text-gray-500">Clicks</p>
-                                                            </div>
-                                                            <div className="text-right">
-                                                                <p className="text-lg font-semibold text-gray-700 dark:text-gray-300">
-                                                                    {brandSegmentData.nonBrand.impressions > 0
-                                                                        ? ((brandSegmentData.nonBrand.clicks / brandSegmentData.nonBrand.impressions) * 100).toFixed(2)
-                                                                        : 0}%
-                                                                </p>
-                                                                <p className="text-xs text-gray-500 hover:text-gray-400">Avg. CTR</p>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-                                                        <h3 className="text-xs font-semibold text-green-600 dark:text-green-400 uppercase tracking-wider mb-2">Brand Performance</h3>
-                                                        <div className="flex justify-between items-end">
-                                                            <div>
-                                                                <p className="text-2xl font-bold text-gray-900 dark:text-white">{brandSegmentData.brand.clicks.toLocaleString()}</p>
-                                                                <p className="text-sm text-gray-500">Clicks</p>
-                                                            </div>
-                                                            <div className="text-right">
-                                                                <p className="text-lg font-semibold text-gray-700 dark:text-gray-300">
-                                                                    {brandSegmentData.brand.impressions > 0
-                                                                        ? ((brandSegmentData.brand.clicks / brandSegmentData.brand.impressions) * 100).toFixed(2)
-                                                                        : 0}%
-                                                                </p>
-                                                                <p className="text-xs text-gray-500 hover:text-gray-400">Avg. CTR</p>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
+                                        <div className="space-y-6">
+                                            <p className="text-sm text-gray-500 dark:text-gray-400 bg-blue-50 dark:bg-blue-900/10 p-4 rounded-lg flex items-center">
+                                                <Brain className="w-4 h-4 mr-2 text-blue-500" />
+                                                View the performance charts and KPIs at the top for a broader overview of brand visibility.
+                                            </p>
+                                        </div>
 
-                                                {brandTrendData && selectedDimensions.includes("date") && (
-                                                    <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-                                                        <h3 className="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wider mb-6">Brand vs Non-Brand Click Trend</h3>
-                                                        <div className="h-[300px] w-full">
-                                                            <ResponsiveContainer width="100%" height="100%">
-                                                                <LineChart data={brandTrendData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#374151" opacity={0.1} />
-                                                                    <XAxis dataKey="period" stroke="#9CA3AF" fontSize={12} tickLine={false} axisLine={false} />
-                                                                    <YAxis stroke="#9CA3AF" fontSize={12} tickLine={false} axisLine={false} />
-                                                                    <Tooltip
-                                                                        contentStyle={{
-                                                                            backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                                                                            borderRadius: '8px',
-                                                                            border: 'none',
-                                                                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                                                                        }}
-                                                                    />
-                                                                    <Legend iconType="circle" />
-                                                                    <Line type="monotone" dataKey="brandClicks" name="Brand Clicks" stroke="#22c55e" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                                                                    <Line type="monotone" dataKey="nonBrandClicks" name="Non-Brand Clicks" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                                                                </LineChart>
-                                                            </ResponsiveContainer>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
 
                                         {/* Raw Data Tab */}
                                         {activeTab === "raw" && (
@@ -1954,13 +2056,74 @@ export default function GscExportPage() {
                                                     </div>
                                                     <button
                                                         onClick={() =>
-                                                            downloadCsv(data, `gsc_data_${selectedProperty}.csv`)
+                                                            downloadCsv(data, `gsc_export_${selectedProperty}.csv`)
                                                         }
                                                         className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
                                                     >
                                                         <Download className="h-4 w-4 mr-2" />
                                                         Download CSV
                                                     </button>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Page Analysis Tab */}
+                                        {activeTab === "page_analysis" && pageAnalysis && (
+                                            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                                                <div className="flex justify-between items-center mb-6">
+                                                    <div>
+                                                        <h2 className="text-xl font-bold text-gray-900 dark:text-white">Page Analysis (Pivot)</h2>
+                                                        <p className="text-gray-500 dark:text-gray-400 text-sm">
+                                                            Grouping data by page with nested queries.
+                                                        </p>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => downloadCsv(pageAnalysis.flatMap(p => p.queries.map(q => ({ page: p.page, ...q }))), `page_analysis_${selectedProperty}.csv`)}
+                                                        className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+                                                    >
+                                                        <Download className="h-4 w-4 mr-2" />
+                                                        Download CSV
+                                                    </button>
+                                                </div>
+                                                <div className="overflow-x-auto border rounded-lg border-gray-200 dark:border-gray-700">
+                                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                                        <thead className="bg-gray-50 dark:bg-gray-900/30">
+                                                            <tr>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Page / Query</th>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Clicks</th>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Impr.</th>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">CTR</th>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Pos.</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                                            {pageAnalysis.slice(0, 50).map((page, idx) => (
+                                                                <Fragment key={idx}>
+                                                                    <tr className="bg-blue-50/30 dark:bg-blue-900/5 font-bold border-l-4 border-blue-500">
+                                                                        <td className="px-6 py-4 text-sm text-blue-600 dark:text-blue-400 truncate max-w-lg" title={page.page}>
+                                                                            <div className="flex items-center">
+                                                                                <ChevronDown className="w-4 h-4 mr-2" />
+                                                                                {formatUrl(page.page)}
+                                                                            </div>
+                                                                        </td>
+                                                                        <td className="px-6 py-4 text-sm text-gray-900 dark:text-white font-bold">{page.totalClicks.toLocaleString()}</td>
+                                                                        <td className="px-6 py-4 text-sm text-gray-900 dark:text-white font-bold">{page.totalImpressions.toLocaleString()}</td>
+                                                                        <td className="px-6 py-4 text-sm text-gray-900 dark:text-white font-bold">{((page.totalClicks / page.totalImpressions) * 100).toFixed(2)}%</td>
+                                                                        <td className="px-6 py-4 text-xs text-gray-500 italic">Avg {page.avgPosition.toFixed(1)} ({page.queryCount} queries)</td>
+                                                                    </tr>
+                                                                    {page.queries.slice(0, 15).map((q, qIdx) => (
+                                                                        <tr key={`${idx}-${qIdx}`} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors border-l-4 border-transparent">
+                                                                            <td className="pl-12 pr-6 py-2 text-sm text-gray-600 dark:text-gray-400">{q.query}</td>
+                                                                            <td className="px-6 py-2 text-sm text-gray-500 dark:text-gray-400">{q.clicks.toLocaleString()}</td>
+                                                                            <td className="px-6 py-2 text-sm text-gray-500 dark:text-gray-400">{q.impressions.toLocaleString()}</td>
+                                                                            <td className="px-6 py-2 text-sm text-gray-500 dark:text-gray-400">{(q.ctr * 100).toFixed(2)}%</td>
+                                                                            <td className="px-6 py-2 text-sm text-gray-500 dark:text-gray-400">{q.position.toFixed(1)}</td>
+                                                                        </tr>
+                                                                    ))}
+                                                                </Fragment>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
                                                 </div>
                                                 <div className="overflow-x-auto border rounded-lg border-gray-200 dark:border-gray-700">
                                                     <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
@@ -2094,6 +2257,67 @@ export default function GscExportPage() {
                                             </div>
                                         )}
 
+                                        {/* Page Analysis Tab */}
+                                        {activeTab === "page_analysis" && pageAnalysis && (
+                                            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                                                <div className="flex justify-between items-center mb-6">
+                                                    <div>
+                                                        <h2 className="text-xl font-bold text-gray-900 dark:text-white">Page Analysis (Pivot)</h2>
+                                                        <p className="text-gray-500 dark:text-gray-400 text-sm">
+                                                            Grouping data by page with nested queries.
+                                                        </p>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => downloadCsv(pageAnalysis.flatMap(p => p.queries.map(q => ({ page: p.page, ...q }))), `page_analysis_${selectedProperty}.csv`)}
+                                                        className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+                                                    >
+                                                        <Download className="h-4 w-4 mr-2" />
+                                                        Download CSV
+                                                    </button>
+                                                </div>
+                                                <div className="overflow-x-auto border rounded-lg border-gray-200 dark:border-gray-700">
+                                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                                        <thead className="bg-gray-50 dark:bg-gray-900/30">
+                                                            <tr>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Page / Query</th>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Clicks</th>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Impr.</th>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">CTR</th>
+                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Pos.</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                                            {pageAnalysis.slice(0, 50).map((page, idx) => (
+                                                                <Fragment key={idx}>
+                                                                    <tr className="bg-blue-50/30 dark:bg-blue-900/5 font-bold border-l-4 border-blue-500">
+                                                                        <td className="px-6 py-4 text-sm text-blue-600 dark:text-blue-400 truncate max-w-lg" title={page.page}>
+                                                                            <div className="flex items-center">
+                                                                                <ChevronDown className="w-4 h-4 mr-2" />
+                                                                                {formatUrl(page.page)}
+                                                                            </div>
+                                                                        </td>
+                                                                        <td className="px-6 py-4 text-sm text-gray-900 dark:text-white font-bold">{page.totalClicks.toLocaleString()}</td>
+                                                                        <td className="px-6 py-4 text-sm text-gray-900 dark:text-white font-bold">{page.totalImpressions.toLocaleString()}</td>
+                                                                        <td className="px-6 py-4 text-sm text-gray-900 dark:text-white font-bold">{((page.totalClicks / page.totalImpressions) * 100).toFixed(2)}%</td>
+                                                                        <td className="px-6 py-4 text-xs text-gray-500 italic">Avg {page.avgPosition.toFixed(1)} ({page.queryCount} queries)</td>
+                                                                    </tr>
+                                                                    {page.queries.slice(0, 15).map((q, qIdx) => (
+                                                                        <tr key={`${idx}-${qIdx}`} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors border-l-4 border-transparent">
+                                                                            <td className="pl-12 pr-6 py-2 text-sm text-gray-600 dark:text-gray-400">{q.query}</td>
+                                                                            <td className="px-6 py-2 text-sm text-gray-500 dark:text-gray-400">{q.clicks.toLocaleString()}</td>
+                                                                            <td className="px-6 py-2 text-sm text-gray-500 dark:text-gray-400">{q.impressions.toLocaleString()}</td>
+                                                                            <td className="px-6 py-2 text-sm text-gray-500 dark:text-gray-400">{(q.ctr * 100).toFixed(2)}%</td>
+                                                                            <td className="px-6 py-2 text-sm text-gray-500 dark:text-gray-400">{q.position.toFixed(1)}</td>
+                                                                        </tr>
+                                                                    ))}
+                                                                </Fragment>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        )}
+
                                         {/* Query Analysis Tab */}
                                         {activeTab === "analysis" && queryAnalysis && (
                                             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
@@ -2203,19 +2427,38 @@ export default function GscExportPage() {
                                                             )}
                                                         </div>
                                                     </div>
-                                                    <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
-                                                        <button
-                                                            onClick={() => setUrlDisplayMode("full")}
-                                                            className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${urlDisplayMode === "full" ? "bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm" : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"}`}
-                                                        >
-                                                            Full URL
-                                                        </button>
-                                                        <button
-                                                            onClick={() => setUrlDisplayMode("path")}
-                                                            className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${urlDisplayMode === "path" ? "bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm" : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"}`}
-                                                        >
-                                                            Path Only
-                                                        </button>
+                                                    <div className="flex flex-col sm:flex-row items-end sm:items-center gap-4">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Min Threshold:</span>
+                                                            <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+                                                                {[5, 10, 15, 20, 25].map((val) => (
+                                                                    <button
+                                                                        key={val}
+                                                                        onClick={() => setMinCannibalizationThreshold(val)}
+                                                                        className={`px-2 py-1 text-xs font-medium rounded-md transition-all ${minCannibalizationThreshold === val
+                                                                            ? "bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm"
+                                                                            : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                                                                            }`}
+                                                                    >
+                                                                        {val}%
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+                                                            <button
+                                                                onClick={() => setUrlDisplayMode("full")}
+                                                                className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${urlDisplayMode === "full" ? "bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm" : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"}`}
+                                                            >
+                                                                Full URL
+                                                            </button>
+                                                            <button
+                                                                onClick={() => setUrlDisplayMode("path")}
+                                                                className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${urlDisplayMode === "path" ? "bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm" : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"}`}
+                                                            >
+                                                                Path Only
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 </div>
 
@@ -2309,6 +2552,7 @@ export default function GscExportPage() {
                                                                                                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700" onClick={() => handleChildSort('url')}>URL {childSortConfig?.key === 'url' ? (childSortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 inline" /> : <ArrowDown className="w-3 h-3 inline" />) : <ArrowUpDown className="w-3 h-3 inline opacity-50" />}</th>
                                                                                                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700" onClick={() => handleChildSort('clicks')}>Clicks {childSortConfig?.key === 'clicks' ? (childSortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 inline" /> : <ArrowDown className="w-3 h-3 inline" />) : <ArrowUpDown className="w-3 h-3 inline opacity-50" />}</th>
                                                                                                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700" onClick={() => handleChildSort('impressions')}>Impr. {childSortConfig?.key === 'impressions' ? (childSortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 inline" /> : <ArrowDown className="w-3 h-3 inline" />) : <ArrowUpDown className="w-3 h-3 inline opacity-50" />}</th>
+                                                                                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Share</th>
                                                                                                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700" onClick={() => handleChildSort('ctr')}>CTR {childSortConfig?.key === 'ctr' ? (childSortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 inline" /> : <ArrowDown className="w-3 h-3 inline" />) : <ArrowUpDown className="w-3 h-3 inline opacity-50" />}</th>
                                                                                                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700" onClick={() => handleChildSort('position')}>Pos {childSortConfig?.key === 'position' ? (childSortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 inline" /> : <ArrowDown className="w-3 h-3 inline" />) : <ArrowUpDown className="w-3 h-3 inline opacity-50" />}</th>
                                                                                             </tr>
@@ -2323,6 +2567,9 @@ export default function GscExportPage() {
                                                                                                     </td>
                                                                                                     <td className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">{page.clicks}</td>
                                                                                                     <td className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">{page.impressions}</td>
+                                                                                                    <td className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
+                                                                                                        {item.totalImpressions > 0 ? ((page.impressions / item.totalImpressions) * 100).toFixed(1) : "0.0"}%
+                                                                                                    </td>
                                                                                                     <td className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">{(page.ctr * 100).toFixed(2)}%</td>
                                                                                                     <td className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">{page.position.toFixed(1)}</td>
                                                                                                 </tr>
@@ -2865,9 +3112,25 @@ export default function GscExportPage() {
                                                             <TrendingDown className="w-5 h-5 mr-2 text-red-500" />
                                                             Content Decay Alerts
                                                         </h2>
-                                                        <p className="text-gray-500 dark:text-gray-400 text-sm">
-                                                            Pages seeing the largest drops in clicks and impressions PoP.
-                                                        </p>
+                                                        <div className="flex items-center gap-4 mt-1">
+                                                            <p className="text-gray-500 dark:text-gray-400 text-sm">
+                                                                Pages seeing the largest drops in clicks and impressions PoP.
+                                                            </p>
+                                                            <div className="flex bg-gray-100 dark:bg-gray-700 p-0.5 rounded-lg border border-gray-200 dark:border-gray-600">
+                                                                <button
+                                                                    onClick={() => setDecayFilter("all")}
+                                                                    className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${decayFilter === "all" ? "bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm" : "text-gray-500 hover:text-gray-700 dark:text-gray-400"}`}
+                                                                >
+                                                                    All
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => setDecayFilter("high_risk")}
+                                                                    className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${decayFilter === "high_risk" ? "bg-red-600 text-white shadow-sm" : "text-gray-500 hover:text-gray-700 dark:text-gray-400"}`}
+                                                                >
+                                                                    High Risk Only
+                                                                </button>
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                     <button
                                                         onClick={() => downloadCsv(decayAnalysis, `decay_analysis_${selectedProperty}.csv`)}
@@ -2876,41 +3139,44 @@ export default function GscExportPage() {
                                                         <Download className="h-4 w-4 mr-2" />
                                                         Download CSV
                                                     </button>
+
                                                 </div>
 
                                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                                    {decayAnalysis.slice(0, 24).map((item, i) => (
-                                                        <div key={i} className={`p-4 rounded-xl border ${item.severity === 'high' ? 'bg-red-50 border-red-100 dark:bg-red-900/10 dark:border-red-900/30' : 'bg-orange-50 border-orange-100 dark:bg-orange-900/10 dark:border-orange-900/30'}`}>
-                                                            <div className="flex justify-between items-start mb-2">
-                                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${item.severity === 'high' ? 'bg-red-100 text-red-800' : 'bg-orange-100 text-orange-800'}`}>
-                                                                    {item.severity} Risk
-                                                                </span>
+                                                    {decayAnalysis
+                                                        .filter(item => decayFilter === "all" || item.severity === 'high')
+                                                        .slice(0, 24).map((item, i) => (
+                                                            <div key={i} className={`p-4 rounded-xl border ${item.severity === 'high' ? 'bg-red-50 border-red-100 dark:bg-red-900/10 dark:border-red-900/30' : 'bg-orange-50 border-orange-100 dark:bg-orange-900/10 dark:border-orange-900/30'}`}>
+                                                                <div className="flex justify-between items-start mb-2">
+                                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${item.severity === 'high' ? 'bg-red-100 text-red-800' : 'bg-orange-100 text-orange-800'}`}>
+                                                                        {item.severity} Risk
+                                                                    </span>
+                                                                </div>
+                                                                <p className="text-sm font-medium text-gray-900 dark:text-white truncate mb-3" title={item.page}>
+                                                                    {item.page}
+                                                                </p>
+                                                                <div className="flex justify-between items-end">
+                                                                    <div>
+                                                                        <p className="text-lg font-bold text-gray-900 dark:text-white">{item.clickDiff.toLocaleString()}</p>
+                                                                        <p className="text-[10px] text-gray-500 uppercase tracking-wider">Click Loss</p>
+                                                                    </div>
+                                                                    <div className="text-right">
+                                                                        <p className="text-sm font-bold text-red-600">{item.clickPcent.toFixed(1)}%</p>
+                                                                        <p className="text-[10px] text-gray-500 uppercase tracking-wider">Click Drop</p>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="mt-3 pt-3 border-t border-gray-200/50 dark:border-gray-700/50 flex justify-between items-end">
+                                                                    <div>
+                                                                        <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{item.imprDiff.toLocaleString()}</p>
+                                                                        <p className="text-[10px] text-gray-500 uppercase tracking-wider">Impr loss</p>
+                                                                    </div>
+                                                                    <div className="text-right">
+                                                                        <p className="text-sm font-semibold text-orange-600">{item.imprPcent.toFixed(1)}%</p>
+                                                                        <p className="text-[10px] text-gray-500 uppercase tracking-wider">Impr drop</p>
+                                                                    </div>
+                                                                </div>
                                                             </div>
-                                                            <p className="text-sm font-medium text-gray-900 dark:text-white truncate mb-3" title={item.page}>
-                                                                {item.page}
-                                                            </p>
-                                                            <div className="flex justify-between items-end">
-                                                                <div>
-                                                                    <p className="text-lg font-bold text-gray-900 dark:text-white">{item.clickDiff.toLocaleString()}</p>
-                                                                    <p className="text-[10px] text-gray-500 uppercase tracking-wider">Click Loss</p>
-                                                                </div>
-                                                                <div className="text-right">
-                                                                    <p className="text-sm font-bold text-red-600">{item.clickPcent.toFixed(1)}%</p>
-                                                                    <p className="text-[10px] text-gray-500 uppercase tracking-wider">Click Drop</p>
-                                                                </div>
-                                                            </div>
-                                                            <div className="mt-3 pt-3 border-t border-gray-200/50 dark:border-gray-700/50 flex justify-between items-end">
-                                                                <div>
-                                                                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{item.imprDiff.toLocaleString()}</p>
-                                                                    <p className="text-[10px] text-gray-500 uppercase tracking-wider">Impr loss</p>
-                                                                </div>
-                                                                <div className="text-right">
-                                                                    <p className="text-sm font-semibold text-orange-600">{item.imprPcent.toFixed(1)}%</p>
-                                                                    <p className="text-[10px] text-gray-500 uppercase tracking-wider">Impr drop</p>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    ))}
+                                                        ))}
                                                 </div>
                                             </div>
                                         )}
