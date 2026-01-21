@@ -2,7 +2,7 @@
 
 import { useSession, signIn, signOut } from "next-auth/react";
 import { useState, useEffect, Fragment, useMemo } from "react";
-import { format, parseISO, startOfWeek, startOfMonth } from "date-fns";
+import { format, parseISO, startOfWeek, startOfMonth, subDays, subMonths, subYears, differenceInDays } from "date-fns";
 import {
     BarChart,
     Bar,
@@ -107,11 +107,20 @@ export default function GscExportPage() {
     const [loadingMessage, setLoadingMessage] = useState("");
     const [data, setData] = useState<GscRow[] | null>(null);
     const [error, setError] = useState("");
-    const [activeTab, setActiveTab] = useState<"raw" | "analysis" | "cannibalization" | "query_counts" | "striking_distance" | "ctr_opportunity" | "pop" | "intent" | "decay">("raw");
+    const [activeTab, setActiveTab] = useState<"raw" | "analysis" | "cannibalization" | "query_counts" | "striking_distance" | "ctr_opportunity" | "pop" | "intent" | "decay" | "page_analysis">("raw");
     const [expandedQueries, setExpandedQueries] = useState<Set<string>>(new Set());
+    const [expandedPages, setExpandedPages] = useState<Set<string>>(new Set());
     const [sortConfig, setSortConfig] = useState<{ key: string; direction: "asc" | "desc" } | null>(null);
     const [childSortConfig, setChildSortConfig] = useState<{ key: string; direction: "asc" | "desc" } | null>(null);
     const [compareMode, setCompareMode] = useState(false);
+    const [compareType, setCompareType] = useState<"previous_period" | "previous_year" | "custom">("previous_period");
+    const [compareStartDate, setCompareStartDate] = useState("");
+    const [compareEndDate, setCompareEndDate] = useState("");
+    const [comparisonData, setComparisonData] = useState<GscRow[] | null>(null);
+    const [activeComparison, setActiveComparison] = useState<{
+        current: { start: string, end: string },
+        compare: { start: string, end: string } | null
+    } | null>(null);
 
     // Brand Segmentation State
     const [brandKeywords, setBrandKeywords] = useState("");
@@ -134,6 +143,16 @@ export default function GscExportPage() {
             newExpanded.add(query);
         }
         setExpandedQueries(newExpanded);
+    };
+
+    const togglePageExpansion = (page: string) => {
+        const newExpanded = new Set(expandedPages);
+        if (newExpanded.has(page)) {
+            newExpanded.delete(page);
+        } else {
+            newExpanded.add(page);
+        }
+        setExpandedPages(newExpanded);
     };
 
     const handleSort = (key: string) => {
@@ -166,9 +185,9 @@ export default function GscExportPage() {
         });
     };
 
-    const filteredData = useMemo(() => {
-        if (!data) return null;
-        return data.filter(row => {
+    const filterRows = (rows: GscRow[] | null) => {
+        if (!rows) return null;
+        return rows.filter(row => {
             if (wordCountFilterType === "all" || !wordCountFilterValue) return true;
             const count = row.wordCount || 0;
             const target = parseInt(wordCountFilterValue);
@@ -179,7 +198,10 @@ export default function GscExportPage() {
             if (wordCountFilterType === "eq") return count === target;
             return true;
         });
-    }, [data, wordCountFilterType, wordCountFilterValue]);
+    };
+
+    const filteredData = useMemo(() => filterRows(data), [data, wordCountFilterType, wordCountFilterValue]);
+    const filteredComparisonData = useMemo(() => filterRows(comparisonData), [comparisonData, wordCountFilterType, wordCountFilterValue]);
 
     const aggregatedByQuery = useMemo(() => {
         if (!filteredData || !selectedDimensions.includes("query")) return null;
@@ -463,48 +485,68 @@ export default function GscExportPage() {
 
     // Period over Period Comparison Logic
     const popAnalysis = useMemo(() => {
-        if (!filteredData || !selectedDimensions.includes("date")) return null;
-        const dateIndex = selectedDimensions.indexOf("date");
+        if (!filteredData) return null;
+        // If comparison data is available, use it. Otherwise, fallback to splitting filteredData if date dimension exists (legacy behavior or single fetch)
+
+        let currentPeriodData = filteredData;
+        let prevPeriodData = filteredComparisonData;
+
+        // Legacy fallback: split filteredData if no comparisonData but date dimension is selected
+        if (!compareMode || !prevPeriodData) {
+            if (!selectedDimensions.includes("date")) return null;
+            const dateIndex = selectedDimensions.indexOf("date");
+            const dates = filteredData.map(r => {
+                const dateStr = r.keys[dateIndex];
+                return dateStr ? parseISO(dateStr).getTime() : 0;
+            }).filter(t => t > 0).sort();
+
+            if (dates.length < 2) return null;
+            const firstDate = dates[0];
+            const lastDate = dates[dates.length - 1];
+            if (firstDate === undefined || lastDate === undefined) return null;
+            const mid = (firstDate + lastDate) / 2;
+
+            currentPeriodData = filteredData.filter(r => {
+                const dateKey = r.keys[dateIndex];
+                if (!dateKey) return false;
+                const d = parseISO(dateKey).getTime();
+                return d >= mid;
+            });
+            prevPeriodData = filteredData.filter(r => {
+                const dateKey = r.keys[dateIndex];
+                if (!dateKey) return false;
+                const d = parseISO(dateKey).getTime();
+                return d < mid;
+            });
+        }
+
         const keyIndex = selectedDimensions.includes("query") ? selectedDimensions.indexOf("query") : (selectedDimensions.includes("page") ? selectedDimensions.indexOf("page") : 0);
 
-        const dates = filteredData.map(r => {
-            const dateStr = r.keys[dateIndex];
-            return dateStr ? parseISO(dateStr).getTime() : 0;
-        }).filter(t => t > 0).sort();
-        if (dates.length < 2) return null;
-
-        const firstDate = dates[0];
-        const lastDate = dates[dates.length - 1];
-        if (firstDate === undefined || lastDate === undefined) return null;
-        const mid = (firstDate + lastDate) / 2;
-
-        const currentPeriodMap: { [key: string]: { clicks: number, impressions: number, pos: number, count: number } } = {};
-        const prevPeriodMap: { [key: string]: { clicks: number, impressions: number, pos: number, count: number } } = {};
+        const currentMap = new Map<string, { clicks: number, impressions: number, pos: number, count: number }>();
+        const prevMap = new Map<string, { clicks: number, impressions: number, pos: number, count: number }>();
         const allKeys = new Set<string>();
 
-        filteredData.forEach(row => {
-            const dateStr = row.keys[dateIndex];
-            if (!dateStr) return;
-            const date = parseISO(dateStr).getTime();
-            const key = row.keys[keyIndex];
-            if (!key) return;
-            allKeys.add(key);
+        const processRows = (rows: GscRow[], map: Map<string, any>) => {
+            rows.forEach(row => {
+                const key = row.keys[keyIndex];
+                if (!key) return;
+                allKeys.add(key);
 
-            const targetMap = date >= mid ? currentPeriodMap : prevPeriodMap;
-            if (!targetMap[key]) targetMap[key] = { clicks: 0, impressions: 0, pos: 0, count: 0 };
-
-            const target = targetMap[key];
-            if (target) {
+                if (!map.has(key)) map.set(key, { clicks: 0, impressions: 0, pos: 0, count: 0 });
+                const target = map.get(key)!;
                 target.clicks += row.clicks;
                 target.impressions += row.impressions;
                 target.pos += row.position;
                 target.count++;
-            }
-        });
+            });
+        };
+
+        processRows(currentPeriodData, currentMap);
+        if (prevPeriodData) processRows(prevPeriodData, prevMap);
 
         const results: PoPRow[] = Array.from(allKeys).map(key => {
-            const curr = currentPeriodMap[key] || { clicks: 0, impressions: 0, pos: 0, count: 0 };
-            const prev = prevPeriodMap[key] || { clicks: 0, impressions: 0, pos: 0, count: 0 };
+            const curr = currentMap.get(key) || { clicks: 0, impressions: 0, pos: 0, count: 0 };
+            const prev = prevMap.get(key) || { clicks: 0, impressions: 0, pos: 0, count: 0 };
 
             const currPos = curr.count > 0 ? curr.pos / curr.count : 0;
             const prevPos = prev.count > 0 ? prev.pos / prev.count : 0;
@@ -530,7 +572,7 @@ export default function GscExportPage() {
         });
 
         return results.sort((a, b) => Math.abs(b.clicks.diff) - Math.abs(a.clicks.diff));
-    }, [filteredData, selectedDimensions]);
+    }, [filteredData, filteredComparisonData, compareMode, selectedDimensions]);
 
     // Decay Alerts Logic
     const decayAnalysis = useMemo(() => {
@@ -591,8 +633,73 @@ export default function GscExportPage() {
                 imprPcent,
                 severity: (clickPcent < -20 || imprPcent < -20) ? 'high' : (clickPcent < -10 || imprPcent < -10) ? 'medium' : 'low'
             };
-        }).filter(item => item.clickPcent < -5 || item.imprPcent < -5)
-            .sort((a, b) => a.clickPcent - b.clickPcent);
+        }).filter(item => Math.abs(item.clickPcent) >= 5 || Math.abs(item.imprPcent) >= 5)
+            .sort((a, b) => {
+                const aSeverity = (Math.abs(a.clickPcent) + Math.abs(a.imprPcent)) / 2;
+                const bSeverity = (Math.abs(b.clickPcent) + Math.abs(b.imprPcent)) / 2;
+                return bSeverity - aSeverity;
+            });
+    }, [filteredData, selectedDimensions]);
+
+    // Page Analysis (Pivot Table)
+    const pageAnalysis = useMemo(() => {
+        if (!filteredData || !selectedDimensions.includes("page") || !selectedDimensions.includes("query")) return null;
+
+        const pageIndex = selectedDimensions.indexOf("page");
+        const queryIndex = selectedDimensions.indexOf("query");
+
+        type PageData = {
+            page: string;
+            totalClicks: number;
+            totalImpressions: number;
+            avgPosition: number;
+            queryCount: number;
+            queries: Array<{
+                query: string;
+                clicks: number;
+                impressions: number;
+                ctr: number;
+                position: number;
+            }>;
+        };
+
+        const pageMap: { [page: string]: PageData } = {};
+
+        filteredData.forEach(row => {
+            const page = row.keys[pageIndex];
+            const query = row.keys[queryIndex];
+            if (!page || !query) return;
+
+            if (!pageMap[page]) {
+                pageMap[page] = {
+                    page,
+                    totalClicks: 0,
+                    totalImpressions: 0,
+                    avgPosition: 0,
+                    queryCount: 0,
+                    queries: []
+                };
+            }
+
+            pageMap[page].totalClicks += row.clicks;
+            pageMap[page].totalImpressions += row.impressions;
+            pageMap[page].queries.push({
+                query,
+                clicks: row.clicks,
+                impressions: row.impressions,
+                ctr: row.ctr,
+                position: row.position
+            });
+        });
+
+        // Calculate averages and sort queries
+        Object.values(pageMap).forEach(pageData => {
+            pageData.queryCount = pageData.queries.length;
+            pageData.avgPosition = pageData.queries.reduce((sum, q) => sum + q.position, 0) / pageData.queryCount;
+            pageData.queries.sort((a, b) => b.clicks - a.clicks);
+        });
+
+        return Object.values(pageMap).sort((a, b) => b.totalClicks - a.totalClicks);
     }, [filteredData, selectedDimensions]);
 
     const sortedCannibalizationData = useMemo(() => {
@@ -665,6 +772,8 @@ export default function GscExportPage() {
         setLoadingMessage("Preparing to fetch data...");
         setError("");
         setData([]); // Clear previous data
+        setComparisonData(null);
+        setActiveComparison(null);
         setSelectedQcUrls([]);
         setHasManuallyClearedQc(false);
 
@@ -690,7 +799,35 @@ export default function GscExportPage() {
                 endDate = customEndDate;
             }
 
-            const filters = [];
+            // Calculate Comparison Dates
+            let compareStart = "";
+            let compareEnd = "";
+
+            if (compareMode) {
+                const currentStart = parseISO(startDate);
+                const currentEnd = parseISO(endDate);
+
+                if (compareType === "previous_period") {
+                    const duration = differenceInDays(currentEnd, currentStart) + 1;
+                    const prevEnd = subDays(currentStart, 1);
+                    const prevStart = subDays(prevEnd, duration - 1);
+                    compareStart = format(prevStart, "yyyy-MM-dd");
+                    compareEnd = format(prevEnd, "yyyy-MM-dd");
+                } else if (compareType === "previous_year") {
+                    compareStart = format(subYears(currentStart, 1), "yyyy-MM-dd");
+                    compareEnd = format(subYears(currentEnd, 1), "yyyy-MM-dd");
+                } else if (compareType === "custom") {
+                    compareStart = compareStartDate;
+                    compareEnd = compareEndDate;
+                }
+            }
+
+            setActiveComparison({
+                current: { start: startDate, end: endDate },
+                compare: compareMode ? { start: compareStart, end: compareEnd } : null
+            });
+
+            const filters: { dimension: string; operator: string; expression: string }[] = [];
             if (deviceFilter !== "all") {
                 filters.push({
                     dimension: "device",
@@ -699,7 +836,6 @@ export default function GscExportPage() {
                 });
             }
 
-            // Add Page Filter
             if (pageFilterValue) {
                 filters.push({
                     dimension: "page",
@@ -708,7 +844,6 @@ export default function GscExportPage() {
                 });
             }
 
-            // Add Query Filter
             if (queryFilterValue) {
                 filters.push({
                     dimension: "query",
@@ -717,96 +852,98 @@ export default function GscExportPage() {
                 });
             }
 
-            setLoadingMessage("Starting data fetch...");
+            const fetchPeriodData = async (start: string, end: string, onProgress: (msg: string) => void, onData?: (rows: GscRow[]) => void) => {
+                onProgress(`Starting fetch for ${start} to ${end}...`);
 
-            const res = await fetch("/api/gsc/query", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    siteUrl: selectedProperty,
-                    startDate,
-                    endDate,
-                    dimensions: selectedDimensions,
-                    filters,
-                    searchType,
-                }),
-            });
+                const res = await fetch("/api/gsc/query", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        siteUrl: selectedProperty,
+                        startDate: start,
+                        endDate: end,
+                        dimensions: selectedDimensions,
+                        filters,
+                        searchType,
+                        rowLimit: 25000,
+                    }),
+                });
 
-            if (!res.ok) throw new Error("Failed to fetch data");
-            if (!res.body) throw new Error("No response body");
+                if (!res.ok) throw new Error(`Failed to fetch data for ${start} - ${end}`);
+                if (!res.body) throw new Error("No response body");
 
-            const reader = res.body.getReader();
-            const decoder = new TextDecoder();
-            let accumulatedRows: GscRow[] = [];
-            let buffer = "";
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder();
+                let accumulatedRows: GscRow[] = [];
+                let buffer = "";
 
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
 
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split("\n");
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split("\n");
+                    buffer = lines.pop() || "";
 
-                // Keep the last potentially incomplete line in the buffer
-                buffer = lines.pop() || "";
-
-                for (const line of lines) {
-                    if (!line.trim()) continue;
+                    for (const line of lines) {
+                        if (!line.trim()) continue;
+                        try {
+                            const message = JSON.parse(line);
+                            if (message.type === "progress") {
+                                onProgress(message.message || "Fetching...");
+                            } else if (message.type === "data") {
+                                const newRows = message.rows || [];
+                                accumulatedRows.push(...newRows);
+                                if (onData) onData(accumulatedRows);
+                            } else if (message.type === "batch_error") {
+                                console.error("Batch error:", message.message);
+                                onProgress(`Warning: ${message.message}`);
+                            } else if (message.type === "error") {
+                                throw new Error(message.message);
+                            }
+                        } catch (e) {
+                            if (e instanceof Error && e.message !== "Unexpected end of JSON input") {
+                                console.error("Error parsing stream message", e);
+                            }
+                        }
+                    }
+                }
+                // Process remaining buffer
+                if (buffer.trim()) {
                     try {
-                        const message = JSON.parse(line);
-
-                        if (message.type === "progress") {
-                            setLoadingMessage(message.message || "Fetching data...");
-                        } else if (message.type === "data") {
+                        const message = JSON.parse(buffer);
+                        if (message.type === "data") {
                             const newRows = message.rows || [];
                             accumulatedRows.push(...newRows);
-
-                            // Group by 1000 rows for UI updates to maintain performance
-                            if (accumulatedRows.length % 1000 < newRows.length || accumulatedRows.length < 1000) {
-                                const currentAggregated = aggregateData(accumulatedRows);
-                                setData(currentAggregated);
-                            }
-                        } else if (message.type === "complete") {
-                            // Done
-                        } else if (message.type === "batch_error") {
-                            console.error("Batch error:", message.message);
-                            // We don't throw to allow other batches to succeed, but we could notify
-                            setLoadingMessage(`Warning: ${message.message}`);
-                        } else if (message.type === "error") {
-                            throw new Error(message.message);
+                            if (onData) onData(accumulatedRows);
                         }
-                    } catch (e) {
-                        if (e instanceof Error && e.message !== "Unexpected end of JSON input") {
-                            console.error("Error parsing stream message", e);
-                        }
-                    }
+                    } catch (e) { }
                 }
+                return accumulatedRows;
+            };
+
+            // Fetch Current Data
+            setLoadingMessage("Fetching current period data...");
+            const currentRows = await fetchPeriodData(startDate, endDate, setLoadingMessage, (rows) => {
+                // Update UI incrementally for current data
+                if (rows.length % 1000 === 0 || rows.length < 1000) {
+                    const currentAggregated = aggregateData(rows);
+                    setData(currentAggregated);
+                }
+            });
+            setData(aggregateData(currentRows));
+
+            // Fetch Comparison Data if needed
+            if (compareMode && compareStart && compareEnd) {
+                setLoadingMessage("Fetching comparison period data...");
+                const compareRows = await fetchPeriodData(compareStart, compareEnd, setLoadingMessage);
+                setComparisonData(aggregateData(compareRows));
             }
 
-            // Process any remaining buffer
-            if (buffer.trim()) {
-                try {
-                    const message = JSON.parse(buffer);
-                    if (message.type === "data") {
-                        const newRows = message.rows || [];
-                        accumulatedRows.push(...newRows);
-                    } else if (message.type === "error") {
-                        throw new Error(message.message);
-                    }
-                } catch (e) {
-                    // Final buffer might be incomplete, ignore
-                }
-            }
+            setLoadingMessage("Data processing complete.");
 
-            // Final Analysis
-            setLoadingMessage("Analyzing data...");
-
-            // Aggregate data by keys if not already (important for multi-batch fetches)
-            const aggregated = aggregateData(accumulatedRows);
-            setData(aggregated);
-
-        } catch (err) {
-            setError("Failed to fetch data. Please try again.");
+        } catch (err: any) {
+            setError(err.message || "Failed to fetch data. Please try again.");
             console.error(err);
         } finally {
             setLoading(false);
@@ -1207,6 +1344,61 @@ export default function GscExportPage() {
                                             </select>
                                         </div>
 
+                                        <div className="space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                    Comparison
+                                                </label>
+                                                <div className="flex items-center">
+                                                    <input
+                                                        type="checkbox"
+                                                        id="compareMode"
+                                                        className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                                                        checked={compareMode}
+                                                        onChange={(e) => setCompareMode(e.target.checked)}
+                                                    />
+                                                    <label htmlFor="compareMode" className="ml-2 text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
+                                                        Enable
+                                                    </label>
+                                                </div>
+                                            </div>
+
+                                            {compareMode ? (
+                                                <div className="space-y-2">
+                                                    <select
+                                                        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                                                        value={compareType}
+                                                        onChange={(e) => setCompareType(e.target.value as any)}
+                                                    >
+                                                        <option value="previous_period">Previous Period</option>
+                                                        <option value="previous_year">Previous Year</option>
+                                                        <option value="custom">Custom Range</option>
+                                                    </select>
+
+                                                    {compareType === "custom" && (
+                                                        <div className="flex space-x-2">
+                                                            <input
+                                                                type="date"
+                                                                className="w-1/2 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs"
+                                                                value={compareStartDate}
+                                                                onChange={(e) => setCompareStartDate(e.target.value)}
+                                                            />
+                                                            <input
+                                                                type="date"
+                                                                className="w-1/2 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs"
+                                                                value={compareEndDate}
+                                                                onChange={(e) => setCompareEndDate(e.target.value)}
+                                                            />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <div className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 bg-gray-50 dark:bg-gray-800 text-gray-400 text-sm italic">
+                                                    Compare disabled
+                                                </div>
+                                            )}
+                                        </div>
+
                                         <div className="space-y-2 col-span-full">
                                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                                                 Dimensions
@@ -1535,6 +1727,18 @@ export default function GscExportPage() {
                                                 >
                                                     <TrendingDown className="w-3 h-3 mr-1" />
                                                     Decay
+                                                </button>
+                                            )}
+                                            {pageAnalysis && (
+                                                <button
+                                                    onClick={() => setActiveTab("page_analysis")}
+                                                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap flex items-center ${activeTab === "page_analysis"
+                                                        ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
+                                                        : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                                                        }`}
+                                                >
+                                                    <LayoutDashboard className="w-3 h-3 mr-1" />
+                                                    Page Analysis
                                                 </button>
                                             )}
                                         </div>
@@ -2284,7 +2488,9 @@ export default function GscExportPage() {
                                                             Winners & Losers (PoP)
                                                         </h2>
                                                         <p className="text-gray-500 dark:text-gray-400 text-sm">
-                                                            Comparing the first half vs. second half of the selected date range.
+                                                            {compareMode && activeComparison?.compare
+                                                                ? `Comparing ${activeComparison.current.start} - ${activeComparison.current.end} vs ${activeComparison.compare.start} - ${activeComparison.compare.end}`
+                                                                : "Comparing the first half vs. second half of the selected date range."}
                                                         </p>
                                                     </div>
                                                     <button
