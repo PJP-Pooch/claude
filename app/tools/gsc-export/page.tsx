@@ -1,7 +1,8 @@
 "use client";
 
 import { useSession, signIn, signOut } from "next-auth/react";
-import { useState, useEffect, Fragment, useMemo } from "react";
+import { useState, useEffect, Fragment, useMemo, useCallback } from "react";
+import Image from "next/image";
 import { format, parseISO, startOfWeek, startOfMonth, subDays, subMonths, subYears, differenceInDays } from "date-fns";
 import {
     BarChart,
@@ -186,7 +187,7 @@ export default function GscExportPage() {
         });
     };
 
-    const filterRows = (rows: GscRow[] | null) => {
+    const filterRows = useCallback((rows: GscRow[] | null) => {
         if (!rows) return null;
         return rows.filter(row => {
             if (wordCountFilterType === "all" || !wordCountFilterValue) return true;
@@ -199,10 +200,10 @@ export default function GscExportPage() {
             if (wordCountFilterType === "eq") return count === target;
             return true;
         });
-    };
+    }, [wordCountFilterType, wordCountFilterValue]);
 
-    const filteredData = useMemo(() => filterRows(data), [data, wordCountFilterType, wordCountFilterValue]);
-    const filteredComparisonData = useMemo(() => filterRows(comparisonData), [comparisonData, wordCountFilterType, wordCountFilterValue]);
+    const filteredData = useMemo(() => filterRows(data), [data, filterRows]);
+    const filteredComparisonData = useMemo(() => filterRows(comparisonData), [comparisonData, filterRows]);
 
     const aggregatedByQuery = useMemo(() => {
         if (!filteredData || !selectedDimensions.includes("query")) return null;
@@ -547,7 +548,7 @@ export default function GscExportPage() {
         });
 
         return results.sort((a, b) => Math.abs(b.clicks.diff) - Math.abs(a.clicks.diff));
-    }, [filteredData, filteredComparisonData, compareMode, selectedDimensions]);
+    }, [filteredData, filteredComparisonData, selectedDimensions]);
 
     // Comparison Trend Chart Data
     const comparisonTrendData = useMemo(() => {
@@ -558,17 +559,19 @@ export default function GscExportPage() {
         const prevDataByDay = new Map<string, { clicks: number, impressions: number }>();
 
         // We want to align days by index (Day 0, Day 1, etc.)
-        const currentDates = Array.from(new Set(filteredData.map(r => r.keys[dateIndex]))).sort();
-        const prevDates = Array.from(new Set(filteredComparisonData.map(r => r.keys[dateIndex]))).sort();
+        const currentDates = Array.from(new Set(filteredData.map(r => r.keys[dateIndex]).filter((d): d is string => !!d))).sort();
+        const prevDates = Array.from(new Set(filteredComparisonData.map(r => r.keys[dateIndex]).filter((d): d is string => !!d))).sort();
 
         filteredData.forEach(row => {
             const d = row.keys[dateIndex];
+            if (typeof d !== 'string') return;
             const existing = currentDataByDay.get(d) || { clicks: 0, impressions: 0 };
             currentDataByDay.set(d, { clicks: existing.clicks + row.clicks, impressions: existing.impressions + row.impressions });
         });
 
         filteredComparisonData.forEach(row => {
             const d = row.keys[dateIndex];
+            if (typeof d !== 'string') return;
             const existing = prevDataByDay.get(d) || { clicks: 0, impressions: 0 };
             prevDataByDay.set(d, { clicks: existing.clicks + row.clicks, impressions: existing.impressions + row.impressions });
         });
@@ -1194,10 +1197,13 @@ export default function GscExportPage() {
                             <div className="space-y-6">
                                 <div className="flex items-center space-x-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                                     {session.user?.image ? (
-                                        <img
+                                        <Image
                                             src={session.user.image}
                                             alt={session.user.name || "User"}
+                                            width={40}
+                                            height={40}
                                             className="w-10 h-10 rounded-full"
+                                            unoptimized
                                         />
                                     ) : (
                                         <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">

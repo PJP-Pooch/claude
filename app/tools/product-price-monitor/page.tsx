@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { useDataForSeoCredentials } from "@/hooks/useDataForSeoCredentials";
 import { Search, Loader2, Download, ExternalLink, AlertCircle } from "lucide-react";
 import ThemeToggle from '@/components/ThemeToggle';
@@ -974,13 +975,13 @@ e.g., 12693300312433459747
                                                             })()}
                                                         </div>
                                                         {product.product_images && product.product_images.length > 0 && (
-                                                            <img
-                                                                src={typeof product.product_images[0] === 'string' ? product.product_images[0] : product.product_images[0].url}
+                                                            <Image
+                                                                src={typeof product.product_images[0] === 'string' ? product.product_images[0] : (product.product_images[0] as any).url}
                                                                 alt={product.title || 'Product image'}
+                                                                width={80}
+                                                                height={80}
                                                                 className="w-20 h-20 object-contain rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex-shrink-0"
-                                                                onError={(e) => {
-                                                                    e.currentTarget.style.display = 'none';
-                                                                }}
+                                                                unoptimized
                                                             />
                                                         )}
                                                         <div className="flex-1">

@@ -9,22 +9,28 @@ description: Push latest changes to GitHub
    git status
    ```
 
-2. Stage all modified files:
+2. Validate the code by running a build:
+   ```
+   npm run build
+   ```
+   (If the build fails, fix the errors before proceeding)
+
+3. Stage all modified files:
    ```
    git add .
    ```
 
-3. Commit the changes with a descriptive message (update the message based on what was changed):
+4. Commit the changes with a descriptive message (update the message based on what was changed):
    ```
    git commit -m "Update: [describe the changes made]"
    ```
 
-4. Push the changes to the remote repository:
+5. Push the changes to the remote repository:
    ```
    git push
    ```
 
-**Note:** The commit message in step 3 should be customized based on the actual changes made. Common patterns:
+**Note:** The commit message in step 4 should be customized based on the actual changes made. Common patterns:
 - `"Fix: [description]"` - for bug fixes
 - `"Add: [description]"` - for new features
 - `"Update: [description]"` - for modifications
