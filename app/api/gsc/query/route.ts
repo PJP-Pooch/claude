@@ -43,33 +43,43 @@ export async function POST(req: Request) {
             const end = parseISO(endDate);
             const totalDays = differenceInDays(end, start);
 
-            // Helper to fetch data for a specific range
+            // Helper to fetch data for a specific range with pagination
             const fetchData = async (startStr: string, endStr: string) => {
-                const requestBody: any = {
-                    startDate: startStr,
-                    endDate: endStr,
-                    dimensions,
-                    rowLimit: 25000, // Max per request
-                    searchType: searchType || "web",
-                };
+                let allRows: any[] = [];
+                let startRow = 0;
+                const BATCH_LIMIT = 25000;
+                const MAX_TOTAL_ROWS = 100000; // Limit per period toggle
 
-                if (filters && filters.length > 0) {
-                    requestBody.dimensionFilterGroups = [
-                        {
-                            filters,
-                        },
-                    ];
+                while (true) {
+                    const requestBody: any = {
+                        startDate: startStr,
+                        endDate: endStr,
+                        dimensions,
+                        rowLimit: BATCH_LIMIT,
+                        startRow: startRow,
+                        searchType: searchType || "web",
+                    };
+
+                    if (filters && filters.length > 0) {
+                        requestBody.dimensionFilterGroups = [{ filters }];
+                    }
+
+                    const response = await searchConsole.searchanalytics.query({
+                        siteUrl,
+                        requestBody,
+                    });
+
+                    const rows = response.data.rows || [];
+                    allRows = [...allRows, ...rows];
+
+                    if (rows.length < BATCH_LIMIT || allRows.length >= MAX_TOTAL_ROWS) {
+                        break;
+                    }
+                    startRow += BATCH_LIMIT;
                 }
 
-                const response = await searchConsole.searchanalytics.query({
-                    siteUrl,
-                    requestBody,
-                });
-
-                const rows = response.data.rows || [];
-
                 // Process rows to ensure numeric types immediately
-                return rows.map((row) => ({
+                return allRows.map((row) => ({
                     ...row,
                     clicks: row.clicks || 0,
                     impressions: row.impressions || 0,

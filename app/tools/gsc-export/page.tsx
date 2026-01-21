@@ -107,7 +107,8 @@ export default function GscExportPage() {
     const [loadingMessage, setLoadingMessage] = useState("");
     const [data, setData] = useState<GscRow[] | null>(null);
     const [error, setError] = useState("");
-    const [activeTab, setActiveTab] = useState<"raw" | "analysis" | "cannibalization" | "query_counts" | "striking_distance" | "ctr_opportunity" | "pop" | "intent" | "decay" | "page_analysis">("raw");
+    const [activeTab, setActiveTab] = useState<"raw" | "analysis" | "cannibalization" | "query_counts" | "striking_distance" | "ctr_opportunity" | "pop" | "yoy" | "intent" | "decay" | "page_analysis">("raw");
+    const [popMetric, setPopMetric] = useState<"clicks" | "impressions">("clicks");
     const [expandedQueries, setExpandedQueries] = useState<Set<string>>(new Set());
     const [expandedPages, setExpandedPages] = useState<Set<string>>(new Set());
     const [sortConfig, setSortConfig] = useState<{ key: string; direction: "asc" | "desc" } | null>(null);
@@ -486,41 +487,15 @@ export default function GscExportPage() {
     // Period over Period Comparison Logic
     const popAnalysis = useMemo(() => {
         if (!filteredData) return null;
-        // If comparison data is available, use it. Otherwise, fallback to splitting filteredData if date dimension exists (legacy behavior or single fetch)
 
         let currentPeriodData = filteredData;
         let prevPeriodData = filteredComparisonData;
 
-        // Legacy fallback: split filteredData if no comparisonData but date dimension is selected
-        if (!compareMode || !prevPeriodData) {
-            if (!selectedDimensions.includes("date")) return null;
-            const dateIndex = selectedDimensions.indexOf("date");
-            const dates = filteredData.map(r => {
-                const dateStr = r.keys[dateIndex];
-                return dateStr ? parseISO(dateStr).getTime() : 0;
-            }).filter(t => t > 0).sort();
+        // Match dimensions (everything except date)
+        const matchDims = selectedDimensions.filter(d => d !== 'date');
+        const matchIndices = matchDims.map(d => selectedDimensions.indexOf(d));
 
-            if (dates.length < 2) return null;
-            const firstDate = dates[0];
-            const lastDate = dates[dates.length - 1];
-            if (firstDate === undefined || lastDate === undefined) return null;
-            const mid = (firstDate + lastDate) / 2;
-
-            currentPeriodData = filteredData.filter(r => {
-                const dateKey = r.keys[dateIndex];
-                if (!dateKey) return false;
-                const d = parseISO(dateKey).getTime();
-                return d >= mid;
-            });
-            prevPeriodData = filteredData.filter(r => {
-                const dateKey = r.keys[dateIndex];
-                if (!dateKey) return false;
-                const d = parseISO(dateKey).getTime();
-                return d < mid;
-            });
-        }
-
-        const keyIndex = selectedDimensions.includes("query") ? selectedDimensions.indexOf("query") : (selectedDimensions.includes("page") ? selectedDimensions.indexOf("page") : 0);
+        if (matchIndices.length === 0) return null;
 
         const currentMap = new Map<string, { clicks: number, impressions: number, pos: number, count: number }>();
         const prevMap = new Map<string, { clicks: number, impressions: number, pos: number, count: number }>();
@@ -528,7 +503,7 @@ export default function GscExportPage() {
 
         const processRows = (rows: GscRow[], map: Map<string, any>) => {
             rows.forEach(row => {
-                const key = row.keys[keyIndex];
+                const key = matchIndices.map(i => row.keys[i]).join(' | ');
                 if (!key) return;
                 allKeys.add(key);
 
@@ -573,6 +548,51 @@ export default function GscExportPage() {
 
         return results.sort((a, b) => Math.abs(b.clicks.diff) - Math.abs(a.clicks.diff));
     }, [filteredData, filteredComparisonData, compareMode, selectedDimensions]);
+
+    // Comparison Trend Chart Data
+    const comparisonTrendData = useMemo(() => {
+        if (!filteredData || !filteredComparisonData || !selectedDimensions.includes("date")) return null;
+
+        const dateIndex = selectedDimensions.indexOf("date");
+        const currentDataByDay = new Map<string, { clicks: number, impressions: number }>();
+        const prevDataByDay = new Map<string, { clicks: number, impressions: number }>();
+
+        // We want to align days by index (Day 0, Day 1, etc.)
+        const currentDates = Array.from(new Set(filteredData.map(r => r.keys[dateIndex]))).sort();
+        const prevDates = Array.from(new Set(filteredComparisonData.map(r => r.keys[dateIndex]))).sort();
+
+        filteredData.forEach(row => {
+            const d = row.keys[dateIndex];
+            const existing = currentDataByDay.get(d) || { clicks: 0, impressions: 0 };
+            currentDataByDay.set(d, { clicks: existing.clicks + row.clicks, impressions: existing.impressions + row.impressions });
+        });
+
+        filteredComparisonData.forEach(row => {
+            const d = row.keys[dateIndex];
+            const existing = prevDataByDay.get(d) || { clicks: 0, impressions: 0 };
+            prevDataByDay.set(d, { clicks: existing.clicks + row.clicks, impressions: existing.impressions + row.impressions });
+        });
+
+        const maxDays = Math.max(currentDates.length, prevDates.length);
+        const chartData = [];
+
+        for (let i = 0; i < maxDays; i++) {
+            const currentDay = currentDates[i];
+            const prevDay = prevDates[i];
+
+            chartData.push({
+                day: i + 1,
+                currentDate: currentDay || "",
+                prevDate: prevDay || "",
+                currentClicks: currentDay ? (currentDataByDay.get(currentDay)?.clicks || 0) : 0,
+                prevClicks: prevDay ? (prevDataByDay.get(prevDay)?.clicks || 0) : 0,
+                currentImpr: currentDay ? (currentDataByDay.get(currentDay)?.impressions || 0) : 0,
+                prevImpr: prevDay ? (prevDataByDay.get(prevDay)?.impressions || 0) : 0,
+            });
+        }
+
+        return chartData;
+    }, [filteredData, filteredComparisonData, selectedDimensions]);
 
     // Decay Alerts Logic
     const decayAnalysis = useMemo(() => {
@@ -1693,16 +1713,32 @@ export default function GscExportPage() {
                                                     CTR Opps
                                                 </button>
                                             )}
+                                            <button
+                                                onClick={() => {
+                                                    setActiveTab("pop");
+                                                    if (compareType !== "previous_period") setCompareType("previous_period");
+                                                }}
+                                                className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap flex items-center ${activeTab === "pop"
+                                                    ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
+                                                    : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                                                    }`}
+                                            >
+                                                <Zap className="w-3 h-3 mr-1" />
+                                                PoP Diff
+                                            </button>
                                             {popAnalysis && (
                                                 <button
-                                                    onClick={() => setActiveTab("pop")}
-                                                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap flex items-center ${activeTab === "pop"
+                                                    onClick={() => {
+                                                        setActiveTab("yoy");
+                                                        if (compareType !== "previous_year") setCompareType("previous_year");
+                                                    }}
+                                                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap flex items-center ${activeTab === "yoy"
                                                         ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
                                                         : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                                                         }`}
                                                 >
-                                                    <Zap className="w-3 h-3 mr-1" />
-                                                    PoP Diff
+                                                    <RefreshCw className="w-3 h-3 mr-1" />
+                                                    YoY Diff
                                                 </button>
                                             )}
                                             {intentAnalysis && (
@@ -2479,83 +2515,152 @@ export default function GscExportPage() {
                                         )}
 
                                         {/* Period over Period Tab */}
-                                        {activeTab === "pop" && popAnalysis && (
-                                            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                                                <div className="flex justify-between items-center mb-6">
-                                                    <div>
-                                                        <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center">
-                                                            <Zap className="w-5 h-5 mr-2 text-yellow-500" />
-                                                            Winners & Losers (PoP)
-                                                        </h2>
-                                                        <p className="text-gray-500 dark:text-gray-400 text-sm">
-                                                            {compareMode && activeComparison?.compare
-                                                                ? `Comparing ${activeComparison.current.start} - ${activeComparison.current.end} vs ${activeComparison.compare.start} - ${activeComparison.compare.end}`
-                                                                : "Comparing the first half vs. second half of the selected date range."}
-                                                        </p>
+                                        {(activeTab === "pop" || activeTab === "yoy") && popAnalysis && (
+                                            <div className="space-y-6">
+                                                {/* Comparison Trend Chart */}
+                                                {comparisonTrendData && selectedDimensions.includes("date") && (
+                                                    <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+                                                        <div className="flex justify-between items-center mb-6">
+                                                            <h3 className="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wider flex items-center">
+                                                                <TrendingDown className="w-4 h-4 mr-2 text-blue-500" />
+                                                                {activeTab === "pop" ? "PoP" : "YoY"} {popMetric === "clicks" ? "Click" : "Impression"} Trend Comparison
+                                                            </h3>
+                                                            <div className="flex bg-gray-100 dark:bg-gray-700 p-0.5 rounded-lg">
+                                                                <button
+                                                                    onClick={() => setPopMetric("clicks")}
+                                                                    className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${popMetric === "clicks" ? "bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm" : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"}`}
+                                                                >
+                                                                    Clicks
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => setPopMetric("impressions")}
+                                                                    className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${popMetric === "impressions" ? "bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm" : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"}`}
+                                                                >
+                                                                    Impressions
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                        <div className="h-[300px] w-full">
+                                                            <ResponsiveContainer width="100%" height="100%">
+                                                                <LineChart data={comparisonTrendData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#374151" opacity={0.1} />
+                                                                    <XAxis dataKey="day" label={{ value: 'Day of Period', position: 'insideBottom', offset: -5 }} stroke="#9CA3AF" fontSize={12} tickLine={false} axisLine={false} />
+                                                                    <YAxis stroke="#9CA3AF" fontSize={12} tickLine={false} axisLine={false} />
+                                                                    <Tooltip
+                                                                        content={({ active, payload }) => {
+                                                                            if (!active || !payload || !payload.length) return null;
+                                                                            const data = payload[0].payload;
+                                                                            return (
+                                                                                <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
+                                                                                    <p className="font-semibold text-gray-900 dark:text-white mb-2">Day {data.day}</p>
+                                                                                    <div className="space-y-1">
+                                                                                        <p className="text-xs text-blue-600 font-medium">Current ({data.currentDate}): {popMetric === "clicks" ? data.currentClicks.toLocaleString() : data.currentImpr.toLocaleString()} {popMetric === "clicks" ? "Clicks" : "Impr"}</p>
+                                                                                        <p className="text-xs text-gray-400 font-medium">Comparison ({data.prevDate}): {popMetric === "clicks" ? data.prevClicks.toLocaleString() : data.prevImpr.toLocaleString()} {popMetric === "clicks" ? "Clicks" : "Impr"}</p>
+                                                                                    </div>
+                                                                                </div>
+                                                                            );
+                                                                        }}
+                                                                    />
+                                                                    <Legend />
+                                                                    <Line type="monotone" dataKey={popMetric === "clicks" ? "currentClicks" : "currentImpr"} name="Current Period" stroke="#3b82f6" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
+                                                                    <Line type="monotone" dataKey={popMetric === "clicks" ? "prevClicks" : "prevImpr"} name="Previous Period" stroke="#9ca3af" strokeWidth={2} strokeDasharray="5 5" dot={false} activeDot={{ r: 4 }} />
+                                                                </LineChart>
+                                                            </ResponsiveContainer>
+                                                        </div>
                                                     </div>
-                                                    <button
-                                                        onClick={() => downloadCsv(popAnalysis, `pop_analysis_${selectedProperty}.csv`)}
-                                                        className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
-                                                    >
-                                                        <Download className="h-4 w-4 mr-2" />
-                                                        Download CSV
-                                                    </button>
-                                                </div>
+                                                )}
 
-                                                <div className="overflow-x-auto border rounded-lg border-gray-200 dark:border-gray-700">
-                                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                                                        <thead className="bg-gray-50 dark:bg-gray-900/30">
-                                                            <tr>
-                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{selectedDimensions.includes("query") ? "Query" : "Page"}</th>
-                                                                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" colSpan={2}>Clicks</th>
-                                                                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" colSpan={2}>Impressions</th>
-                                                                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" colSpan={2}>Position</th>
-                                                            </tr>
-                                                            <tr>
-                                                                <th className="px-6 py-1"></th>
-                                                                <th className="px-3 py-1 text-center text-[10px] text-gray-400 uppercase">Actual</th>
-                                                                <th className="px-3 py-1 text-center text-[10px] text-gray-400 uppercase">%</th>
-                                                                <th className="px-3 py-1 text-center text-[10px] text-gray-400 uppercase">Actual</th>
-                                                                <th className="px-3 py-1 text-center text-[10px] text-gray-400 uppercase">%</th>
-                                                                <th className="px-3 py-1 text-center text-[10px] text-gray-400 uppercase">Actual</th>
-                                                                <th className="px-3 py-1 text-center text-[10px] text-gray-400 uppercase">%</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                                            {popAnalysis.slice(0, 100).map((row, i) => (
-                                                                <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                                                    <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white truncate max-w-[300px]" title={row.key}>{row.key}</td>
-                                                                    <td className={`px-3 py-4 text-sm text-center font-semibold ${row.clicks.diff > 0 ? "text-green-600" : row.clicks.diff < 0 ? "text-red-600" : "text-gray-500"}`}>
-                                                                        {row.clicks.diff > 0 ? "+" : ""}{row.clicks.diff.toLocaleString()}
-                                                                        <div className="text-[10px] text-gray-400 font-normal">({row.clicks.prev} → {row.clicks.current})</div>
-                                                                    </td>
-                                                                    <td className="px-3 py-4 text-center">
-                                                                        <span className={`px-2 py-0.5 rounded text-xs font-bold ${row.clicks.pcent > 0 ? "bg-green-100 text-green-800" : row.clicks.pcent < 0 ? "bg-red-100 text-red-800" : "bg-gray-100 text-gray-800"}`}>
-                                                                            {row.clicks.pcent.toFixed(1)}%
-                                                                        </span>
-                                                                    </td>
-                                                                    <td className={`px-3 py-4 text-sm text-center font-semibold ${row.impressions.diff > 0 ? "text-green-600" : row.impressions.diff < 0 ? "text-red-600" : "text-gray-500"}`}>
-                                                                        {row.impressions.diff > 0 ? "+" : ""}{row.impressions.diff.toLocaleString()}
-                                                                        <div className="text-[10px] text-gray-400 font-normal">({row.impressions.prev} → {row.impressions.current})</div>
-                                                                    </td>
-                                                                    <td className="px-3 py-4 text-center">
-                                                                        <span className={`px-2 py-0.5 rounded text-xs font-bold ${row.impressions.pcent > 0 ? "bg-green-100 text-green-800" : row.impressions.pcent < 0 ? "bg-red-100 text-red-800" : "bg-gray-100 text-gray-800"}`}>
-                                                                            {row.impressions.pcent.toFixed(1)}%
-                                                                        </span>
-                                                                    </td>
-                                                                    <td className={`px-3 py-4 text-sm text-center font-semibold ${row.position.diff > 0 ? "text-green-600" : row.position.diff < 0 ? "text-red-600" : "text-gray-500"}`}>
-                                                                        {row.position.diff > 0 ? "+" : ""}{row.position.diff.toFixed(1)}
-                                                                        <div className="text-[10px] text-gray-400 font-normal">({row.position.prev.toFixed(1)} → {row.position.current.toFixed(1)})</div>
-                                                                    </td>
-                                                                    <td className="px-3 py-4 text-center">
-                                                                        <span className={`px-2 py-0.5 rounded text-xs font-bold ${row.position.pcent > 0 ? "bg-green-100 text-green-800" : row.position.pcent < 0 ? "bg-red-100 text-red-800" : "bg-gray-100 text-gray-800"}`}>
-                                                                            {row.position.pcent.toFixed(1)}%
-                                                                        </span>
-                                                                    </td>
+                                                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                                                    <div className="flex justify-between items-center mb-6">
+                                                        <div>
+                                                            <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center">
+                                                                <Zap className="w-5 h-5 mr-2 text-yellow-500" />
+                                                                {activeTab === "pop" ? "Winners & Losers (PoP)" : "Year-over-Year Comparison (YoY)"}
+                                                            </h2>
+                                                            <p className="text-gray-500 dark:text-gray-400 text-sm">
+                                                                {compareMode && activeComparison?.compare
+                                                                    ? `Comparing ${activeComparison.current.start} - ${activeComparison.current.end} vs ${activeComparison.compare.start} - ${activeComparison.compare.end}`
+                                                                    : "Comparison mode is disabled. Enable it in the settings above to see data."}
+                                                            </p>
+                                                        </div>
+                                                        <div className="flex gap-2">
+                                                            {compareMode && ((activeTab === "yoy" && compareType !== "previous_year") || (activeTab === "pop" && compareType !== "previous_period")) && (
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setCompareType(activeTab === "yoy" ? "previous_year" : "previous_period");
+                                                                        setTimeout(() => handleFetchData(), 100);
+                                                                    }}
+                                                                    className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                                                                >
+                                                                    <RefreshCw className="h-4 w-4 mr-2 animate-spin-slow" />
+                                                                    Sync & Fetch {activeTab === "yoy" ? "YoY" : "PoP"}
+                                                                </button>
+                                                            )}
+                                                            <button
+                                                                onClick={() => downloadCsv(popAnalysis, `${activeTab}_analysis_${selectedProperty}.csv`)}
+                                                                className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+                                                            >
+                                                                <Download className="h-4 w-4 mr-2" />
+                                                                Download CSV
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="overflow-x-auto border rounded-lg border-gray-200 dark:border-gray-700">
+                                                        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                                            <thead className="bg-gray-50 dark:bg-gray-900/30">
+                                                                <tr>
+                                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{selectedDimensions.filter(d => d !== 'date').join(' / ')}</th>
+                                                                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" colSpan={2}>Clicks</th>
+                                                                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" colSpan={2}>Impressions</th>
+                                                                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" colSpan={2}>Position</th>
                                                                 </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
+                                                                <tr>
+                                                                    <th className="px-6 py-1"></th>
+                                                                    <th className="px-3 py-1 text-center text-[10px] text-gray-400 uppercase">Actual</th>
+                                                                    <th className="px-3 py-1 text-center text-[10px] text-gray-400 uppercase">%</th>
+                                                                    <th className="px-3 py-1 text-center text-[10px] text-gray-400 uppercase">Actual</th>
+                                                                    <th className="px-3 py-1 text-center text-[10px] text-gray-400 uppercase">%</th>
+                                                                    <th className="px-3 py-1 text-center text-[10px] text-gray-400 uppercase">Actual</th>
+                                                                    <th className="px-3 py-1 text-center text-[10px] text-gray-400 uppercase">%</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                                                {popAnalysis.slice(0, 100).map((row, i) => (
+                                                                    <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                                                        <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white truncate max-w-[300px]" title={row.key}>{row.key}</td>
+                                                                        <td className={`px-3 py-4 text-sm text-center font-semibold ${row.clicks.diff > 0 ? "text-green-600" : row.clicks.diff < 0 ? "text-red-600" : "text-gray-500"}`}>
+                                                                            {row.clicks.diff > 0 ? "+" : ""}{row.clicks.diff.toLocaleString()}
+                                                                            <div className="text-[10px] text-gray-400 font-normal">({row.clicks.prev.toLocaleString()} → {row.clicks.current.toLocaleString()})</div>
+                                                                        </td>
+                                                                        <td className="px-3 py-4 text-center">
+                                                                            <span className={`px-2 py-0.5 rounded text-xs font-bold ${row.clicks.pcent > 0 ? "bg-green-100 text-green-800" : row.clicks.pcent < 0 ? "bg-red-100 text-red-800" : "bg-gray-100 text-gray-800"}`}>
+                                                                                {row.clicks.pcent.toFixed(1)}%
+                                                                            </span>
+                                                                        </td>
+                                                                        <td className={`px-3 py-4 text-sm text-center font-semibold ${row.impressions.diff > 0 ? "text-green-600" : row.impressions.diff < 0 ? "text-red-600" : "text-gray-500"}`}>
+                                                                            {row.impressions.diff > 0 ? "+" : ""}{row.impressions.diff.toLocaleString()}
+                                                                            <div className="text-[10px] text-gray-400 font-normal">({row.impressions.prev.toLocaleString()} → {row.impressions.current.toLocaleString()})</div>
+                                                                        </td>
+                                                                        <td className="px-3 py-4 text-center">
+                                                                            <span className={`px-2 py-0.5 rounded text-xs font-bold ${row.impressions.pcent > 0 ? "bg-green-100 text-green-800" : row.impressions.pcent < 0 ? "bg-red-100 text-red-800" : "bg-gray-100 text-gray-800"}`}>
+                                                                                {row.impressions.pcent.toFixed(1)}%
+                                                                            </span>
+                                                                        </td>
+                                                                        <td className={`px-3 py-4 text-sm text-center font-semibold ${row.position.diff > 0 ? "text-green-600" : row.position.diff < 0 ? "text-red-600" : "text-gray-500"}`}>
+                                                                            {row.position.diff > 0 ? "+" : ""}{row.position.diff.toFixed(1)}
+                                                                            <div className="text-[10px] text-gray-400 font-normal">({row.position.prev.toFixed(1)} → {row.position.current.toFixed(1)})</div>
+                                                                        </td>
+                                                                        <td className="px-3 py-4 text-center">
+                                                                            <span className={`px-2 py-0.5 rounded text-xs font-bold ${row.position.pcent > 0 ? "bg-green-100 text-green-800" : row.position.pcent < 0 ? "bg-red-100 text-red-800" : "bg-gray-100 text-gray-800"}`}>
+                                                                                {row.position.pcent.toFixed(1)}%
+                                                                            </span>
+                                                                        </td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
                                                 </div>
                                             </div>
                                         )}
