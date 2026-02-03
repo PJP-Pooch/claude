@@ -108,7 +108,7 @@ export default function GscExportPage() {
     const [loadingMessage, setLoadingMessage] = useState("");
     const [data, setData] = useState<GscRow[] | null>(null);
     const [error, setError] = useState("");
-    const [activeTab, setActiveTab] = useState<"raw" | "analysis" | "cannibalization" | "query_counts" | "striking_distance" | "ctr_opportunity" | "pop" | "yoy" | "intent" | "decay" | "page_analysis">("raw");
+    const [activeTab, setActiveTab] = useState<"raw" | "analysis" | "cannibalization" | "query_counts" | "striking_distance" | "ctr_opportunity" | "pop" | "yoy" | "intent" | "decay" | "page_analysis" | "directory">("raw");
     const [popMetric, setPopMetric] = useState<"clicks" | "impressions">("clicks");
     const [expandedQueries, setExpandedQueries] = useState<Set<string>>(new Set());
     const [expandedPages, setExpandedPages] = useState<Set<string>>(new Set());
@@ -489,6 +489,7 @@ export default function GscExportPage() {
             .map(item => {
                 const topImpression = Math.max(...item.pages.map(p => p.impressions));
                 const filteredPages = item.pages.filter(p => {
+                    if (p.clicks === 0) return false;
                     if (topImpression === 0) return true;
                     return (p.impressions / topImpression) * 100 >= minCannibalizationThreshold;
                 });
@@ -788,6 +789,58 @@ export default function GscExportPage() {
         });
 
         return Object.values(pageMap).sort((a, b) => b.totalClicks - a.totalClicks);
+    }, [filteredData, selectedDimensions]);
+
+    // Directory Analysis
+    const directoryAnalysis = useMemo(() => {
+        if (!filteredData || !selectedDimensions.includes("page")) return null;
+
+        const pageIndex = selectedDimensions.indexOf("page");
+        const dirMap: { [dir: string]: { dir: string; clicks: number; impressions: number; ctr: number; pos: number; count: number; pages: number } } = {};
+
+        filteredData.forEach(row => {
+            const url = row.keys[pageIndex];
+            if (!url) return;
+
+            try {
+                // Handle both full URLs and paths
+                let path = url;
+                if (url.startsWith('http')) {
+                    path = new URL(url).pathname;
+                }
+
+                const parts = path.split('/').filter(Boolean);
+                let dir = '/';
+                if (parts.length > 0) {
+                    dir = `/${parts[0]}/`;
+                    // If we want 2nd level as well, we could do:
+                    // if (parts.length > 1) dir += `${parts[1]}/`;
+                }
+
+                if (!dirMap[dir]) {
+                    dirMap[dir] = { dir, clicks: 0, impressions: 0, ctr: 0, pos: 0, count: 0, pages: 0 };
+                }
+
+                const d = dirMap[dir];
+                if (d) {
+                    d.clicks += row.clicks;
+                    d.impressions += row.impressions;
+                    d.pos += row.position;
+                    d.count++;
+                    d.pages++;
+                }
+            } catch (e) {
+                console.error("Error parsing URL for directory analysis:", url);
+            }
+        });
+
+        return Object.values(dirMap)
+            .map(d => ({
+                ...d,
+                ctr: d.impressions > 0 ? d.clicks / d.impressions : 0,
+                avgPos: d.count > 0 ? d.pos / d.count : 0
+            }))
+            .sort((a, b) => b.clicks - a.clicks);
     }, [filteredData, selectedDimensions]);
 
     const sortedCannibalizationData = useMemo(() => {
@@ -1909,16 +1962,29 @@ export default function GscExportPage() {
                                                     >
                                                         Query Analysis
                                                     </button>
+
                                                     <button
-                                                        onClick={() => setActiveTab("page_analysis")}
-                                                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === "page_analysis"
+                                                        onClick={() => setActiveTab("directory")}
+                                                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === "directory"
                                                             ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
                                                             : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                                                             }`}
                                                     >
-                                                        Page Analysis
+                                                        Category Analysis
                                                     </button>
                                                 </>
+                                            )}
+                                            {pageAnalysis && (
+                                                <button
+                                                    onClick={() => setActiveTab("page_analysis")}
+                                                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap flex items-center ${activeTab === "page_analysis"
+                                                        ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
+                                                        : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                                                        }`}
+                                                >
+                                                    <LayoutDashboard className="w-3 h-3 mr-1" />
+                                                    Page Analysis
+                                                </button>
                                             )}
                                             {cannibalizationData && (
                                                 <button
@@ -2022,18 +2088,7 @@ export default function GscExportPage() {
                                                     Decay
                                                 </button>
                                             )}
-                                            {pageAnalysis && (
-                                                <button
-                                                    onClick={() => setActiveTab("page_analysis")}
-                                                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap flex items-center ${activeTab === "page_analysis"
-                                                        ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
-                                                        : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-                                                        }`}
-                                                >
-                                                    <LayoutDashboard className="w-3 h-3 mr-1" />
-                                                    Page Analysis
-                                                </button>
-                                            )}
+
                                         </div>
 
                                         <div className="space-y-6">
@@ -2064,67 +2119,7 @@ export default function GscExportPage() {
                                                         Download CSV
                                                     </button>
                                                 </div>
-                                            </div>
-                                        )}
 
-                                        {/* Page Analysis Tab */}
-                                        {activeTab === "page_analysis" && pageAnalysis && (
-                                            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                                                <div className="flex justify-between items-center mb-6">
-                                                    <div>
-                                                        <h2 className="text-xl font-bold text-gray-900 dark:text-white">Page Analysis (Pivot)</h2>
-                                                        <p className="text-gray-500 dark:text-gray-400 text-sm">
-                                                            Grouping data by page with nested queries.
-                                                        </p>
-                                                    </div>
-                                                    <button
-                                                        onClick={() => downloadCsv(pageAnalysis.flatMap(p => p.queries.map(q => ({ page: p.page, ...q }))), `page_analysis_${selectedProperty}.csv`)}
-                                                        className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
-                                                    >
-                                                        <Download className="h-4 w-4 mr-2" />
-                                                        Download CSV
-                                                    </button>
-                                                </div>
-                                                <div className="overflow-x-auto border rounded-lg border-gray-200 dark:border-gray-700">
-                                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                                                        <thead className="bg-gray-50 dark:bg-gray-900/30">
-                                                            <tr>
-                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Page / Query</th>
-                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Clicks</th>
-                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Impr.</th>
-                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">CTR</th>
-                                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Pos.</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                                            {pageAnalysis.slice(0, 50).map((page, idx) => (
-                                                                <Fragment key={idx}>
-                                                                    <tr className="bg-blue-50/30 dark:bg-blue-900/5 font-bold border-l-4 border-blue-500">
-                                                                        <td className="px-6 py-4 text-sm text-blue-600 dark:text-blue-400 truncate max-w-lg" title={page.page}>
-                                                                            <div className="flex items-center">
-                                                                                <ChevronDown className="w-4 h-4 mr-2" />
-                                                                                {formatUrl(page.page)}
-                                                                            </div>
-                                                                        </td>
-                                                                        <td className="px-6 py-4 text-sm text-gray-900 dark:text-white font-bold">{page.totalClicks.toLocaleString()}</td>
-                                                                        <td className="px-6 py-4 text-sm text-gray-900 dark:text-white font-bold">{page.totalImpressions.toLocaleString()}</td>
-                                                                        <td className="px-6 py-4 text-sm text-gray-900 dark:text-white font-bold">{((page.totalClicks / page.totalImpressions) * 100).toFixed(2)}%</td>
-                                                                        <td className="px-6 py-4 text-xs text-gray-500 italic">Avg {page.avgPosition.toFixed(1)} ({page.queryCount} queries)</td>
-                                                                    </tr>
-                                                                    {page.queries.slice(0, 15).map((q, qIdx) => (
-                                                                        <tr key={`${idx}-${qIdx}`} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors border-l-4 border-transparent">
-                                                                            <td className="pl-12 pr-6 py-2 text-sm text-gray-600 dark:text-gray-400">{q.query}</td>
-                                                                            <td className="px-6 py-2 text-sm text-gray-500 dark:text-gray-400">{q.clicks.toLocaleString()}</td>
-                                                                            <td className="px-6 py-2 text-sm text-gray-500 dark:text-gray-400">{q.impressions.toLocaleString()}</td>
-                                                                            <td className="px-6 py-2 text-sm text-gray-500 dark:text-gray-400">{(q.ctr * 100).toFixed(2)}%</td>
-                                                                            <td className="px-6 py-2 text-sm text-gray-500 dark:text-gray-400">{q.position.toFixed(1)}</td>
-                                                                        </tr>
-                                                                    ))}
-                                                                </Fragment>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
                                                 <div className="overflow-x-auto border rounded-lg border-gray-200 dark:border-gray-700">
                                                     <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                                                         <thead className="bg-gray-50 dark:bg-gray-900/30">
@@ -2215,7 +2210,7 @@ export default function GscExportPage() {
                                                             </tr>
                                                         </thead>
                                                         <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                                            {sortedData?.slice(0, 10).map((row, i) => (
+                                                            {sortedData?.slice(0, 100).map((row, i) => (
                                                                 <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                                                                     {row.keys &&
                                                                         row.keys.map((k, j) => (
@@ -2248,9 +2243,9 @@ export default function GscExportPage() {
                                                             ))}
                                                         </tbody>
                                                     </table>
-                                                    {data.length > 10 && (
+                                                    {data.length > 100 && (
                                                         <div className="px-6 py-3 bg-gray-50 dark:bg-gray-900/30 text-center text-sm text-gray-500 dark:text-gray-400 border-t border-gray-200 dark:border-gray-700">
-                                                            Showing first 10 rows of {data.length.toLocaleString()}
+                                                            Showing first 100 rows of {data.length.toLocaleString()}
                                                         </div>
                                                     )}
                                                 </div>
@@ -2289,10 +2284,17 @@ export default function GscExportPage() {
                                                         <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                                             {pageAnalysis.slice(0, 50).map((page, idx) => (
                                                                 <Fragment key={idx}>
-                                                                    <tr className="bg-blue-50/30 dark:bg-blue-900/5 font-bold border-l-4 border-blue-500">
+                                                                    <tr
+                                                                        className="bg-blue-50/30 dark:bg-blue-900/5 font-bold border-l-4 border-blue-500 cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                                                                        onClick={() => togglePageExpansion(page.page)}
+                                                                    >
                                                                         <td className="px-6 py-4 text-sm text-blue-600 dark:text-blue-400 truncate max-w-lg" title={page.page}>
                                                                             <div className="flex items-center">
-                                                                                <ChevronDown className="w-4 h-4 mr-2" />
+                                                                                {expandedPages.has(page.page) ? (
+                                                                                    <ChevronDown className="w-4 h-4 mr-2" />
+                                                                                ) : (
+                                                                                    <ChevronRight className="w-4 h-4 mr-2" />
+                                                                                )}
                                                                                 {formatUrl(page.page)}
                                                                             </div>
                                                                         </td>
@@ -2301,7 +2303,7 @@ export default function GscExportPage() {
                                                                         <td className="px-6 py-4 text-sm text-gray-900 dark:text-white font-bold">{((page.totalClicks / page.totalImpressions) * 100).toFixed(2)}%</td>
                                                                         <td className="px-6 py-4 text-xs text-gray-500 italic">Avg {page.avgPosition.toFixed(1)} ({page.queryCount} queries)</td>
                                                                     </tr>
-                                                                    {page.queries.slice(0, 15).map((q, qIdx) => (
+                                                                    {expandedPages.has(page.page) && page.queries.slice(0, 15).map((q, qIdx) => (
                                                                         <tr key={`${idx}-${qIdx}`} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors border-l-4 border-transparent">
                                                                             <td className="pl-12 pr-6 py-2 text-sm text-gray-600 dark:text-gray-400">{q.query}</td>
                                                                             <td className="px-6 py-2 text-sm text-gray-500 dark:text-gray-400">{q.clicks.toLocaleString()}</td>
