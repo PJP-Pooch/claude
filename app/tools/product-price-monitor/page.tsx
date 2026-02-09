@@ -232,11 +232,8 @@ export default function ProductPriceMonitorPage() {
                             const extractedGid = productInfo?.gid || extractParam(productInfo?.shopping_url, 'gid') || extractParam(firstSeller?.url, 'gid');
                             const extractedDocid = productInfo?.data_docid || extractParam(productInfo?.shopping_url, 'data_docid') || extractParam(firstSeller?.url, 'data_docid');
 
-                            // Use the URL from the API result if available (usually points to the product on Google Shopping)
-                            // Construct a reliable Google Shopping URL using the Product ID
-                            // The API sometimes returns a generic search URL or one with udm=28 (image search)
-                            // We prefer the direct shopping/product endpoint
-                            const googleShoppingUrl = constructShoppingUrl(
+                            // Prioritize the URL provided by the API if it's already a full Shopping link
+                            const googleShoppingUrl = productInfo?.shopping_url || constructShoppingUrl(
                                 productId,
                                 extractedGid,
                                 extractedDocid,
@@ -357,8 +354,8 @@ export default function ProductPriceMonitorPage() {
                         // Encapsulate ID generation to ensure every item has one
                         const finalId = extractedId || `missing-id-${idx}-${Date.now()}`;
 
-                        // Construct a reliable Google Shopping URL
-                        if (extractedId) {
+                        // Construct a reliable Google Shopping URL ONLY if one isn't provided by the API
+                        if (extractedId && (!shoppingUrl || !shoppingUrl.includes('google.com/shopping/product/'))) {
                             const extractedGid = item.gid || extractParam(item.shopping_url, 'gid') || extractParam(item.url, 'gid');
                             const extractedDocid = item.data_docid || extractParam(item.shopping_url, 'data_docid') || extractParam(item.url, 'data_docid');
 
@@ -547,7 +544,7 @@ export default function ProductPriceMonitorPage() {
                                 specs: productInfo.specs_info || p.specs,
                                 data_docid: extractedDocid,
                                 gid: extractedGid,
-                                shopping_url: constructShoppingUrl(
+                                shopping_url: productInfo.shopping_url || constructShoppingUrl(
                                     p.product_id!,
                                     extractedGid,
                                     extractedDocid,
