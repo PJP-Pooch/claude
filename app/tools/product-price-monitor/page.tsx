@@ -85,6 +85,26 @@ type SellerInfo = {
 
 
 
+const constructShoppingUrl = (productId: string, gid?: string, dataDocid?: string, countryCode: string = 'gb') => {
+    if (!gid) {
+        return `https://www.google.com/shopping/product/${productId}?gl=${countryCode}&hl=en`;
+    }
+
+    const prds = [
+        `gpcid:${gid}`,
+        `rds:PC_${gid}|PROD_PC_${gid}`,
+        dataDocid ? `headlineOfferDocid:${dataDocid}` : '',
+        `catalogid:${productId}`,
+        `pvo:3`,
+        `pvt:hg`
+    ].filter(Boolean).join(',');
+
+    // Encode the pipe character specifically as seen in the user's working URL
+    const encodedPrds = prds.replace(/\|/g, '%7C');
+
+    return `https://www.google.com/shopping/product/${productId}?gid=${gid}&prds=${encodedPrds}&hl=en&gl=${countryCode.toUpperCase()}`;
+};
+
 export default function ProductPriceMonitorPage() {
     const [keyword, setKeyword] = useState("");
     const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
@@ -196,7 +216,12 @@ export default function ProductPriceMonitorPage() {
                             // Construct a reliable Google Shopping URL using the Product ID
                             // The API sometimes returns a generic search URL or one with udm=28 (image search)
                             // We prefer the direct shopping/product endpoint
-                            const googleShoppingUrl = `https://www.google.com/shopping/product/${productId}?gl=${countryCode}&hl=en`;
+                            const googleShoppingUrl = constructShoppingUrl(
+                                productId,
+                                productInfo?.gid,
+                                productInfo?.data_docid,
+                                countryCode
+                            );
 
                             const syntheticProduct: ProductResult = {
                                 product_id: productId,
@@ -312,9 +337,14 @@ export default function ProductPriceMonitorPage() {
                         // Encapsulate ID generation to ensure every item has one
                         const finalId = extractedId || `missing-id-${idx}-${Date.now()}`;
 
-                        // Use the URL from API as-is, or construct a simple one if missing
-                        if (!shoppingUrl && extractedId) {
-                            shoppingUrl = `https://www.google.com/shopping/product/${extractedId}`;
+                        // Construct a reliable Google Shopping URL
+                        if (extractedId) {
+                            shoppingUrl = constructShoppingUrl(
+                                extractedId,
+                                item.gid,
+                                item.data_docid,
+                                countryCode
+                            );
                         }
 
                         return {
@@ -481,11 +511,22 @@ export default function ProductPriceMonitorPage() {
                     [product.product_id!]: topItems
                 }));
 
-                // If we also got specs_info, update the main product in the products list
-                if (productInfo?.specs_info) {
+                // Update the main product data in the products list if we got more info
+                if (productInfo) {
                     setProducts(prev => prev.map(p =>
                         p.product_id === product.product_id
-                            ? { ...p, specs: productInfo.specs_info }
+                            ? {
+                                ...p,
+                                specs: productInfo.specs_info || p.specs,
+                                data_docid: productInfo.data_docid || p.data_docid,
+                                gid: productInfo.gid || p.gid,
+                                shopping_url: constructShoppingUrl(
+                                    p.product_id!,
+                                    productInfo.gid || p.gid,
+                                    productInfo.data_docid || p.data_docid,
+                                    COUNTRY_CODES[location] || 'gb'
+                                )
+                            }
                             : p
                     ));
                 }
