@@ -11,7 +11,9 @@ export type OpportunityAction =
     | 'Increase Spend (CTR)'
     | 'Reduce Spend'
     | 'Pause PPC'
-    | 'Monitor';
+    | 'Monitor'
+    | 'Add Exact Match'   // New: Broad match with conversions
+    | 'Scale Spend';      // New: High ROAS with low impression share
 
 // Raw GSC query data
 export interface GscQueryRow {
@@ -32,6 +34,14 @@ export interface AdsSearchTermRow {
     averageCpc: number;
     conversions: number;
     conversionValue: number;
+    campaign: string;
+    adGroup: string;
+    // Extended metrics
+    matchType: string;
+    impressionShare: number | null;
+    budgetLostImpressionShare: number | null;
+    rankLostImpressionShare: number | null;
+    conversionRate: number;
 }
 
 // Merged opportunity row with all metrics
@@ -55,6 +65,15 @@ export interface MergedOpportunityRow {
     conv_value_paid: number;
     cpa_paid: number | null;   // null if no conversions
     roas_paid: number | null;  // null if no cost
+    campaign?: string;
+    adGroup?: string;
+
+    // Extended paid metrics
+    matchType?: string;
+    impressionShare?: number | null;
+    budgetLostImpressionShare?: number | null;
+    rankLostImpressionShare?: number | null;
+    conversionRate?: number;
 
     // Calculated KPIs
     ctr_diff: number;
@@ -69,6 +88,34 @@ export interface MergedOpportunityRow {
     // Data source flags
     hasOrganic: boolean;
     hasPaid: boolean;
+}
+
+// SERP Analysis Types
+export interface SerpResult {
+    rank: number;
+    title: string;
+    url: string;
+    snippet: string;
+    domain: string;
+}
+
+export interface AiRecommendation {
+    action: string;
+    reasoning: string;
+    impact: string;
+    difficulty: "Low" | "Medium" | "High";
+}
+
+export interface SerpAnalysis {
+    query: string;
+    action?: OpportunityAction;
+    difficulty: number;
+    searchVolume: number;
+    intent: "Informational" | "Commercial" | "Transactional";
+    topResults: SerpResult[];
+    paidResults: SerpResult[];
+    serpFeatures: string[];
+    aiRecommendation: AiRecommendation;
 }
 
 // DataForSEO enrichment data
@@ -98,6 +145,13 @@ export interface OpportunitySummary {
     blendedCtr: number;
     opportunityCount: number;
     actionBreakdown: Record<OpportunityAction, number>;
+    // Extended metrics for SEO/PPC experts
+    totalConvValue: number;
+    wastedSpend: number;                    // Cost on keywords with top 3 organic position
+    seoOpportunityValue: number;            // Estimated savings if SEO captures traffic
+    avgRoas: number | null;                 // Weighted average ROAS
+    avgCpa: number | null;                  // Weighted average CPA
+    avgImpressionShare: number | null;       // Weighted average impression share
 }
 
 // Google Ads customer account info

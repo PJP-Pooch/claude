@@ -11,6 +11,14 @@ interface SearchTermMetrics {
     averageCpc: number;
     conversions: number;
     conversionValue: number;
+    campaign: string;
+    adGroup: string;
+    // New metrics
+    matchType: string;
+    impressionShare: number | null;
+    budgetLostImpressionShare: number | null;
+    rankLostImpressionShare: number | null;
+    conversionRate: number;
 }
 
 /**
@@ -42,16 +50,21 @@ export async function POST(request: NextRequest) {
         const developerToken = process.env.GOOGLE_ADS_DEVELOPER_TOKEN || '';
 
         // Build the Google Ads Query Language (GAQL) query
+        // Note: search_impression_share metrics are at campaign level, but we fetch what's available
         const query = `
       SELECT
         search_term_view.search_term,
+        segments.search_term_match_type,
+        campaign.name,
+        ad_group.name,
         metrics.impressions,
         metrics.clicks,
         metrics.cost_micros,
         metrics.ctr,
         metrics.average_cpc,
         metrics.conversions,
-        metrics.conversions_value
+        metrics.conversions_value,
+        metrics.conversions_from_interactions_rate
       FROM search_term_view
       WHERE segments.date BETWEEN '${startDate}' AND '${endDate}'
       ORDER BY metrics.impressions DESC
@@ -98,12 +111,18 @@ export async function POST(request: NextRequest) {
         // Parse the streaming response - it comes as an array of batches
         const rows: SearchTermMetrics[] = [];
 
+        // We'll also fetch campaign-level impression share data separately
+        // For now, we approximate based on available data
         if (Array.isArray(data)) {
             for (const batch of data) {
                 if (batch.results) {
                     for (const result of batch.results) {
                         const searchTerm = result.searchTermView?.searchTerm;
                         if (!searchTerm) continue;
+
+                        // Parse match type from segments
+                        const matchTypeRaw = result.segments?.searchTermMatchType || 'UNSPECIFIED';
+                        const matchType = matchTypeRaw.replace('SEARCH_TERM_MATCH_TYPE_', '').toLowerCase();
 
                         rows.push({
                             searchTerm,
@@ -114,6 +133,14 @@ export async function POST(request: NextRequest) {
                             averageCpc: parseInt(result.metrics?.averageCpc) || 0,
                             conversions: parseFloat(result.metrics?.conversions) || 0,
                             conversionValue: parseFloat(result.metrics?.conversionsValue) || 0,
+                            campaign: result.campaign?.name || '',
+                            adGroup: result.adGroup?.name || '',
+                            // New metrics
+                            matchType,
+                            impressionShare: null, // Will be fetched at campaign level if needed
+                            budgetLostImpressionShare: null,
+                            rankLostImpressionShare: null,
+                            conversionRate: parseFloat(result.metrics?.conversionsFromInteractionsRate) || 0,
                         });
                     }
                 }
