@@ -195,37 +195,11 @@ export default function ProductPriceMonitorPage() {
                 // Fetch sellers for all product IDs in parallel
                 const fetchPromises = productIds.map(async (productId) => {
                     try {
-                        // 1. First try to get full product metadata (gid, docid, etc.) by searching for the ID
-                        const productSearchRes = await fetch("/api/merchant/google-shopping/products", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({
-                                keyword: productId,
-                                location_code: LOCATION_CODES[location],
-                                language_code: "en",
-                                depth: 1,
-                                dataforseoLogin: apiLogin || undefined,
-                                dataforseoPassword: apiPassword || undefined,
-                            }),
-                        });
-
-                        let searchProductInfo = null;
-                        if (productSearchRes.ok) {
-                            const searchData = await productSearchRes.json();
-                            if (searchData.tasks?.[0]?.result?.[0]?.items?.[0]) {
-                                searchProductInfo = searchData.tasks[0].result[0].items[0];
-                            }
-                        }
-
-                        // 2. Fetch sellers
                         const sellersRes = await fetch("/api/merchant/google-shopping/sellers", {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({
                                 product_id: productId,
-                                // If we found the GID/DocID from search, provide them to help the sellers API
-                                data_docid: searchProductInfo?.data_docid,
-                                gid: searchProductInfo?.gid,
                                 location_code: LOCATION_CODES[location],
                                 language_code: "en",
                                 dataforseoLogin: apiLogin || undefined,
@@ -234,7 +208,8 @@ export default function ProductPriceMonitorPage() {
                         });
 
                         if (!sellersRes.ok) {
-                            return { productId, error: `Failed to fetch: ${sellersRes.statusText}`, sellers: [] as SellerInfo[], product: null };
+                            const errorText = await sellersRes.text().catch(() => "");
+                            return { productId, error: `Failed to fetch: ${sellersRes.statusText} ${errorText}`, sellers: [] as SellerInfo[], product: null };
                         }
 
                         const sellersData = await sellersRes.json();
@@ -242,26 +217,33 @@ export default function ProductPriceMonitorPage() {
                         if (sellersData.tasks && sellersData.tasks[0]?.result?.[0]?.items) {
                             const resultObj = sellersData.tasks[0].result[0];
                             const sellerItems = resultObj.items as SellerInfo[];
-                            const sellerProductInfo = resultObj.item;
+                            const productInfo = resultObj.item;
 
                             if (sellerItems.length === 0) {
                                 return { productId, error: "No sellers found", sellers: [] as SellerInfo[], product: null };
                             }
 
                             const firstSeller = sellerItems[0];
-                            const productTitle = searchProductInfo?.title || sellerProductInfo?.title || firstSeller?.details || firstSeller?.title || "Product Found";
+                            const productTitle = productInfo?.title || firstSeller?.details || firstSeller?.title || "Product Found";
 
-                            // Deep extraction across both responses
-                            const extractedGid = searchProductInfo?.gid || sellerProductInfo?.gid || extractParam(searchProductInfo?.shopping_url, 'gid') || extractParam(sellerProductInfo?.shopping_url, 'gid') || extractParam(firstSeller?.url, 'gid');
-                            const extractedDocid = searchProductInfo?.data_docid || sellerProductInfo?.data_docid || extractParam(searchProductInfo?.shopping_url, 'data_docid') || extractParam(sellerProductInfo?.shopping_url, 'data_docid') || extractParam(firstSeller?.url, 'data_docid');
+                            // Deep extraction from sellers response
+                            const extractedGid = productInfo?.gid || extractParam(productInfo?.shopping_url, 'gid') || extractParam(firstSeller?.url, 'gid');
+                            const extractedDocid = productInfo?.data_docid || extractParam(productInfo?.shopping_url, 'data_docid') || extractParam(firstSeller?.url, 'data_docid');
 
-                            // Prioritize the URL provided by the Search API (usually high quality)
-                            const googleShoppingUrl = searchProductInfo?.shopping_url || sellerProductInfo?.shopping_url || constructShoppingUrl(
-                                productId,
-                                extractedGid,
-                                extractedDocid,
-                                countryCode
-                            );
+                            // URL Logic:
+                            // 1. Prioritize API's shopping_url
+                            // 2. If missing gid, use the /offers endpoint (most reliable fallback for niche IDs)
+                            // 3. If gid exists, use the "Perfect" URL structure
+                            let googleShoppingUrl = productInfo?.shopping_url;
+
+                            if (!googleShoppingUrl || !googleShoppingUrl.includes('google.com/shopping/product/')) {
+                                if (extractedGid) {
+                                    googleShoppingUrl = constructShoppingUrl(productId, extractedGid, extractedDocid, countryCode);
+                                } else {
+                                    // The /offers endpoint is the ONLY one that reliably works for IDs without a Hub page
+                                    googleShoppingUrl = `https://www.google.com/shopping/product/${productId}/offers?gl=${countryCode.toUpperCase()}&hl=en`;
+                                }
+                            }
 
                             const syntheticProduct: ProductResult = {
                                 product_id: productId,
@@ -269,10 +251,10 @@ export default function ProductPriceMonitorPage() {
                                 price: firstSeller?.price ?? firstSeller?.base_price ?? null,
                                 currency: firstSeller?.currency,
                                 shop_name: "Various Sellers",
-                                product_images: searchProductInfo?.product_images || sellerProductInfo?.images || [],
+                                product_images: productInfo?.images || [],
                                 available: true,
                                 shopping_url: googleShoppingUrl,
-                                specs: searchProductInfo?.specs || sellerProductInfo?.specs_info || [],
+                                specs: productInfo?.specs_info || [],
                                 data_docid: extractedDocid,
                                 gid: extractedGid
                             };
