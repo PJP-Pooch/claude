@@ -195,13 +195,37 @@ export default function ProductPriceMonitorPage() {
                 // Fetch sellers for all product IDs in parallel
                 const fetchPromises = productIds.map(async (productId) => {
                     try {
+                        // 1. First try to get full product metadata (gid, docid, etc.) by searching for the ID
+                        const productSearchRes = await fetch("/api/merchant/google-shopping/products", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                keyword: productId,
+                                location_code: LOCATION_CODES[location],
+                                language_code: "en",
+                                depth: 1,
+                                dataforseoLogin: apiLogin || undefined,
+                                dataforseoPassword: apiPassword || undefined,
+                            }),
+                        });
+
+                        let searchProductInfo = null;
+                        if (productSearchRes.ok) {
+                            const searchData = await productSearchRes.json();
+                            if (searchData.tasks?.[0]?.result?.[0]?.items?.[0]) {
+                                searchProductInfo = searchData.tasks[0].result[0].items[0];
+                            }
+                        }
+
+                        // 2. Fetch sellers
                         const sellersRes = await fetch("/api/merchant/google-shopping/sellers", {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({
                                 product_id: productId,
-                                data_docid: undefined,
-                                gid: undefined,
+                                // If we found the GID/DocID from search, provide them to help the sellers API
+                                data_docid: searchProductInfo?.data_docid,
+                                gid: searchProductInfo?.gid,
                                 location_code: LOCATION_CODES[location],
                                 language_code: "en",
                                 dataforseoLogin: apiLogin || undefined,
@@ -218,22 +242,21 @@ export default function ProductPriceMonitorPage() {
                         if (sellersData.tasks && sellersData.tasks[0]?.result?.[0]?.items) {
                             const resultObj = sellersData.tasks[0].result[0];
                             const sellerItems = resultObj.items as SellerInfo[];
-                            const productInfo = resultObj.item; // This usually contains the product metadata like images
+                            const sellerProductInfo = resultObj.item;
 
                             if (sellerItems.length === 0) {
                                 return { productId, error: "No sellers found", sellers: [] as SellerInfo[], product: null };
                             }
 
                             const firstSeller = sellerItems[0];
-                            // Use details for title if available, otherwise title (which might be seller name sometimes)
-                            const productTitle = firstSeller?.details || firstSeller?.title || "Product Found";
+                            const productTitle = searchProductInfo?.title || sellerProductInfo?.title || firstSeller?.details || firstSeller?.title || "Product Found";
 
-                            // Try to extract higher quality IDs if missing from main item
-                            const extractedGid = productInfo?.gid || extractParam(productInfo?.shopping_url, 'gid') || extractParam(firstSeller?.url, 'gid');
-                            const extractedDocid = productInfo?.data_docid || extractParam(productInfo?.shopping_url, 'data_docid') || extractParam(firstSeller?.url, 'data_docid');
+                            // Deep extraction across both responses
+                            const extractedGid = searchProductInfo?.gid || sellerProductInfo?.gid || extractParam(searchProductInfo?.shopping_url, 'gid') || extractParam(sellerProductInfo?.shopping_url, 'gid') || extractParam(firstSeller?.url, 'gid');
+                            const extractedDocid = searchProductInfo?.data_docid || sellerProductInfo?.data_docid || extractParam(searchProductInfo?.shopping_url, 'data_docid') || extractParam(sellerProductInfo?.shopping_url, 'data_docid') || extractParam(firstSeller?.url, 'data_docid');
 
-                            // Prioritize the URL provided by the API if it's already a full Shopping link
-                            const googleShoppingUrl = productInfo?.shopping_url || constructShoppingUrl(
+                            // Prioritize the URL provided by the Search API (usually high quality)
+                            const googleShoppingUrl = searchProductInfo?.shopping_url || sellerProductInfo?.shopping_url || constructShoppingUrl(
                                 productId,
                                 extractedGid,
                                 extractedDocid,
@@ -242,14 +265,14 @@ export default function ProductPriceMonitorPage() {
 
                             const syntheticProduct: ProductResult = {
                                 product_id: productId,
-                                title: productInfo?.title || productTitle,
+                                title: productTitle,
                                 price: firstSeller?.price ?? firstSeller?.base_price ?? null,
                                 currency: firstSeller?.currency,
                                 shop_name: "Various Sellers",
-                                product_images: productInfo?.images || [], // Use images from the main item object
+                                product_images: searchProductInfo?.product_images || sellerProductInfo?.images || [],
                                 available: true,
                                 shopping_url: googleShoppingUrl,
-                                specs: productInfo?.specs_info || [], // Use specs_info from the main item object
+                                specs: searchProductInfo?.specs || sellerProductInfo?.specs_info || [],
                                 data_docid: extractedDocid,
                                 gid: extractedGid
                             };
