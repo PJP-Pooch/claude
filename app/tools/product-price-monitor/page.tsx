@@ -86,8 +86,10 @@ type SellerInfo = {
 
 
 const constructShoppingUrl = (productId: string, gid?: string, dataDocid?: string, countryCode: string = 'gb') => {
+    // If no gid, use a forced-offer URL which is much more reliable than the basic landing page
     if (!gid) {
-        return `https://www.google.com/shopping/product/${productId}?gl=${countryCode}&hl=en`;
+        // prds=prmr:1,cs:1 often forces Google to display the product/comparison page instead of an empty "Nothing to see here"
+        return `https://www.google.com/shopping/product/${productId}?gl=${countryCode.toUpperCase()}&hl=en&prds=prmr:1,cs:1`;
     }
 
     const prds = [
@@ -103,6 +105,13 @@ const constructShoppingUrl = (productId: string, gid?: string, dataDocid?: strin
     const encodedPrds = prds.replace(/\|/g, '%7C');
 
     return `https://www.google.com/shopping/product/${productId}?gid=${gid}&prds=${encodedPrds}&hl=en&gl=${countryCode.toUpperCase()}`;
+};
+
+const extractParam = (url: string | undefined, param: string) => {
+    if (!url) return undefined;
+    const regex = new RegExp(`[?&]${param}=([^&#]*)`);
+    const match = url.match(regex);
+    return (match && match[1]) ? decodeURIComponent(match[1]) : undefined;
 };
 
 export default function ProductPriceMonitorPage() {
@@ -212,14 +221,18 @@ export default function ProductPriceMonitorPage() {
                             // Use details for title if available, otherwise title (which might be seller name sometimes)
                             const productTitle = firstSeller?.details || firstSeller?.title || "Product Found";
 
+                            // Try to extract higher quality IDs if missing from main item
+                            const extractedGid = productInfo?.gid || extractParam(firstSeller?.url, 'gid');
+                            const extractedDocid = productInfo?.data_docid || extractParam(firstSeller?.url, 'data_docid');
+
                             // Use the URL from the API result if available (usually points to the product on Google Shopping)
                             // Construct a reliable Google Shopping URL using the Product ID
                             // The API sometimes returns a generic search URL or one with udm=28 (image search)
                             // We prefer the direct shopping/product endpoint
                             const googleShoppingUrl = constructShoppingUrl(
                                 productId,
-                                productInfo?.gid,
-                                productInfo?.data_docid,
+                                extractedGid,
+                                extractedDocid,
                                 countryCode
                             );
 
@@ -233,8 +246,8 @@ export default function ProductPriceMonitorPage() {
                                 available: true,
                                 shopping_url: googleShoppingUrl,
                                 specs: productInfo?.specs_info || [], // Use specs_info from the main item object
-                                data_docid: productInfo?.data_docid,
-                                gid: productInfo?.gid
+                                data_docid: extractedDocid,
+                                gid: extractedGid
                             };
 
                             return { productId, error: null, sellers: sellerItems, product: syntheticProduct };
@@ -513,17 +526,21 @@ export default function ProductPriceMonitorPage() {
 
                 // Update the main product data in the products list if we got more info
                 if (productInfo) {
+                    const firstSeller = topItems[0];
+                    const extractedGid = productInfo.gid || product.gid || extractParam(firstSeller?.url, 'gid');
+                    const extractedDocid = productInfo.data_docid || product.data_docid || extractParam(firstSeller?.url, 'data_docid');
+
                     setProducts(prev => prev.map(p =>
                         p.product_id === product.product_id
                             ? {
                                 ...p,
                                 specs: productInfo.specs_info || p.specs,
-                                data_docid: productInfo.data_docid || p.data_docid,
-                                gid: productInfo.gid || p.gid,
+                                data_docid: extractedDocid,
+                                gid: extractedGid,
                                 shopping_url: constructShoppingUrl(
                                     p.product_id!,
-                                    productInfo.gid || p.gid,
-                                    productInfo.data_docid || p.data_docid,
+                                    extractedGid,
+                                    extractedDocid,
                                     COUNTRY_CODES[location] || 'gb'
                                 )
                             }
