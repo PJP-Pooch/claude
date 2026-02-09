@@ -130,6 +130,26 @@ export default function Home() {
         'Data Export',
       ],
     },
+    {
+      id: 'seo-ppc-opportunities',
+      title: 'SEO/PPC Opportunity Finder',
+      description: 'Identify high-value opportunities by analyzing the overlap between organic rankings and paid search performance to optimize spend and improve visibility.',
+      icon: (
+        <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+        </svg>
+      ),
+      href: '/tools/seo-ppc-opportunities',
+      color: 'from-violet-500 to-purple-600',
+      apiType: 'google',
+      features: [
+        'Organic vs Paid Gap Analysis',
+        'Cannibalization Detection',
+        'Spend Efficiency Optimization',
+        'Keyword Opportunity Scoring',
+        'Actionable Recommendations',
+      ],
+    },
     /*
     {
       id: 'merchant-price',

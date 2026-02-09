@@ -7,6 +7,15 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: false,
   },
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'www.google.com',
+        pathname: '/**',
+      },
+    ],
+  },
 };
 
 module.exports = nextConfig;
