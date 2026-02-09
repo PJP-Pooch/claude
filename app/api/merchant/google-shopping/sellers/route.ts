@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function POST(req: Request) {
     try {
         const body = await req.json();
-        const { product_id, location_code, language_code, dataforseoLogin, dataforseoPassword } = body;
+        const { product_id, data_docid, gid, location_code, language_code, dataforseoLogin, dataforseoPassword } = body;
 
         // Use credentials from request if provided, otherwise fallback to env vars
         const login = dataforseoLogin || process.env.DATAFORSEO_LOGIN;
@@ -11,7 +11,8 @@ export async function POST(req: Request) {
         const auth = Buffer.from(`${login}:${password}`).toString('base64');
 
         // 1. Try LIVE endpoint first for speed
-        console.log(`Fetching sellers (LIVE) for product: ${product_id}`);
+        const identifier = product_id || data_docid || gid;
+        console.log(`Fetching sellers (LIVE) for product: ${identifier}`);
         const liveResponse = await fetch('https://api.dataforseo.com/v3/merchant/google/sellers/live', {
             method: 'POST',
             headers: {
@@ -20,6 +21,8 @@ export async function POST(req: Request) {
             },
             body: JSON.stringify([{
                 product_id,
+                data_docid,
+                gid,
                 location_code,
                 language_code,
             }]),
@@ -27,15 +30,19 @@ export async function POST(req: Request) {
 
         if (liveResponse.ok) {
             const data = await liveResponse.json();
-            return NextResponse.json(data);
+            // Check if result is successful and contains items
+            if (data.tasks?.[0]?.status_code === 20000 && data.tasks[0].result?.[0]?.items?.length > 0) {
+                return NextResponse.json(data);
+            }
+            console.warn(`Live endpoint returned non-success or empty items (${data.tasks?.[0]?.status_code}: ${data.tasks?.[0]?.status_message}). Falling back to Task API...`);
+        } else {
+            // Log the live error but don't fail yet
+            const liveError = await liveResponse.text();
+            console.warn(`Live endpoint failed with status ${liveResponse.status}. Falling back to Task API. Error: ${liveError}`);
         }
 
-        // Log the live error but don't fail yet
-        const liveError = await liveResponse.text();
-        console.warn(`Live endpoint failed (${liveResponse.status}), falling back to Task API. Error: ${liveError}`);
-
-        // 2. Fallback to TASK endpoint if Live fails
-        console.log(`Falling back to Task API for product: ${product_id}`);
+        // 2. Fallback to TASK endpoint if Live fails or returns "No data found"
+        console.log(`Setting up Sellers Task for product: ${identifier}`);
         const taskResponse = await fetch('https://api.dataforseo.com/v3/merchant/google/sellers/task_post', {
             method: 'POST',
             headers: {
@@ -44,6 +51,8 @@ export async function POST(req: Request) {
             },
             body: JSON.stringify([{
                 product_id,
+                data_docid,
+                gid,
                 location_code,
                 language_code,
                 priority: 2

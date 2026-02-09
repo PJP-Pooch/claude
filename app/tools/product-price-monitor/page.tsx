@@ -34,6 +34,8 @@ type ProductResult = {
     available?: boolean;
     shopping_url?: string;
     specs?: { name: string; value: string }[];
+    data_docid?: string;
+    gid?: string;
 };
 
 
@@ -162,6 +164,8 @@ export default function ProductPriceMonitorPage() {
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({
                                 product_id: productId,
+                                data_docid: undefined,
+                                gid: undefined,
                                 location_code: LOCATION_CODES[location],
                                 language_code: "en",
                                 dataforseoLogin: apiLogin || undefined,
@@ -203,7 +207,9 @@ export default function ProductPriceMonitorPage() {
                                 product_images: productInfo?.images || [], // Use images from the main item object
                                 available: true,
                                 shopping_url: googleShoppingUrl,
-                                specs: productInfo?.specs_info || [] // Use specs_info from the main item object
+                                specs: productInfo?.specs_info || [], // Use specs_info from the main item object
+                                data_docid: productInfo?.data_docid,
+                                gid: productInfo?.gid
                             };
 
                             return { productId, error: null, sellers: sellerItems, product: syntheticProduct };
@@ -314,7 +320,9 @@ export default function ProductPriceMonitorPage() {
                         return {
                             ...item,
                             product_id: finalId,
-                            shopping_url: shoppingUrl
+                            shopping_url: shoppingUrl,
+                            data_docid: item.data_docid,
+                            gid: item.gid
                         };
                     });
 
@@ -443,6 +451,8 @@ export default function ProductPriceMonitorPage() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     product_id: product.product_id,
+                    data_docid: product.data_docid,
+                    gid: product.gid,
                     location_code: LOCATION_CODES[location],
                     language_code: "en",
                     dataforseoLogin: apiLogin || undefined,
