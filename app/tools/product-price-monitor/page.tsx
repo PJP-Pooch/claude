@@ -86,25 +86,32 @@ type SellerInfo = {
 
 
 const constructShoppingUrl = (productId: string, gid?: string, dataDocid?: string, countryCode: string = 'gb') => {
-    // If no gid, use a forced-offer URL which is much more reliable than the basic landing page
-    if (!gid) {
-        // prds=prmr:1,cs:1 often forces Google to display the product/comparison page instead of an empty "Nothing to see here"
-        return `https://www.google.com/shopping/product/${productId}?gl=${countryCode.toUpperCase()}&hl=en&prds=prmr:1,cs:1`;
+    const gl = countryCode.toUpperCase();
+
+    // Always include catalogid in prds - this is often mandatory for the page to render
+    const prdsParts = [`catalogid:${productId}`];
+
+    if (gid) {
+        // Full set of parameters for when GID is available
+        prdsParts.push(`gpcid:${gid}`);
+        prdsParts.push(`rds:PC_${gid}|PROD_PC_${gid}`);
+    } else {
+        // Fallback flags to help Google find the primary listing
+        prdsParts.push(`prmr:1`);
+        prdsParts.push(`cs:1`);
     }
 
-    const prds = [
-        `gpcid:${gid}`,
-        `rds:PC_${gid}|PROD_PC_${gid}`,
-        dataDocid ? `headlineOfferDocid:${dataDocid}` : '',
-        `catalogid:${productId}`,
-        `pvo:3`,
-        `pvt:hg`
-    ].filter(Boolean).join(',');
+    if (dataDocid) {
+        prdsParts.push(`headlineOfferDocid:${dataDocid}`);
+    }
 
-    // Encode the pipe character specifically as seen in the user's working URL
-    const encodedPrds = prds.replace(/\|/g, '%7C');
+    // These parameters were present in the user's working URL and seem important for Google's internal routing
+    prdsParts.push(`pvo:3`, `pvt:hg`);
 
-    return `https://www.google.com/shopping/product/${productId}?gid=${gid}&prds=${encodedPrds}&hl=en&gl=${countryCode.toUpperCase()}`;
+    const prds = prdsParts.join(',').replace(/\|/g, '%7C');
+    const gidParam = gid ? `gid=${gid}&` : '';
+
+    return `https://www.google.com/shopping/product/${productId}?${gidParam}prds=${prds}&hl=en&gl=${gl}`;
 };
 
 const extractParam = (url: string | undefined, param: string) => {
@@ -222,8 +229,8 @@ export default function ProductPriceMonitorPage() {
                             const productTitle = firstSeller?.details || firstSeller?.title || "Product Found";
 
                             // Try to extract higher quality IDs if missing from main item
-                            const extractedGid = productInfo?.gid || extractParam(firstSeller?.url, 'gid');
-                            const extractedDocid = productInfo?.data_docid || extractParam(firstSeller?.url, 'data_docid');
+                            const extractedGid = productInfo?.gid || extractParam(productInfo?.shopping_url, 'gid') || extractParam(firstSeller?.url, 'gid');
+                            const extractedDocid = productInfo?.data_docid || extractParam(productInfo?.shopping_url, 'data_docid') || extractParam(firstSeller?.url, 'data_docid');
 
                             // Use the URL from the API result if available (usually points to the product on Google Shopping)
                             // Construct a reliable Google Shopping URL using the Product ID
@@ -352,10 +359,13 @@ export default function ProductPriceMonitorPage() {
 
                         // Construct a reliable Google Shopping URL
                         if (extractedId) {
+                            const extractedGid = item.gid || extractParam(item.shopping_url, 'gid') || extractParam(item.url, 'gid');
+                            const extractedDocid = item.data_docid || extractParam(item.shopping_url, 'data_docid') || extractParam(item.url, 'data_docid');
+
                             shoppingUrl = constructShoppingUrl(
                                 extractedId,
-                                item.gid,
-                                item.data_docid,
+                                extractedGid,
+                                extractedDocid,
                                 countryCode
                             );
                         }
@@ -527,8 +537,8 @@ export default function ProductPriceMonitorPage() {
                 // Update the main product data in the products list if we got more info
                 if (productInfo) {
                     const firstSeller = topItems[0];
-                    const extractedGid = productInfo.gid || product.gid || extractParam(firstSeller?.url, 'gid');
-                    const extractedDocid = productInfo.data_docid || product.data_docid || extractParam(firstSeller?.url, 'data_docid');
+                    const extractedGid = productInfo.gid || product.gid || extractParam(productInfo.shopping_url, 'gid') || extractParam(firstSeller?.url, 'gid');
+                    const extractedDocid = productInfo.data_docid || product.data_docid || extractParam(productInfo.shopping_url, 'data_docid') || extractParam(firstSeller?.url, 'data_docid');
 
                     setProducts(prev => prev.map(p =>
                         p.product_id === product.product_id
