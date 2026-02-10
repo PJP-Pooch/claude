@@ -1,8 +1,9 @@
 "use client";
 
 import { useSession, signIn, signOut } from "next-auth/react";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
+import Papa from "papaparse";
 import {
     TrendingUp,
     TrendingDown,
@@ -15,6 +16,7 @@ import {
     AlertCircle,
     ExternalLink,
     Award,
+    Upload,
 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -186,6 +188,111 @@ export default function ShoppingAdsPerformancePage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [sortField, setSortField] = useState<keyof ShoppingProduct>("clicks");
     const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+
+    // CSV Upload Logic
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [uploadStatus, setUploadStatus] = useState<{ message: string; type: 'success' | 'error' | '' }>({ message: '', type: '' });
+
+    const cleanCurrency = (val: string | number): number => {
+        if (typeof val === 'number') return val;
+        if (!val) return 0;
+        return parseFloat(val.toString().replace(/[£$,]/g, '').trim()) || 0;
+    };
+
+    const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        setUploadStatus({ message: 'Parsing CSV...', type: '' });
+
+        Papa.parse(file, {
+            header: true,
+            skipEmptyLines: true,
+            complete: (results) => {
+                try {
+                    const data = results.data as Record<string, any>[];
+                    if (!data || data.length === 0) {
+                        setUploadStatus({ message: 'CSV appears empty or invalid.', type: 'error' });
+                        return;
+                    }
+
+                    // Map product IDs to metrics
+                    const metricsMap = new Map<string, { clicks: number; impressions: number; cost: number; conversions: number; conversionValue: number }>();
+                    let matchedCount = 0;
+
+                    // console.log('CSV Headers:', Object.keys(data[0]));
+
+                    data.forEach(row => {
+                        // Try various column names for ID
+                        const rawId = row['Item ID'] || row['Offer ID'] || row['Product ID'] || row['id'] || row['item_id'];
+                        if (!rawId) return;
+
+                        // Normalize ID: remove channel prefixes (e.g. "online:en:GB:12345" -> "12345")
+                        const normalizedId = rawId.split(':').pop()?.toLowerCase() || '';
+
+                        const clicks = cleanCurrency(row['Clicks'] || row['clicks']);
+                        const impressions = cleanCurrency(row['Impressions'] || row['Impr.'] || row['impressions']);
+                        const cost = cleanCurrency(row['Cost'] || row['cost']);
+                        const conversions = cleanCurrency(row['Conversions'] || row['conversions']);
+                        const conversionValue = cleanCurrency(row['Conv. value'] || row['Conversion value'] || row['Total conv. value'] || row['All conv. value'] || row['conversion_value']);
+
+                        metricsMap.set(rawId.toLowerCase(), { clicks, impressions, cost, conversions, conversionValue });
+                        metricsMap.set(normalizedId, { clicks, impressions, cost, conversions, conversionValue });
+                    });
+
+                    // Update products state with new metrics
+                    setProducts(prevProducts => {
+                        const updatedProducts = prevProducts.map(p => {
+                            const pId = p.productId.toLowerCase();
+                            // Try exact match or normalized match
+                            const metrics = metricsMap.get(pId) || metricsMap.get(pId.split(':').pop() || '');
+
+                            if (metrics) {
+                                matchedCount++;
+                                const cost = metrics.cost;
+                                const conversionValue = metrics.conversionValue;
+
+                                return {
+                                    ...p,
+                                    clicks: metrics.clicks,
+                                    impressions: metrics.impressions,
+                                    cost: cost,
+                                    conversions: metrics.conversions,
+                                    conversionValue: conversionValue,
+                                    ctr: metrics.impressions > 0 ? (metrics.clicks / metrics.impressions) * 100 : 0,
+                                    roas: cost > 0 ? conversionValue / cost : 0,
+                                    cpa: metrics.conversions > 0 ? cost / metrics.conversions : 0,
+                                };
+                            }
+                            return p;
+                        });
+                        return updatedProducts;
+                    });
+
+                    setUploadStatus({
+                        message: `Successfully merged Google Ads data for ${matchedCount} products!`,
+                        type: 'success'
+                    });
+
+                    // Clear status after 5 seconds
+                    setTimeout(() => setUploadStatus({ message: '', type: '' }), 5000);
+
+                } catch (err) {
+                    console.error('CSV Parse Error:', err);
+                    setUploadStatus({ message: 'Failed to parse CSV. Check console.', type: 'error' });
+                }
+            },
+            error: (error) => {
+                console.error('Papa Parse Error:', error);
+                setUploadStatus({ message: `Error parsing file: ${error.message}`, type: 'error' });
+            }
+        });
+
+        // Reset input
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
+    };
 
     // Initialize dates
     useEffect(() => {
@@ -556,6 +663,26 @@ export default function ShoppingAdsPerformancePage() {
                                 )}
                             </button>
 
+                            {/* Hidden File Input */}
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                onChange={handleFileUpload}
+                                accept=".csv"
+                                className="hidden"
+                            />
+
+                            {/* Upload Button */}
+                            <button
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={products.length === 0}
+                                className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white font-medium py-2 px-6 rounded-lg transition-colors flex items-center gap-2"
+                                title={products.length === 0 ? "Fetch products first before uploading data" : "Upload Google Ads 'Shopping - Products' CSV to enrich data"}
+                            >
+                                <Upload className="h-4 w-4" />
+                                Upload GAds CSV
+                            </button>
+
                             {products.length > 0 && (
                                 <button
                                     onClick={handleExportCsv}
@@ -566,6 +693,17 @@ export default function ShoppingAdsPerformancePage() {
                                 </button>
                             )}
                         </div>
+
+                        {/* Upload Status */}
+                        {uploadStatus.message && (
+                            <div className={`mt-4 rounded-lg p-3 text-sm flex items-center gap-2 ${uploadStatus.type === 'error'
+                                    ? 'bg-red-50 text-red-700 border border-red-200'
+                                    : 'bg-green-50 text-green-700 border border-green-200'
+                                }`}>
+                                <AlertCircle className="h-4 w-4" />
+                                {uploadStatus.message}
+                            </div>
+                        )}
 
                         {error && (
                             <div className="mt-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start gap-2">
