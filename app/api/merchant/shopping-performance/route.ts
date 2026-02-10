@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
         };
 
         const response = await fetch(
-            `https://merchantapi.googleapis.com/reports/v1beta/accounts/${merchantId}/reports:search`,
+            `https://shoppingcontent.googleapis.com/content/v2.1/${merchantId}/reports/search`,
             {
                 method: 'POST',
                 headers: {
