@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import PriceCorrelationChart from "./PriceCorrelationChart";
 
 // Date preset type
 type DatePreset = "last7" | "last28" | "last90" | "mtd" | "custom";
@@ -602,164 +603,173 @@ export default function ShoppingAdsPerformancePage() {
                         </div>
                     )}
 
-                    {/* Products Table */}
+                    {/* Products Table & Analysis */}
                     {products.length > 0 && (
-                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700">
-                            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-                                <div className="flex items-center justify-between">
-                                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                                        Product Performance
-                                    </h2>
-                                    <input
-                                        type="text"
-                                        placeholder="Search products..."
-                                        value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
-                                        className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 w-64"
-                                    />
+                        <>
+                            {/* Analytics Charts */}
+                            {includeCompetitiveIntel && (
+                                <div className="mb-8">
+                                    <PriceCorrelationChart products={filteredProducts} />
                                 </div>
-                            </div>
+                            )}
 
-                            <div className="overflow-x-auto">
-                                <table className="w-full">
-                                    <thead className="bg-gray-50 dark:bg-gray-700">
-                                        <tr>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600" onClick={() => handleSort("title")}>
-                                                Product
-                                            </th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600" onClick={() => handleSort("price")}>
-                                                Price
-                                            </th>
-                                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600" onClick={() => handleSort("clicks")}>
-                                                Clicks
-                                            </th>
-                                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600" onClick={() => handleSort("impressions")}>
-                                                Impr.
-                                            </th>
-                                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600" onClick={() => handleSort("ctr")}>
-                                                CTR
-                                            </th>
-                                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600" onClick={() => handleSort("conversions")}>
-                                                Conv.
-                                            </th>
-                                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600" onClick={() => handleSort("cost")}>
-                                                Cost
-                                            </th>
-                                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600" onClick={() => handleSort("roas")}>
-                                                ROAS
-                                            </th>
-                                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600" onClick={() => handleSort("cpa")}>
-                                                CPA
-                                            </th>
-                                            {includeCompetitiveIntel && (
-                                                <>
-                                                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                                        Rank
-                                                    </th>
-                                                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                                        Competitors
-                                                    </th>
-                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                                        Price Position
-                                                    </th>
-                                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                                        Price Gap
-                                                    </th>
-                                                </>
-                                            )}
-                                        </tr>
-                                    </thead>
-                                    <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                        {filteredProducts.map((product) => (
-                                            <tr key={product.productId} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                                                <td className="px-6 py-4">
-                                                    <div className="text-sm font-medium text-gray-900 dark:text-white">
-                                                        {product.title}
-                                                    </div>
-                                                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                                                        {product.brand} • {product.category}
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
-                                                    {formatCurrency(product.price, product.currency)}
-                                                </td>
-                                                <td className="px-6 py-4 text-sm text-right text-gray-900 dark:text-white">
-                                                    {formatNumber(product.clicks)}
-                                                </td>
-                                                <td className="px-6 py-4 text-sm text-right text-gray-900 dark:text-white">
-                                                    {formatNumber(product.impressions)}
-                                                </td>
-                                                <td className="px-6 py-4 text-sm text-right text-gray-900 dark:text-white">
-                                                    {formatPercent(product.ctr)}
-                                                </td>
-                                                <td className="px-6 py-4 text-sm text-right text-gray-900 dark:text-white">
-                                                    {formatNumber(product.conversions)}
-                                                </td>
-                                                <td className="px-6 py-4 text-sm text-right text-gray-900 dark:text-white">
-                                                    {formatCurrency(product.cost, product.currency)}
-                                                </td>
-                                                <td className="px-6 py-4 text-sm text-right">
-                                                    <span className={`font-medium ${product.roas >= 3 ? 'text-green-600 dark:text-green-400' : product.roas >= 1.5 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'}`}>
-                                                        {product.roas.toFixed(2)}x
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 text-sm text-right text-gray-900 dark:text-white">
-                                                    {formatCurrency(product.cpa, product.currency)}
-                                                </td>
+                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700">
+                                <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+                                    <div className="flex items-center justify-between">
+                                        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                            Product Performance
+                                        </h2>
+                                        <input
+                                            type="text"
+                                            placeholder="Search products..."
+                                            value={searchQuery}
+                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 w-64"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="overflow-x-auto">
+                                    <table className="w-full">
+                                        <thead className="bg-gray-50 dark:bg-gray-700">
+                                            <tr>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600" onClick={() => handleSort("title")}>
+                                                    Product
+                                                </th>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600" onClick={() => handleSort("price")}>
+                                                    Price
+                                                </th>
+                                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600" onClick={() => handleSort("clicks")}>
+                                                    Clicks
+                                                </th>
+                                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600" onClick={() => handleSort("impressions")}>
+                                                    Impr.
+                                                </th>
+                                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600" onClick={() => handleSort("ctr")}>
+                                                    CTR
+                                                </th>
+                                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600" onClick={() => handleSort("conversions")}>
+                                                    Conv.
+                                                </th>
+                                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600" onClick={() => handleSort("cost")}>
+                                                    Cost
+                                                </th>
+                                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600" onClick={() => handleSort("roas")}>
+                                                    ROAS
+                                                </th>
+                                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600" onClick={() => handleSort("cpa")}>
+                                                    CPA
+                                                </th>
                                                 {includeCompetitiveIntel && (
                                                     <>
-                                                        <td className="px-6 py-4 text-sm text-center">
-                                                            {product.competitiveData?.yourRank ? (
-                                                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-xs font-medium">
-                                                                    <Award className="h-3 w-3" />
-                                                                    #{product.competitiveData.yourRank}
-                                                                </span>
-                                                            ) : (
-                                                                <span className="text-gray-400">-</span>
-                                                            )}
-                                                        </td>
-                                                        <td className="px-6 py-4 text-sm text-center text-gray-900 dark:text-white">
-                                                            {product.competitiveData?.competitorCount || "-"}
-                                                        </td>
-                                                        <td className="px-6 py-4 text-sm">
-                                                            {product.competitiveData?.pricePosition && (
-                                                                <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${product.competitiveData.pricePosition === 'Cheapest'
-                                                                    ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
-                                                                    : product.competitiveData.pricePosition === 'Premium'
-                                                                        ? 'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200'
-                                                                        : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
-                                                                    }`}>
-                                                                    {product.competitiveData.pricePosition}
-                                                                </span>
-                                                            )}
-                                                        </td>
-                                                        <td className="px-6 py-4 text-sm text-right">
-                                                            {product.competitiveData?.priceGap !== undefined && (
-                                                                <span className={`font-medium ${product.competitiveData.priceGap > 0
-                                                                    ? 'text-red-600 dark:text-red-400' // More expensive
-                                                                    : 'text-green-600 dark:text-green-400' // Cheaper or equal
-                                                                    }`}>
-                                                                    {product.competitiveData.priceGap > 0 ? '+' : ''}
-                                                                    {formatCurrency(product.competitiveData.priceGap, product.currency)}
-                                                                </span>
-                                                            )}
-                                                        </td>
+                                                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                                            Rank
+                                                        </th>
+                                                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                                            Competitors
+                                                        </th>
+                                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                                            Price Position
+                                                        </th>
+                                                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                                            Price Gap
+                                                        </th>
                                                     </>
                                                 )}
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-
-                            {filteredProducts.length === 0 && (
-                                <div className="text-center py-12">
-                                    <p className="text-gray-500 dark:text-gray-400">
-                                        No products found matching your search
-                                    </p>
+                                        </thead>
+                                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                            {filteredProducts.map((product) => (
+                                                <tr key={product.productId} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                                    <td className="px-6 py-4">
+                                                        <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                                            {product.title}
+                                                        </div>
+                                                        <div className="text-sm text-gray-500 dark:text-gray-400">
+                                                            {product.brand} • {product.category}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                                        {formatCurrency(product.price, product.currency)}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-sm text-right text-gray-900 dark:text-white">
+                                                        {formatNumber(product.clicks)}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-sm text-right text-gray-900 dark:text-white">
+                                                        {formatNumber(product.impressions)}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-sm text-right text-gray-900 dark:text-white">
+                                                        {formatPercent(product.ctr)}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-sm text-right text-gray-900 dark:text-white">
+                                                        {formatNumber(product.conversions)}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-sm text-right text-gray-900 dark:text-white">
+                                                        {formatCurrency(product.cost, product.currency)}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-sm text-right">
+                                                        <span className={`font-medium ${product.roas >= 3 ? 'text-green-600 dark:text-green-400' : product.roas >= 1.5 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'}`}>
+                                                            {product.roas.toFixed(2)}x
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-sm text-right text-gray-900 dark:text-white">
+                                                        {formatCurrency(product.cpa, product.currency)}
+                                                    </td>
+                                                    {includeCompetitiveIntel && (
+                                                        <>
+                                                            <td className="px-6 py-4 text-sm text-center">
+                                                                {product.competitiveData?.yourRank ? (
+                                                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-xs font-medium">
+                                                                        <Award className="h-3 w-3" />
+                                                                        #{product.competitiveData.yourRank}
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-gray-400">-</span>
+                                                                )}
+                                                            </td>
+                                                            <td className="px-6 py-4 text-sm text-center text-gray-900 dark:text-white">
+                                                                {product.competitiveData?.competitorCount || "-"}
+                                                            </td>
+                                                            <td className="px-6 py-4 text-sm">
+                                                                {product.competitiveData?.pricePosition && (
+                                                                    <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${product.competitiveData.pricePosition === 'Cheapest'
+                                                                        ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
+                                                                        : product.competitiveData.pricePosition === 'Premium'
+                                                                            ? 'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200'
+                                                                            : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
+                                                                        }`}>
+                                                                        {product.competitiveData.pricePosition}
+                                                                    </span>
+                                                                )}
+                                                            </td>
+                                                            <td className="px-6 py-4 text-sm text-right">
+                                                                {product.competitiveData?.priceGap !== undefined && (
+                                                                    <span className={`font-medium ${product.competitiveData.priceGap > 0
+                                                                        ? 'text-red-600 dark:text-red-400' // More expensive
+                                                                        : 'text-green-600 dark:text-green-400' // Cheaper or equal
+                                                                        }`}>
+                                                                        {product.competitiveData.priceGap > 0 ? '+' : ''}
+                                                                        {formatCurrency(product.competitiveData.priceGap, product.currency)}
+                                                                    </span>
+                                                                )}
+                                                            </td>
+                                                        </>
+                                                    )}
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
                                 </div>
-                            )}
-                        </div>
+
+                                {filteredProducts.length === 0 && (
+                                    <div className="text-center py-12">
+                                        <p className="text-gray-500 dark:text-gray-400">
+                                            No products found matching your search
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        </>
                     )}
 
                     {/* Info Note about Paid vs Free Listings */}
