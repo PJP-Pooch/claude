@@ -50,7 +50,6 @@ import {
     Zap,
     Eye,
     Upload,
-    AlertTriangle,
 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { ThemeProvider } from "@/components/ThemeProvider";
