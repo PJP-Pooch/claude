@@ -40,19 +40,24 @@ export async function GET(request: NextRequest) {
             console.error('Merchant Center API error:', {
                 status: response.status,
                 statusText: response.statusText,
+                headers: Object.fromEntries(response.headers.entries()),
                 error: errorText,
+                tokenScope: accessToken.substring(0, 10) + '...', // Log first 10 chars to verify token exists
             });
 
             // If it's a permission error, return empty list with helpful message
+            // 401 = Invalid credentials (token expired or missing scope)
+            // 403 = Insufficient permissions (user doesn't have access to MC)
             if (response.status === 403 || response.status === 401) {
                 return NextResponse.json({
                     accounts: [],
-                    error: 'No Merchant Center access. Please ensure your Google account has access to Google Merchant Center.',
+                    error: `No Merchant Center access (Status ${response.status}). Please ensure your Google account has access to Google Merchant Center and you have granted the necessary permissions.`,
+                    debug: errorText
                 });
             }
 
             return NextResponse.json(
-                { error: `Failed to fetch Merchant Center accounts: ${response.status}` },
+                { error: `Failed to fetch Merchant Center accounts: ${response.status} - ${errorText}` },
                 { status: response.status }
             );
         }
