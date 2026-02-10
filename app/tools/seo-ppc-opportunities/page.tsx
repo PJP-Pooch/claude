@@ -1,9 +1,10 @@
 "use client";
 
 import { useSession, signIn, signOut } from "next-auth/react";
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import Papa from "papaparse";
 import {
     BarChart,
     Bar,
@@ -48,6 +49,7 @@ import {
     Percent,
     Zap,
     Eye,
+    Upload,
 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -265,11 +267,21 @@ export default function SeoPpcOpportunitiesPage() {
 
     // Data state
     const [data, setData] = useState<MergedOpportunityRow[]>([]);
+    const [rawGscData, setRawGscData] = useState<GscQueryRow[]>([]);
+    const [rawAdsData, setRawAdsData] = useState<AdsSearchTermRow[]>([]);
     const [currencyCode, setCurrencyCode] = useState<string>("GBP");
 
     // Table state
     const [sortKey, setSortKey] = useState<keyof MergedOpportunityRow>("opportunity_score");
     const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+    // Merge data whenever raw sources change
+    useEffect(() => {
+        if (rawGscData.length || rawAdsData.length) {
+            const merged = mergeDatasets(rawGscData, rawAdsData);
+            setData(merged);
+        }
+    }, [rawGscData, rawAdsData]);
     const [filterAction, setFilterAction] = useState<OpportunityAction | "all">("all");
     const [filterCampaign, setFilterCampaign] = useState<string>("all");
     const [filterAdGroup, setFilterAdGroup] = useState<string>("all");
@@ -279,6 +291,9 @@ export default function SeoPpcOpportunitiesPage() {
     const [trendData, setTrendData] = useState<any[]>([]);
     const [trendMetric, setTrendMetric] = useState<string>("");
     const [trendLoading, setTrendLoading] = useState(false);
+
+    // File upload ref
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Analysis state
     const [analysisModalOpen, setAnalysisModalOpen] = useState(false);
@@ -354,11 +369,16 @@ export default function SeoPpcOpportunitiesPage() {
         return getDateRangeFromPreset(datePreset);
     }, [datePreset, customStartDate, customEndDate]);
 
-    // Fetch and merge data
+    // Fetch and update data
     const handleFetchData = useCallback(async () => {
         setLoading(true);
         setError(null);
         setProgress("Starting data fetch...");
+
+        // Clear existing data to avoid stale state
+        setData([]);
+        setRawGscData([]);
+        setRawAdsData([]);
 
         try {
             const startDate = formatDateForApi(dateRange.start);
@@ -368,9 +388,12 @@ export default function SeoPpcOpportunitiesPage() {
                 setProgress("Generating mock data...");
                 await new Promise((r) => setTimeout(r, 500));
                 const mockData = generateMockData();
-                const merged = mergeDatasets(mockData.gscData, mockData.adsData);
-                setData(merged);
+
+                // Update raw state - effect will trigger merge
+                setRawGscData(mockData.gscData);
+                setRawAdsData(mockData.adsData);
                 setCurrencyCode("GBP");
+
                 setProgress("");
                 setLoading(false);
                 return;
@@ -432,12 +455,11 @@ export default function SeoPpcOpportunitiesPage() {
                 }
             }
 
-            setProgress("Merging and analyzing data...");
-            await new Promise((r) => setTimeout(r, 100));
-
-            const merged = mergeDatasets(gscData, adsData);
-            setData(merged);
+            // Set raw data - merge effect will run
+            setRawGscData(gscData);
+            setRawAdsData(adsData);
             setCurrencyCode(adsCurrency);
+
             setProgress("");
 
         } catch (e) {
@@ -447,6 +469,86 @@ export default function SeoPpcOpportunitiesPage() {
             setLoading(false);
         }
     }, [mockMode, selectedProperty, selectedCustomer, dateRange]);
+
+    // Handle CSV Upload for Google Ads
+    const handleAdsFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        setProgress("Parsing CSV...");
+
+        Papa.parse(file, {
+            header: true,
+            skipEmptyLines: true,
+            complete: (results) => {
+                try {
+                    const rows = results.data as Record<string, any>[];
+                    if (!rows || rows.length === 0) {
+                        setError('CSV appears empty or invalid.');
+                        setProgress("");
+                        return;
+                    }
+
+                    // Helper to clean currency/number strings
+                    const cleanNumber = (val: any): number => {
+                        if (typeof val === 'number') return val;
+                        if (!val) return 0;
+                        return parseFloat(String(val).replace(/[£$,%]/g, '').trim()) || 0;
+                    };
+
+                    const adsRows: AdsSearchTermRow[] = rows
+                        .filter(row => (row['Search term'] || row['Search keyword'] || row['Keyword']))
+                        .map(row => {
+                            const cost = cleanNumber(row['Cost'] || row['cost']);
+                            const clicks = cleanNumber(row['Clicks'] || row['clicks']);
+                            const impressions = cleanNumber(row['Impr.'] || row['Impressions'] || row['impressions']);
+                            const conversions = cleanNumber(row['Conversions'] || row['conversions']);
+                            const convValue = cleanNumber(row['Conv. value'] || row['Total conv. value'] || row['conversion_value']);
+
+                            return {
+                                searchTerm: row['Search term'] || row['Search keyword'] || row['Keyword'] || '',
+                                costMicros: cost * 1_000_000,
+                                impressions,
+                                clicks,
+                                conversions,
+                                conversionValue: convValue,
+                                ctr: impressions > 0 ? clicks / impressions : 0,
+                                averageCpc: clicks > 0 ? cost / clicks : 0,
+                                campaign: row['Campaign'] || 'Uploaded CSV',
+                                adGroup: row['Ad group'] || 'Uploaded CSV',
+                                matchType: row['Match type'] || 'Broad',
+                                impressionShare: null,
+                                budgetLostImpressionShare: null,
+                                rankLostImpressionShare: null,
+                                conversionRate: clicks > 0 ? conversions / clicks : 0
+                            };
+                        });
+
+                    if (adsRows.length === 0) {
+                        setError("No valid search terms found in CSV. Expected column 'Search term'.");
+                        setProgress("");
+                        return;
+                    }
+
+                    setRawAdsData(adsRows);
+                    setProgress("");
+                    setError(null);
+
+                    // Reset input
+                    if (fileInputRef.current) fileInputRef.current.value = '';
+
+                } catch (e) {
+                    console.error("CSV Parse Error:", e);
+                    setError("Failed to parse CSV: " + String(e));
+                    setProgress("");
+                }
+            },
+            error: (err) => {
+                setError("CSV Error: " + err.message);
+                setProgress("");
+            }
+        });
+    };
 
     // Unique campaigns and ad groups
     const uniqueCampaigns = useMemo(() => {
@@ -957,7 +1059,7 @@ export default function SeoPpcOpportunitiesPage() {
                                     <div className="mt-4 flex items-center gap-4">
                                         <button
                                             onClick={handleFetchData}
-                                            disabled={loading || (!mockMode && !selectedProperty && !selectedCustomer)}
+                                            disabled={loading || (!mockMode && !selectedProperty)}
                                             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium px-6 py-2 rounded-lg transition-colors"
                                         >
                                             {loading ? (
@@ -967,6 +1069,26 @@ export default function SeoPpcOpportunitiesPage() {
                                             )}
                                             {loading ? "Fetching..." : "Fetch Data"}
                                         </button>
+
+                                        {/* Hidden CSV Upload */}
+                                        <input
+                                            type="file"
+                                            ref={fileInputRef}
+                                            onChange={handleAdsFileUpload}
+                                            accept=".csv"
+                                            className="hidden"
+                                        />
+
+                                        {!mockMode && (
+                                            <button
+                                                onClick={() => fileInputRef.current?.click()}
+                                                className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white font-medium px-6 py-2 rounded-lg transition-colors"
+                                                title="Upload Google Ads 'Search Terms' CSV Report (Columns: Search term, Cost, Impr., Clicks, Conversions)"
+                                            >
+                                                <Upload className="w-4 h-4" />
+                                                Upload Ads CSV
+                                            </button>
+                                        )}
 
                                         {progress && (
                                             <span className="text-sm text-gray-500 dark:text-gray-400">
