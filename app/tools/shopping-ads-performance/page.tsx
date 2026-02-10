@@ -754,8 +754,9 @@ export default function ShoppingAdsPerformancePage() {
                             <div className="flex items-start gap-2">
                                 <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
                                 <div className="text-sm text-blue-600 dark:text-blue-400">
-                                    <p className="font-medium mb-1">Shopping Ads vs Free Listings</p>
-                                    <p>This data shows <strong>paid Shopping Ads</strong> performance (cost, ROAS, CPA). For <strong>free listings</strong> (organic Shopping), check the Merchant Center Free Listings report separately.</p>
+                                    <p className="font-medium mb-1">Data Availability Note</p>
+                                    <p>Cost and ROAS metrics are temporarily unavailable pending Google Ads API Developer Token approval (1-2 days). Currently showing Traffic (Clicks, Impressions, CTR) and Competitive Intelligence.</p>
+                                    <p className="mt-2 text-xs opacity-75">This data shows <strong>paid Shopping Ads</strong> traffic. For <strong>free listings</strong> (organic Shopping), check the Merchant Center Free Listings report separately.</p>
                                 </div>
                             </div>
                         </div>
