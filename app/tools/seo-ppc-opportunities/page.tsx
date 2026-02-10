@@ -187,6 +187,60 @@ function KpiCard({
     );
 }
 
+// Quick Win Card Component
+function QuickWinCard({
+    title,
+    opportunities,
+    icon: Icon,
+    iconColorClass,
+    subtitle,
+    valueFormatter,
+    valueKey
+}: {
+    title: string;
+    opportunities: MergedOpportunityRow[];
+    icon: any;
+    iconColorClass: string;
+    subtitle: string;
+    valueFormatter: (v: any) => string;
+    valueKey: keyof MergedOpportunityRow;
+}) {
+    if (!opportunities?.length) return null;
+
+    return (
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700 h-full flex flex-col">
+            <div className="flex items-center gap-3 mb-4">
+                <div className={`p-2 rounded-lg ${iconColorClass} bg-opacity-10 text-opacity-100`}>
+                    <Icon className="w-5 h-5" />
+                </div>
+                <div>
+                    <h3 className="font-semibold text-gray-900 dark:text-white">{title}</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{subtitle}</p>
+                </div>
+            </div>
+            <div className="space-y-3 flex-1 overflow-y-auto max-h-[200px] pr-2 custom-scrollbar">
+                {opportunities.map((op, i) => (
+                    <div key={i} className="flex justify-between items-center text-sm border-b border-gray-100 dark:border-gray-700 pb-2 last:border-0 last:pb-0 hover:bg-gray-50 dark:hover:bg-gray-700/50 p-1.5 rounded transition-colors group">
+                        <div className="truncate pr-4 flex-1">
+                            <p className="font-medium text-gray-800 dark:text-gray-200 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" title={op.query}>
+                                {op.query}
+                            </p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
+                                <span>Pos: {op.position_org > 0 ? op.position_org.toFixed(1) : '-'}</span>
+                                <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+                                <span>Vol: {formatNumber(op.impressions_paid + op.impressions_org)}</span>
+                            </p>
+                        </div>
+                        <div className="text-right whitespace-nowrap">
+                            <p className="font-bold text-gray-900 dark:text-white">{valueFormatter(op[valueKey])}</p>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
 export default function SeoPpcOpportunitiesPage() {
     const { data: session, status } = useSession();
 
@@ -450,6 +504,29 @@ export default function SeoPpcOpportunitiesPage() {
 
     // Summary stats - calculate from filtered data
     const summary = useMemo(() => calculateSummary(filteredData), [filteredData]);
+
+    // Quick Wins Logic (Global Top 5)
+    const quickWins = useMemo(() => {
+        if (!data.length) return null;
+
+        // Use full dataset for global quick wins, regardless of current filters
+        const pausePpc = [...data]
+            .filter(r => r.action === 'Pause PPC')
+            .sort((a, b) => b.cost_paid - a.cost_paid)
+            .slice(0, 5);
+
+        const scaleSpend = [...data]
+            .filter(r => r.action === 'Scale Spend')
+            .sort((a, b) => (b.roas_paid || 0) - (a.roas_paid || 0))
+            .slice(0, 5);
+
+        const seoFocus = [...data]
+            .filter(r => r.action === 'SEO Focus')
+            .sort((a, b) => b.conversions_paid - a.conversions_paid)
+            .slice(0, 5);
+
+        return { pausePpc, scaleSpend, seoFocus };
+    }, [data]);
 
     // Chart data - calculate from filtered data
     const actionChartData = useMemo(() => prepareActionChartData(filteredData), [filteredData]);
@@ -1185,6 +1262,39 @@ export default function SeoPpcOpportunitiesPage() {
                                                         </div>
                                                     </div>
                                                 </div>
+
+                                                {/* Quick Wins Section */}
+                                                {quickWins && (
+                                                    <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+                                                        <QuickWinCard
+                                                            title="💰 Stop Wasting Spend"
+                                                            subtitle="Top 'Pause PPC' opportunities by cost"
+                                                            opportunities={quickWins.pausePpc}
+                                                            icon={DollarSign}
+                                                            iconColorClass="bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"
+                                                            valueFormatter={(v) => formatCurrency(v, currencyCode)}
+                                                            valueKey="cost_paid"
+                                                        />
+                                                        <QuickWinCard
+                                                            title="🚀 Scale Winners"
+                                                            subtitle="Top 'Scale Spend' opportunities by ROAS"
+                                                            opportunities={quickWins.scaleSpend}
+                                                            icon={TrendingUp}
+                                                            iconColorClass="bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400"
+                                                            valueFormatter={(v) => `ROAS: ${v?.toFixed(2)}x`}
+                                                            valueKey="roas_paid"
+                                                        />
+                                                        <QuickWinCard
+                                                            title="🎯 SEO Content Gaps"
+                                                            subtitle="Top 'SEO Focus' opportunities by conversions"
+                                                            opportunities={quickWins.seoFocus}
+                                                            icon={Target}
+                                                            iconColorClass="bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
+                                                            valueFormatter={(v) => `${v} Conv.`}
+                                                            valueKey="conversions_paid"
+                                                        />
+                                                    </div>
+                                                )}
                                             </>
                                         )}
                                     </section>
