@@ -294,6 +294,7 @@ export default function SeoPpcOpportunitiesPage() {
 
     // File upload ref
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const fileInputRefGsc = useRef<HTMLInputElement>(null);
 
     // Analysis state
     const [analysisModalOpen, setAnalysisModalOpen] = useState(false);
@@ -464,11 +465,95 @@ export default function SeoPpcOpportunitiesPage() {
 
         } catch (e) {
             console.error("Error fetching data:", e);
-            setError(String(e));
+            const err = String(e);
+            if (err.includes("SyntaxError") || err.includes("JSON")) {
+                setError("API Error: Received invalid response. Try using Manual CSV Upload instead.");
+            } else {
+                setError(err);
+            }
         } finally {
             setLoading(false);
         }
     }, [mockMode, selectedProperty, selectedCustomer, dateRange]);
+
+    // Handle CSV Upload for GSC
+    const handleGscFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        setProgress("Parsing GSC CSV...");
+
+        Papa.parse(file, {
+            header: true,
+            skipEmptyLines: true,
+            complete: (results) => {
+                try {
+                    const rows = results.data as Record<string, any>[];
+                    if (!rows || rows.length === 0) {
+                        setError('GSC CSV appears empty or invalid.');
+                        setProgress("");
+                        return;
+                    }
+
+                    // Helper to clean number strings
+                    const cleanNumber = (val: any): number => {
+                        if (typeof val === 'number') return val;
+                        if (!val) return 0;
+                        return parseFloat(String(val).replace(/[,%]/g, '').trim()) || 0;
+                    };
+
+                    const gscRows: GscQueryRow[] = rows
+                        .filter(row => (row['Top queries'] || row['Query'] || row['query']))
+                        .map(row => {
+                            const query = row['Top queries'] || row['Query'] || row['query'] || '';
+                            const clicks = cleanNumber(row['Clicks'] || row['clicks']);
+                            const impressions = cleanNumber(row['Impressions'] || row['impressions']);
+                            const posVal = row['Position'] || row['position'];
+                            const position = cleanNumber(posVal);
+
+                            // Handle CTR %
+                            let finalCtr = 0;
+                            const ctrVal = row['CTR'] || row['ctr'];
+                            if (typeof ctrVal === 'string' && ctrVal.includes('%')) {
+                                finalCtr = parseFloat(ctrVal.replace('%', '')) / 100;
+                            } else {
+                                finalCtr = cleanNumber(ctrVal);
+                            }
+
+                            return {
+                                query,
+                                clicks,
+                                impressions,
+                                ctr: finalCtr,
+                                position
+                            };
+                        });
+
+                    if (gscRows.length === 0) {
+                        setError("No valid queries found in CSV. Expected column 'Top queries' or 'Query'.");
+                        setProgress("");
+                        return;
+                    }
+
+                    setRawGscData(gscRows);
+                    setProgress("");
+                    setError(null);
+
+                    // Reset input
+                    if (fileInputRefGsc.current) fileInputRefGsc.current.value = '';
+
+                } catch (e) {
+                    console.error("GSC CSV Parse Error:", e);
+                    setError("Failed to parse GSC CSV: " + String(e));
+                    setProgress("");
+                }
+            },
+            error: (err) => {
+                setError("GSC CSV Error: " + err.message);
+                setProgress("");
+            }
+        });
+    };
 
     // Handle CSV Upload for Google Ads
     const handleAdsFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -1069,6 +1154,26 @@ export default function SeoPpcOpportunitiesPage() {
                                             )}
                                             {loading ? "Fetching..." : "Fetch Data"}
                                         </button>
+
+                                        {/* Hidden GSC Upload */}
+                                        <input
+                                            type="file"
+                                            ref={fileInputRefGsc}
+                                            onChange={handleGscFileUpload}
+                                            accept=".csv"
+                                            className="hidden"
+                                        />
+
+                                        {!mockMode && (
+                                            <button
+                                                onClick={() => fileInputRefGsc.current?.click()}
+                                                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-6 py-2 rounded-lg transition-colors"
+                                                title="Upload GSC 'Top Queries' CSV Report (Columns: Top queries, Clicks, Impressions, CTR, Position)"
+                                            >
+                                                <Upload className="w-4 h-4" />
+                                                Upload GSC
+                                            </button>
+                                        )}
 
                                         {/* Hidden CSV Upload */}
                                         <input
