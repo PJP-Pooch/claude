@@ -43,3 +43,7 @@ services:
         sync: false
       - key: NEXTAUTH_SECRET
         sync: false
+      - key: GOOGLE_ADS_DEVELOPER_TOKEN
+        sync: false
+      - key: NEXT_PUBLIC_OPENAI_API_KEY
+        sync: false
