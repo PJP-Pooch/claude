@@ -68,7 +68,7 @@ function getExpectedCtr(position: number): number {
  */
 export function classifyAction(row: Omit<MergedOpportunityRow, 'action' | 'opportunity_score'>): OpportunityAction {
     const {
-        position_org, conversions_paid, cost_paid, clicks_org,
+        position_org, conversions_paid, cost_paid, clicks_org, clicks_paid,
         ctr_org, impressions_org, impressions_paid, roas_paid, cpa_paid,
         matchType, impressionShare
     } = row;
@@ -81,6 +81,9 @@ export function classifyAction(row: Omit<MergedOpportunityRow, 'action' | 'oppor
     const hasSignificantPaidData = impressions_paid >= 100 && cost_paid > 0;
     const hasSignificantOrgData = impressions_org >= 100;
     const hasConversions = conversions_paid >= 1;
+
+    // SEO Focus criteria: meaningful PPC activity (clicks > 1 OR conversions > 1)
+    const hasMeaningfulPaidActivity = clicks_paid > 1 || conversions_paid > 1;
 
     // ROAS efficiency thresholds
     const isPaidProfitable = roas_paid !== null && roas_paid >= 2;
@@ -117,13 +120,15 @@ export function classifyAction(row: Omit<MergedOpportunityRow, 'action' | 'oppor
 
     // --- PRIORITY 2: No organic presence but paid is converting ---
     // This is a clear SEO opportunity - proven demand with no organic capture
-    if (position_org === 0 && hasConversions) {
+    // Requires meaningful PPC activity (clicks > 1 OR conversions > 1)
+    if (position_org === 0 && hasMeaningfulPaidActivity) {
         return 'SEO Focus';
     }
 
     // --- PRIORITY 3: Striking distance (11-20) with proven demand ---
     // These should be SEO focus, NOT PPC activation
-    if (position_org > 10 && position_org <= 20 && hasConversions) {
+    // Requires meaningful PPC activity (clicks > 1 OR conversions > 1)
+    if (position_org > 10 && position_org <= 20 && hasMeaningfulPaidActivity) {
         return 'SEO Focus';
     }
 
@@ -135,7 +140,8 @@ export function classifyAction(row: Omit<MergedOpportunityRow, 'action' | 'oppor
 
     // --- PRIORITY 5: Low organic ranking (20+) with paid conversions ---
     // Long-term SEO play for proven converting terms
-    if (position_org > 20 && hasConversions && isPaidProfitable) {
+    // Requires meaningful PPC activity (clicks > 1 OR conversions > 1)
+    if (position_org > 20 && hasMeaningfulPaidActivity && isPaidProfitable) {
         return 'SEO Focus';
     }
 
@@ -170,6 +176,62 @@ export function classifyAction(row: Omit<MergedOpportunityRow, 'action' | 'oppor
 
     // Default: Monitor for everything else
     return 'Monitor';
+}
+
+/**
+ * Get human-readable reason for the opportunity classification
+ */
+export function getActionReason(row: Omit<MergedOpportunityRow, 'action' | 'opportunity_score'>, action: OpportunityAction): string {
+    const {
+        position_org, conversions_paid, cost_paid, clicks_org, clicks_paid,
+        ctr_org, impressions_org, impressions_paid, roas_paid,
+        matchType, impressionShare
+    } = row;
+
+    const expectedCtr = getExpectedCtr(position_org);
+    const ctrRatio = expectedCtr > 0 ? ctr_org / expectedCtr : 0;
+
+    const hasSignificantPaidData = impressions_paid >= 100 && cost_paid > 0;
+    const hasSignificantOrgData = impressions_org >= 100;
+    const hasConversions = conversions_paid >= 1;
+    const isPaidProfitable = roas_paid !== null && roas_paid >= 2;
+    const isPaidHighlyProfitable = roas_paid !== null && roas_paid >= 4;
+    const isPaidUnprofitable = roas_paid !== null && roas_paid < 2;
+    const isBroadOrPhrase = matchType === 'broad' || matchType === 'phrase' || matchType === 'near_exact';
+    const hasLowImpressionShare = impressionShare !== null && impressionShare !== undefined && impressionShare < 0.5;
+
+    // SEO Focus criteria: meaningful PPC activity (clicks > 1 OR conversions > 1)
+    const hasMeaningfulPaidActivity = clicks_paid > 1 || conversions_paid > 1;
+
+    switch (action) {
+        case 'Add Exact Match':
+            return `Keyword is currently '${matchType}' match but converting profitably (ROAS > 2). Adding as Exact Match can improve efficiency and control.`;
+        case 'Scale Spend':
+            return `High ROAS (>4) but low Impression Share (<50%). Significant opportunity to capture more profitable volume by increasing budget/bids.`;
+        case 'Pause PPC':
+            return `Strong Organic presence (Pos 1-3) with good CTR, while Paid Ads are unprofitable (ROAS < 2). Save budget by relying on organic listing.`;
+        case 'Reduce Spend':
+            return `Strong Organic presence (Pos 1-3) allows for reduced ad spend without losing traffic, especially since paid performance isn't highly profitable.`;
+        case 'SEO Focus':
+            if (position_org === 0 && hasMeaningfulPaidActivity) return `Proven paid engagement (clicks or conversions), but zero organic visibility. High value target for new SEO content.`;
+            if (position_org > 10 && position_org <= 20) return `Ranking in striking distance (Page 2) with meaningful paid activity. Push to Page 1 for significant traffic gain.`;
+            if (position_org > 20 && hasMeaningfulPaidActivity) return `Meaningful paid engagement, but organic ranking is low (>20). Long-term SEO opportunity to reduce reliance on paid spend.`;
+            return `Keyword shows potential but lacks organic visibility. Improve content relevance to rank.`;
+        case 'Investigate':
+            if (position_org > 0 && position_org <= 10 && ctrRatio < 0.5) return `Organic ranking is good (Pos 1-10) but CTR is unexpectedly low. Investigate Title/Meta Description or SERP features stealing clicks.`;
+            return `Performance metrics look unusual. Review queries and landing pages for relevance issues.`;
+        case 'Consider PPC':
+            if (position_org === 0) return `No organic visibility yet. Test viability with a small PPC campaign to gauge conversion potential before investing in SEO.`;
+            if (clicks_org === 0 && impressions_org < 50) return `Low organic volume. PPC can help validate keyword demand and gather initial data.`;
+            return `Potential gap in coverage. Consider testing Ads to capture traffic.`;
+        case 'Increase Spend (CTR)':
+            return `Good organic ranking (Pos 4-10) and highly profitable ads. Increasing ad spend can maximize capture while working on organic improvements.`;
+        case 'Monitor':
+            if (position_org > 0 && position_org <= 10 && cost_paid === 0) return `Already winning organically (Top 10) with no ad spend. Maintain current performance.`;
+            return `Current performance is stable. No immediate high-impact action required.`;
+        default:
+            return `General opportunity derived from performance analysis.`;
+    }
 }
 
 /**

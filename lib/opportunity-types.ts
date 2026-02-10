@@ -116,6 +116,7 @@ export interface SerpAnalysis {
     paidResults: SerpResult[];
     serpFeatures: string[];
     aiRecommendation: AiRecommendation;
+    targetRank?: number | null;
 }
 
 // DataForSEO enrichment data
