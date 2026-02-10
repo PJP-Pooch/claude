@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
         });
 
         // Fetch Shopping Ads performance from Merchant Center Reports API
-        // Note: ensuring we only request fields that are generally available to avoid 400 errors
+        // Try querying ProductView first to verify API access and table validity
         const reportQuery = {
             query: `
                 SELECT
@@ -66,22 +66,13 @@ export async function POST(request: NextRequest) {
                     product_view.brand,
                     product_view.category_l1,
                     product_view.price.amount_micros,
-                    product_view.price.currency_code,
-                    segments.marketing_method,
-                    product_performance_view.clicks,
-                    product_performance_view.impressions,
-                    product_performance_view.click_through_rate,
-                    product_performance_view.conversions,
-                    product_performance_view.conversion_value.amount_micros
-                FROM ProductPerformanceView
-                WHERE segments.date BETWEEN '${startDate}' AND '${endDate}'
-                AND segments.marketing_method = 'ADS'
-                ORDER BY product_performance_view.clicks DESC
+                    product_view.price.currency_code
+                FROM ProductView
             `
         };
 
         const response = await fetch(
-            `https://shoppingcontent.googleapis.com/content/v2.1/${merchantId}/reports/search`,
+            `https://merchantapi.googleapis.com/reports/v1beta/accounts/${merchantId}/reports:search`,
             {
                 method: 'POST',
                 headers: {
@@ -120,6 +111,8 @@ export async function POST(request: NextRequest) {
         // Transform the response to a more usable format
         const products = (data.results || []).map((result: any) => {
             const product = result.productView || {};
+            // If performance view is requested but missing, default to empty object
+            // For the ProductView query, this will be empty
             const performance = result.productPerformanceView || {};
 
             const clicks = parseInt(performance.clicks || '0', 10);
