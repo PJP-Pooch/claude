@@ -50,6 +50,7 @@ import {
     Zap,
     Eye,
     Upload,
+    AlertTriangle,
 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -1083,11 +1084,18 @@ export default function SeoPpcOpportunitiesPage() {
                                             <button
                                                 onClick={() => fileInputRef.current?.click()}
                                                 className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white font-medium px-6 py-2 rounded-lg transition-colors"
-                                                title="Upload Google Ads 'Search Terms' CSV Report (Columns: Search term, Cost, Impr., Clicks, Conversions)"
+                                                title="Upload Google Ads 'Search Terms' CSV Report for the SELECTED DATE RANGE. (Columns: Search term, Cost, Impr., Clicks)"
                                             >
                                                 <Upload className="w-4 h-4" />
                                                 Upload Ads CSV
                                             </button>
+                                        )}
+
+                                        {rawAdsData.length > 0 && rawAdsData[0]?.campaign === 'Uploaded CSV' && !progress && !mockMode && (
+                                            <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-3 py-1.5 rounded-lg border border-amber-100 dark:border-amber-800">
+                                                <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+                                                <span><span className="font-semibold">Manual Data Active:</span> Ensure CSV date range matches GSC dates for accurate analysis.</span>
+                                            </div>
                                         )}
 
                                         {progress && (

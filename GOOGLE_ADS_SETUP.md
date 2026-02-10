@@ -3,6 +3,17 @@
 ## Overview
 To access Google Ads data in your SEO/PPC Opportunity Finder, you need to complete the following steps:
 
+## 🚀 Quick Workaround: Manual CSV Upload
+
+If you are waiting for API approval or finding the setup difficult, you can use the **Manual CSV Upload** feature in both the **Shopping Ads Performance** and **SEO/PPC Opportunity Finder** tools to get started immediately.
+
+**For Opportunity Finder:**
+1. Export a "Search Terms" report from Google Ads as a CSV.
+2. Ensure you include columns: `Search term`, `Cost`, `Impr.`, `Clicks`, `Conversions`.
+3. Use the "Upload Ads CSV" button in the tool.
+   
+**Important:** Ensure the date range in your CSV export matches the date range selected in the tool for accurate analysis.
+
 ---
 
 ## ✅ What You Already Have
