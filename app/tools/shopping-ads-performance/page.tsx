@@ -662,6 +662,9 @@ export default function ShoppingAdsPerformancePage() {
                                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                                                         Price Position
                                                     </th>
+                                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                                        Price Gap
+                                                    </th>
                                                 </>
                                             )}
                                         </tr>
@@ -727,6 +730,17 @@ export default function ShoppingAdsPerformancePage() {
                                                                         : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
                                                                     }`}>
                                                                     {product.competitiveData.pricePosition}
+                                                                </span>
+                                                            )}
+                                                        </td>
+                                                        <td className="px-6 py-4 text-sm text-right">
+                                                            {product.competitiveData?.priceGap !== undefined && (
+                                                                <span className={`font-medium ${product.competitiveData.priceGap > 0
+                                                                    ? 'text-red-600 dark:text-red-400' // More expensive
+                                                                    : 'text-green-600 dark:text-green-400' // Cheaper or equal
+                                                                    }`}>
+                                                                    {product.competitiveData.priceGap > 0 ? '+' : ''}
+                                                                    {formatCurrency(product.competitiveData.priceGap, product.currency)}
                                                                 </span>
                                                             )}
                                                         </td>
