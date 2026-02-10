@@ -150,6 +150,26 @@ export default function Home() {
         'Actionable Recommendations',
       ],
     },
+    {
+      id: 'shopping-ads-performance',
+      title: 'Shopping Ads Performance',
+      description: 'Analyze Shopping Ads performance with product-level metrics (ROAS, CPA) and competitive intelligence. Distinguish between paid ads and free listings.',
+      icon: (
+        <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+        </svg>
+      ),
+      href: '/tools/shopping-ads-performance',
+      color: 'from-pink-500 to-rose-600',
+      apiType: 'google',
+      features: [
+        'Product-level ROAS & CPA tracking',
+        'Competitive intelligence (rankings, prices)',
+        'Merchant Center integration',
+        'Paid vs Free listings distinction',
+        'DataForSEO price comparison',
+      ],
+    },
     /*
     {
       id: 'merchant-price',

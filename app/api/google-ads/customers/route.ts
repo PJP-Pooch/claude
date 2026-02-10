@@ -18,6 +18,14 @@ export async function GET(request: NextRequest) {
         }
 
         const accessToken = session.accessToken as string;
+        const developerToken = process.env.GOOGLE_ADS_DEVELOPER_TOKEN || '';
+
+        // Debug logging
+        console.log('Fetching Google Ads customers:', {
+            hasAccessToken: !!accessToken,
+            hasDeveloperToken: !!developerToken,
+            developerTokenLength: developerToken.length
+        });
 
         // Try to get accessible customers using the Google Ads REST API
         // Note: This requires the user to have linked their Google Ads account
@@ -26,20 +34,30 @@ export async function GET(request: NextRequest) {
             {
                 headers: {
                     'Authorization': `Bearer ${accessToken}`,
-                    'developer-token': process.env.GOOGLE_ADS_DEVELOPER_TOKEN || '',
+                    'developer-token': developerToken,
                 },
             }
         );
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('Google Ads API error:', response.status, errorText);
+            console.error('Google Ads API error:', {
+                status: response.status,
+                statusText: response.statusText,
+                error: errorText,
+                hasDeveloperToken: !!process.env.GOOGLE_ADS_DEVELOPER_TOKEN,
+                developerTokenLength: process.env.GOOGLE_ADS_DEVELOPER_TOKEN?.length || 0
+            });
 
-            // If it's a permission error, return empty list rather than error
+            // If it's a permission error, return empty list with detailed error
             if (response.status === 403 || response.status === 401) {
                 return NextResponse.json({
                     customers: [],
                     error: 'No Google Ads access. Please ensure your Google account has access to Google Ads.',
+                    debug: process.env.NODE_ENV === 'development' ? {
+                        status: response.status,
+                        message: errorText
+                    } : undefined
                 });
             }
 
