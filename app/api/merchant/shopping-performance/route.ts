@@ -57,6 +57,7 @@ export async function POST(request: NextRequest) {
         });
 
         // Fetch Shopping Ads performance from Merchant Center Reports API
+        // Note: ensuring we only request fields that are generally available to avoid 400 errors
         const reportQuery = {
             query: `
                 SELECT
@@ -64,17 +65,17 @@ export async function POST(request: NextRequest) {
                     product_view.title,
                     product_view.brand,
                     product_view.category_l1,
-                    product_view.category_l2,
                     product_view.price.amount_micros,
                     product_view.price.currency_code,
+                    segments.marketing_method,
                     product_performance_view.clicks,
                     product_performance_view.impressions,
                     product_performance_view.click_through_rate,
                     product_performance_view.conversions,
-                    product_performance_view.conversion_value.amount_micros,
-                    product_performance_view.cost_of_goods_sold.amount_micros
+                    product_performance_view.conversion_value.amount_micros
                 FROM ProductPerformanceView
                 WHERE segments.date BETWEEN '${startDate}' AND '${endDate}'
+                AND segments.marketing_method = 'ADS'
                 ORDER BY product_performance_view.clicks DESC
             `
         };
@@ -96,18 +97,20 @@ export async function POST(request: NextRequest) {
             console.error('Merchant Center Reports API error:', {
                 status: response.status,
                 statusText: response.statusText,
+                query: reportQuery,
                 error: errorText,
             });
 
             if (response.status === 403 || response.status === 401) {
                 return NextResponse.json({
                     products: [],
-                    error: 'No access to Merchant Center Reports. Please ensure your account has the necessary permissions.',
+                    error: `No access to Merchant Center Reports (Status ${response.status}). Please ensure your account has the necessary permissions.`,
+                    debug: errorText
                 });
             }
 
             return NextResponse.json(
-                { error: `Failed to fetch Shopping Ads performance: ${response.status}` },
+                { error: `Failed to fetch Shopping Ads performance: ${response.status} - ${errorText}` },
                 { status: response.status }
             );
         }
@@ -119,16 +122,18 @@ export async function POST(request: NextRequest) {
             const product = result.productView || {};
             const performance = result.productPerformanceView || {};
 
-            const clicks = performance.clicks || 0;
-            const impressions = performance.impressions || 0;
-            const conversions = performance.conversions || 0;
-            const conversionValueMicros = performance.conversionValue?.amountMicros || 0;
-            const cogsMicros = performance.costOfGoodsSold?.amountMicros || 0;
+            const clicks = parseInt(performance.clicks || '0', 10);
+            const impressions = parseInt(performance.impressions || '0', 10);
+            const conversions = parseFloat(performance.conversions || '0');
+            const conversionValueMicros = parseInt(performance.conversionValue?.amountMicros || '0', 10);
+
+            // Note: Cost is not available directly in Merchant Center Reports API (requires Google Ads link)
+            // We set cost/roas to 0 for now unless we can link to Google Ads API later
+            const cogs = 0;
 
             // Calculate metrics
             const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
             const conversionValue = conversionValueMicros / 1000000;
-            const cogs = cogsMicros / 1000000;
             const roas = cogs > 0 ? conversionValue / cogs : 0;
             const cpa = conversions > 0 ? cogs / conversions : 0;
 
@@ -137,8 +142,8 @@ export async function POST(request: NextRequest) {
                 title: product.title,
                 brand: product.brand,
                 category: product.categoryL1 || 'Uncategorized',
-                subCategory: product.categoryL2,
-                price: (product.price?.amountMicros || 0) / 1000000,
+                subCategory: null, // Removed categoryL2 to avoid errors
+                price: (parseInt(product.price?.amountMicros || '0', 10)) / 1000000,
                 currency: product.price?.currencyCode || 'GBP',
 
                 // Performance metrics
@@ -147,9 +152,9 @@ export async function POST(request: NextRequest) {
                 ctr,
                 conversions,
                 conversionValue,
-                cost: cogs,
-                roas,
-                cpa,
+                cost: cogs, // Set to 0 as cost data requires Google Ads API
+                roas,       // Set to 0 as cost data requires Google Ads API
+                cpa,        // Set to 0 as cost data requires Google Ads API
 
                 // Competitive intelligence (to be populated if requested)
                 competitiveData: null,
