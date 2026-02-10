@@ -607,28 +607,28 @@ export default function SeoPpcOpportunitiesPage() {
     // Summary stats - calculate from filtered data
     const summary = useMemo(() => calculateSummary(filteredData), [filteredData]);
 
-    // Quick Wins Logic (Global Top 5)
+    // Quick Wins Logic (Top 5 based on current filters)
     const quickWins = useMemo(() => {
-        if (!data.length) return null;
+        if (!filteredData.length) return null;
 
-        // Use full dataset for global quick wins, regardless of current filters
-        const pausePpc = [...data]
+        // Use filtered dataset so quick wins reflect current view
+        const pausePpc = [...filteredData]
             .filter(r => r.action === 'Pause PPC')
             .sort((a, b) => b.cost_paid - a.cost_paid)
             .slice(0, 5);
 
-        const scaleSpend = [...data]
+        const scaleSpend = [...filteredData]
             .filter(r => r.action === 'Scale Spend')
             .sort((a, b) => (b.roas_paid || 0) - (a.roas_paid || 0))
             .slice(0, 5);
 
-        const seoFocus = [...data]
+        const seoFocus = [...filteredData]
             .filter(r => r.action === 'SEO Focus')
             .sort((a, b) => b.conversions_paid - a.conversions_paid)
             .slice(0, 5);
 
         return { pausePpc, scaleSpend, seoFocus };
-    }, [data]);
+    }, [filteredData]);
 
     // Chart data - calculate from filtered data
     const actionChartData = useMemo(() => prepareActionChartData(filteredData), [filteredData]);
