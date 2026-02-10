@@ -18,13 +18,15 @@ To access Google Ads data in your SEO/PPC Opportunity Finder, you need to comple
 
 ## 🔧 What You Need to Set Up
 
-### Step 1: Enable Google Ads API in Google Cloud Console
+### Step 1: Enable APIs in Google Cloud Console
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
 2. Select your project (the one with your OAuth credentials)
 3. Navigate to **APIs & Services** > **Library**
-4. Search for **"Google Ads API"**
-5. Click on **Google Ads API** and click **Enable**
+4. Enable the following APIs:
+   - **Google Ads API**
+   - **Content API for Shopping** (Crucial for Merchant Center access)
+   - **Google Merchant Center API** (Optional but recommended)
 
 ### Step 2: Apply for Google Ads Developer Token
 
@@ -112,19 +114,12 @@ After adding the developer token:
 - **Test Mode:** Your developer token will have "Test" status initially
 - **Limitations:** Test tokens can only access accounts you own/manage
 
-### Issue: 401/403 errors when fetching customers
+### Issue: "No Merchant Center access" error
 
-Check the browser console and server logs:
-
-```bash
-# Check server logs for detailed error messages
-```
-
-Common issues:
-- Developer token not set in `.env`
-- Developer token not approved
-- OAuth scope not granted during sign-in
-- Account doesn't have Ads access
+**Possible causes:**
+1. **Content API not enabled** - Go to Google Cloud Console > APIs & Services > Library and enable "Content API for Shopping".
+2. **Missing OAuth Scope** - The user must grant "Manage your product listings and accounts for Google Shopping" permission.
+3. **No Merchant Center Account** - The email address must be a user in a Merchant Center account.
 
 ---
 
