@@ -262,9 +262,11 @@ export default function SeoPpcOpportunitiesPage() {
             const res = await fetch("/api/gsc/properties");
             if (res.ok) {
                 const data = await res.json();
-                setGscProperties(data.sites || []);
-                if (data.sites?.length > 0) {
-                    setSelectedProperty(data.sites[0]);
+                // Extract siteUrl strings from the site objects
+                const siteUrls = (data.sites || []).map((site: any) => site.siteUrl || site);
+                setGscProperties(siteUrls);
+                if (siteUrls.length > 0) {
+                    setSelectedProperty(siteUrls[0]);
                 }
             }
         } catch (e) {
