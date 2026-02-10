@@ -56,100 +56,100 @@ export async function POST(request: NextRequest) {
             includeCompetitiveIntel
         });
 
-        // Fetch Shopping Ads performance from Merchant Center Reports API
-        // Try querying ProductView first to verify API access and table validity
-        const reportQuery = {
-            query: `
-                SELECT
-                    product_view.id,
-                    product_view.title,
-                    product_view.brand,
-                    product_view.category_l1,
-                    product_view.price.amount_micros,
-                    product_view.price.currency_code
-                FROM ProductView
-            `
-        };
+        // Switch to Direct Product List API (REST) since Reports API (MCQL) is failing with "invalid table name"
+        // This is a more robust way to get product data when Reports service is fickle.
+        // Endpoint: GET https://merchantapi.googleapis.com/products/v1beta/accounts/{merchantId}/products
+
+        console.log(`Fetching products list for merchant ${merchantId}...`);
 
         const response = await fetch(
-            `https://merchantapi.googleapis.com/reports/v1beta/accounts/${merchantId}/reports:search`,
+            `https://merchantapi.googleapis.com/products/v1beta/accounts/${merchantId}/products?pageSize=250`,
             {
-                method: 'POST',
+                method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${accessToken}`,
                     'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(reportQuery),
+                }
             }
         );
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('Merchant Center Reports API error:', {
+            console.error('Merchant Center Products List API error:', {
                 status: response.status,
                 statusText: response.statusText,
-                query: reportQuery,
                 error: errorText,
             });
 
-            if (response.status === 403 || response.status === 401) {
-                return NextResponse.json({
-                    products: [],
-                    error: `No access to Merchant Center Reports (Status ${response.status}). Please ensure your account has the necessary permissions.`,
-                    debug: errorText
-                });
-            }
-
+            // Fallback: If v1beta fails, try v1alpha (sometimes enabled differently)
+            // or return friendlier error
             return NextResponse.json(
-                { error: `Failed to fetch Shopping Ads performance: ${response.status} - ${errorText}` },
+                { error: `Failed to fetch products: ${response.status} - ${errorText}` },
                 { status: response.status }
             );
         }
 
         const data = await response.json();
 
+        // Data structure for Products List is { products: [ ... ] }
+        const productList = data.products || [];
+
         // Transform the response to a more usable format
-        const products = (data.results || []).map((result: any) => {
-            const product = result.productView || {};
-            // If performance view is requested but missing, default to empty object
-            // For the ProductView query, this will be empty
-            const performance = result.productPerformanceView || {};
+        const products = productList.map((product: any) => {
+            // Attributes are directly on the product object in Products List API
+            const attributes = product.attributes || {};
 
-            const clicks = parseInt(performance.clicks || '0', 10);
-            const impressions = parseInt(performance.impressions || '0', 10);
-            const conversions = parseFloat(performance.conversions || '0');
-            const conversionValueMicros = parseInt(performance.conversionValue?.amountMicros || '0', 10);
+            // Extract price (handling various formats)
+            let priceMicros = 0;
+            let currencyCode = 'GBP';
 
-            // Note: Cost is not available directly in Merchant Center Reports API (requires Google Ads link)
-            // We set cost/roas to 0 for now unless we can link to Google Ads API later
+            if (product.price?.amountMicros) {
+                priceMicros = parseInt(product.price.amountMicros, 10);
+                currencyCode = product.price.currencyCode;
+            } else if (attributes.price?.amountMicros) {
+                priceMicros = parseInt(attributes.price.amountMicros, 10);
+                currencyCode = attributes.price.currencyCode;
+            }
+
+            // Since we are not using Reports API, we don't have performance metrics here
+            // These will come from Google Ads API later
+            const clicks = 0;
+            const impressions = 0;
+            const conversions = 0;
+            const conversionValueMicros = 0;
             const cogs = 0;
 
-            // Calculate metrics
-            const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
-            const conversionValue = conversionValueMicros / 1000000;
-            const roas = cogs > 0 ? conversionValue / cogs : 0;
-            const cpa = conversions > 0 ? cogs / conversions : 0;
+            // Calculate metrics (defaults to 0)
+            const ctr = 0;
+            const conversionValue = 0;
+            const roas = 0;
+            const cpa = 0;
+
+            // Extract ID - In v1beta list, name is likely "accounts/{id}/products/{productId}"
+            // We want just the ID (usually the offerId)
+            const rawName = product.name || '';
+            const productId = product.offerId || rawName.split('/').pop() || 'unknown';
 
             return {
-                productId: product.id,
-                title: product.title,
-                brand: product.brand,
-                category: product.categoryL1 || 'Uncategorized',
-                subCategory: null, // Removed categoryL2 to avoid errors
-                price: (parseInt(product.price?.amountMicros || '0', 10)) / 1000000,
-                currency: product.price?.currencyCode || 'GBP',
+                productId: productId,
+                title: product.title || attributes.title || 'Untitled',
+                brand: product.brand || attributes.brand || '',
+                category: product.productTypes?.[0] || attributes.productTypes?.[0] || 'Uncategorized',
+                subCategory: null,
+                price: priceMicros / 1000000,
+                currency: currencyCode,
 
-                // Performance metrics
+                // Performance metrics (Placeholders until Google Ads integration)
                 clicks,
                 impressions,
                 ctr,
                 conversions,
                 conversionValue,
-                cost: cogs, // Set to 0 as cost data requires Google Ads API
-                roas,       // Set to 0 as cost data requires Google Ads API
-                cpa,        // Set to 0 as cost data requires Google Ads API
+                cost: cogs,
+                roas,
+                cpa,
 
-                // Competitive intelligence (to be populated if requested)
+                // Competitive intelligence (to be populated)
                 competitiveData: null,
             };
         });
