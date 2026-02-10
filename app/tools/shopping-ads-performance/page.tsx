@@ -398,7 +398,7 @@ export default function ShoppingAdsPerformancePage() {
                             Sign in with Google to analyze your Shopping Ads performance
                         </p>
                         <button
-                            onClick={() => signIn("google")}
+                            onClick={() => signIn("google", { callbackUrl: "/tools/shopping-ads-performance", prompt: "login consent" })}
                             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors"
                         >
                             Sign in with Google
