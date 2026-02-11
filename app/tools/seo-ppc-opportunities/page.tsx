@@ -1240,7 +1240,7 @@ export default function SeoPpcOpportunitiesPage() {
                                     <div className="space-y-3 pt-3">
                                         <div>
                                             <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 mb-1">Google Search Console (Performance Report)</p>
-                                            <p className="text-[10px] text-gray-500 mb-1">Export "Queries" report. Required columns:</p>
+                                            <p className="text-[10px] text-gray-500 mb-1">Export &quot;Queries&quot; report. Required columns:</p>
                                             <ul className="text-[10px] text-gray-600 dark:text-gray-400 list-disc pl-3 space-y-0.5">
                                                 <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Top queries</code> or <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Query</code></li>
                                                 <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Clicks</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Impressions</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Position</code></li>
