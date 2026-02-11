@@ -1,6 +1,5 @@
-
 import { NextResponse } from 'next/server';
-import { fetchDataForSEO } from '@/lib/dataforseo';
+import { fetchDataForSEO, getLocationCode, getLanguageCode } from '@/lib/dataforseo';
 import { extractDomain } from '@/lib/normalize';
 
 export async function POST(request: Request) {
@@ -12,11 +11,9 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Keyword is required' }, { status: 400 });
         }
 
-        // 1. Get Location and Language codes (using simple maps or defaults)
-        // These maps should ideally be imported from lib/dataforseo.ts but for now we'll match simple logic
-        // default 2826 (UK), 'en' (English)
-        const location_code = 2826;
-        const language_code = 'en';
+        // 1. Get Location and Language codes
+        const location_code = getLocationCode(location);
+        const language_code = getLanguageCode(language);
 
         // 2. Prepare DataForSEO request
         const payload = [{
@@ -53,13 +50,19 @@ export async function POST(request: Request) {
         const topResults = organicResults.slice(0, 10);
 
         const paidResults = items
-            .filter((item: any) => item.type === 'paid')
+            .filter((item: any) =>
+                item.type === 'paid' ||
+                item.type === 'google_ads_top' ||
+                item.type === 'google_ads_bottom' ||
+                item.type === 'google_ads_shopping'
+            )
             .map((item: any) => ({
                 rank: item.rank_absolute,
-                title: item.title,
-                url: item.url,
-                snippet: item.description,
-                domain: new URL(item.url).hostname.replace('www.', '')
+                title: item.title || item.description || 'Google Ad',
+                url: item.url || item.ad_link || '',
+                snippet: item.description || '',
+                domain: item.url ? new URL(item.url).hostname.replace('www.', '') :
+                    (item.ad_link ? new URL(item.ad_link).hostname.replace('www.', '') : '')
             }));
 
         // 5. Extract SERP Features

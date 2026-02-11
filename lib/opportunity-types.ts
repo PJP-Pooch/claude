@@ -12,6 +12,7 @@ export type OpportunityAction =
     | 'Reduce Spend'
     | 'Pause PPC'
     | 'Monitor'
+    | 'No Action'         // New: Default when no specific flag is triggered
     | 'Add Exact Match'   // New: Broad match with conversions
     | 'Scale Spend';      // New: High ROAS with low impression share
 
@@ -197,6 +198,7 @@ export interface ScatterPlotPoint {
     cost_paid: number;
     conversions_paid: number;
     action: OpportunityAction;
+    cpa_paid: number | null;
 }
 
 export interface ScoreDistribution {

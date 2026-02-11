@@ -3,6 +3,7 @@
 import { useSession, signIn, signOut } from "next-auth/react";
 import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import Papa from "papaparse";
 import {
     TrendingUp,
@@ -17,6 +18,11 @@ import {
     ExternalLink,
     Award,
     Upload,
+    ArrowLeft,
+    ArrowUpDown,
+    ArrowUp,
+    ArrowDown,
+    Search,
 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -188,6 +194,7 @@ export default function ShoppingAdsPerformancePage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [sortField, setSortField] = useState<keyof ShoppingProduct>("clicks");
     const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+    const [loadingCompetitiveData, setLoadingCompetitiveData] = useState<Set<string>>(new Set());
 
     // CSV Upload Logic
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -197,6 +204,12 @@ export default function ShoppingAdsPerformancePage() {
         if (typeof val === 'number') return val;
         if (!val) return 0;
         return parseFloat(val.toString().replace(/[£$,]/g, '').trim()) || 0;
+    };
+
+    const cleanNumber = (val: string | number): number => {
+        if (typeof val === 'number') return val;
+        if (!val) return 0;
+        return parseFloat(val.toString().replace(/[,]/g, '').trim()) || 0;
     };
 
     const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -230,10 +243,10 @@ export default function ShoppingAdsPerformancePage() {
                         // Normalize ID: remove channel prefixes (e.g. "online:en:GB:12345" -> "12345")
                         const normalizedId = rawId.split(':').pop()?.toLowerCase() || '';
 
-                        const clicks = cleanCurrency(row['Clicks'] || row['clicks']);
-                        const impressions = cleanCurrency(row['Impressions'] || row['Impr.'] || row['impressions']);
+                        const clicks = cleanNumber(row['Clicks'] || row['clicks']);
+                        const impressions = cleanNumber(row['Impressions'] || row['Impr.'] || row['impressions']);
                         const cost = cleanCurrency(row['Cost'] || row['cost']);
-                        const conversions = cleanCurrency(row['Conversions'] || row['conversions']);
+                        const conversions = cleanNumber(row['Conversions'] || row['conversions'] || row['Conv.'] || row['All conv.']);
                         const conversionValue = cleanCurrency(row['Conv. value'] || row['Conversion value'] || row['Total conv. value'] || row['All conv. value'] || row['conversion_value']);
 
                         metricsMap.set(rawId.toLowerCase(), { clicks, impressions, cost, conversions, conversionValue });
@@ -242,6 +255,10 @@ export default function ShoppingAdsPerformancePage() {
 
                     // Update products state with new metrics
                     setProducts(prevProducts => {
+                        let matchedCount = 0;
+                        let createdCount = 0;
+
+                        // First, try to update existing products
                         const updatedProducts = prevProducts.map(p => {
                             const pId = p.productId.toLowerCase();
                             // Try exact match or normalized match
@@ -266,12 +283,57 @@ export default function ShoppingAdsPerformancePage() {
                             }
                             return p;
                         });
-                        return updatedProducts;
-                    });
 
-                    setUploadStatus({
-                        message: `Successfully merged Google Ads data for ${matchedCount} products!`,
-                        type: 'success'
+                        // If no products exist, create products from CSV data
+                        if (prevProducts.length === 0) {
+                            const newProducts: ShoppingProduct[] = [];
+
+                            data.forEach(row => {
+                                const rawId = row['Item ID'] || row['Offer ID'] || row['Product ID'] || row['id'] || row['item_id'];
+                                if (!rawId) return;
+
+                                const title = row['Product title'] || row['Product'] || row['Item'] || rawId;
+                                const clicks = cleanNumber(row['Clicks'] || row['clicks']);
+                                const impressions = cleanNumber(row['Impressions'] || row['Impr.'] || row['impressions']);
+                                const cost = cleanCurrency(row['Cost'] || row['cost']);
+                                const conversions = cleanNumber(row['Conversions'] || row['conversions'] || row['Conv.'] || row['All conv.']);
+                                const conversionValue = cleanCurrency(row['Conv. value'] || row['Conversion value'] || row['Total conv. value'] || row['All conv. value'] || row['conversion_value']);
+
+                                newProducts.push({
+                                    productId: rawId,
+                                    title: title,
+                                    brand: row['Brand'] || 'Unknown',
+                                    category: row['Category'] || row['Product type'] || 'Uncategorized',
+                                    price: cleanCurrency(row['Price'] || 0),
+                                    currency: 'GBP',
+                                    clicks: clicks,
+                                    impressions: impressions,
+                                    ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
+                                    conversions: conversions,
+                                    conversionValue: conversionValue,
+                                    cost: cost,
+                                    roas: cost > 0 ? conversionValue / cost : 0,
+                                    cpa: conversions > 0 ? cost / conversions : 0,
+                                    competitiveData: null
+                                });
+                                createdCount++;
+                            });
+
+                            setUploadStatus({
+                                message: `Successfully created ${createdCount} products from Google Ads CSV!`,
+                                type: 'success'
+                            });
+
+                            return newProducts;
+                        }
+
+                        // Return updated products if we had existing products
+                        setUploadStatus({
+                            message: `Successfully merged Google Ads data for ${matchedCount} products!`,
+                            type: 'success'
+                        });
+
+                        return updatedProducts;
                     });
 
                     // Clear status after 5 seconds
@@ -349,7 +411,7 @@ export default function ShoppingAdsPerformancePage() {
                     merchantId: selectedMerchant,
                     startDate,
                     endDate,
-                    includeCompetitiveIntel,
+                    includeCompetitiveIntel: false, // Competitive data is now fetched per-product on-demand
                 }),
             });
 
@@ -399,6 +461,11 @@ export default function ShoppingAdsPerformancePage() {
         return filtered;
     }, [products, searchQuery, sortField, sortDirection]);
 
+    // Check if any products have competitive data
+    const hasCompetitiveData = useMemo(() => {
+        return products.some(p => p.competitiveData !== null);
+    }, [products]);
+
     // Calculate KPIs
     const kpis = useMemo(() => {
         const totalProducts = products.length;
@@ -426,6 +493,101 @@ export default function ShoppingAdsPerformancePage() {
         } else {
             setSortField(field);
             setSortDirection("desc");
+        }
+    };
+
+    // Fetch competitive data for a single product
+    const fetchCompetitiveDataForProduct = async (product: ShoppingProduct) => {
+        const productId = product.productId;
+
+        // Add to loading set
+        setLoadingCompetitiveData(prev => new Set(prev).add(productId));
+
+        try {
+            const searchQuery = `${product.brand} ${product.title}`.substring(0, 100);
+
+            const response = await fetch('/api/merchant/google-shopping/products', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    keyword: searchQuery,
+                    location_code: 2826, // UK
+                    language_code: 'en',
+                    depth: 40,
+                }),
+            });
+
+            if (response.ok) {
+                const competitiveData = await response.json();
+                const items = competitiveData.tasks?.[0]?.result?.[0]?.items || [];
+
+                if (items.length > 0) {
+                    // Find your product in the results
+                    const yourRank = items.findIndex((item: any) =>
+                        item.title?.toLowerCase().includes(product.title.toLowerCase().substring(0, 30))
+                    ) + 1;
+
+                    // Get competitor prices
+                    const prices = items
+                        .filter((item: any) => item.price)
+                        .map((item: any) => item.price)
+                        .sort((a: number, b: number) => a - b);
+
+                    const lowestPrice = prices[0] || product.price;
+                    const highestPrice = prices[prices.length - 1] || product.price;
+                    const avgPrice = prices.length > 0
+                        ? prices.reduce((sum: number, p: number) => sum + p, 0) / prices.length
+                        : product.price;
+
+                    // Determine price position
+                    let pricePosition = 'Competitive';
+                    if (product.price <= lowestPrice * 1.05) {
+                        pricePosition = 'Cheapest';
+                    } else if (product.price >= highestPrice * 0.95) {
+                        pricePosition = 'Premium';
+                    }
+
+                    // Get top competitor
+                    const topCompetitor = items[0];
+
+                    const newCompetitiveData = {
+                        yourRank: yourRank || null,
+                        competitorCount: items.length,
+                        lowestPrice,
+                        highestPrice,
+                        avgPrice,
+                        pricePosition,
+                        priceGap: product.price - lowestPrice,
+                        topCompetitor: topCompetitor ? {
+                            name: topCompetitor.seller_name || topCompetitor.shop_name,
+                            price: topCompetitor.price,
+                            domain: topCompetitor.domain,
+                        } : null,
+                    };
+
+                    // Update the product in state
+                    setProducts(prevProducts =>
+                        prevProducts.map(p =>
+                            p.productId === productId
+                                ? { ...p, competitiveData: newCompetitiveData }
+                                : p
+                        )
+                    );
+                }
+            } else {
+                console.error('Failed to fetch competitive data:', await response.text());
+            }
+        } catch (error) {
+            console.error(`Failed to fetch competitive data for ${product.title}:`, error);
+        } finally {
+            // Remove from loading set
+            setLoadingCompetitiveData(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(productId);
+                return newSet;
+            });
         }
     };
 
@@ -496,22 +658,85 @@ export default function ShoppingAdsPerformancePage() {
     if (status === "unauthenticated") {
         return (
             <ThemeProvider>
-                <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 max-w-md w-full text-center">
-                        <ShoppingCart className="h-16 w-16 text-blue-600 mx-auto mb-4" />
-                        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-                            Shopping Ads Performance
-                        </h1>
-                        <p className="text-gray-600 dark:text-gray-400 mb-6">
-                            Sign in with Google to analyze your Shopping Ads performance
-                        </p>
-                        <button
-                            onClick={() => signIn("google", { callbackUrl: "/tools/shopping-ads-performance", prompt: "login consent" })}
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors"
-                        >
-                            Sign in with Google
-                        </button>
-                    </div>
+                <div className="flex min-h-screen bg-gray-100 dark:bg-gray-900 transition-colors">
+                    {/* Sidebar */}
+                    <aside className="w-80 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex-shrink-0 flex flex-col fixed h-full z-10">
+                        <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+                            <Link
+                                href="/"
+                                className="flex items-center text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                            >
+                                <ArrowLeft className="w-5 h-5 mr-2" />
+                                <span className="font-medium">Back to Tools</span>
+                            </Link>
+                        </div>
+
+                        <div className="p-6 flex-1 overflow-y-auto">
+                            <div className="space-y-6">
+                                <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-800 relative">
+                                    <div className="absolute -top-2 -left-2">
+                                        <span className="relative flex h-4 w-4">
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-4 w-4 bg-blue-500"></span>
+                                        </span>
+                                    </div>
+                                    <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
+                                        Get Started
+                                    </h3>
+                                    <p className="text-sm text-blue-800 dark:text-blue-200">
+                                        Connect your Google account to access Merchant Center and analyze your Shopping Ads performance.
+                                    </p>
+                                </div>
+
+                                <button
+                                    onClick={() => signIn("google", { callbackUrl: "/tools/shopping-ads-performance", prompt: "login consent" })}
+                                    className="w-full flex items-center justify-center px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors shadow-sm hover:shadow-md group"
+                                >
+                                    <Image
+                                        src="https://www.google.com/favicon.ico"
+                                        alt="Google"
+                                        width={20}
+                                        height={20}
+                                        className="mr-3 filter brightness-0 invert"
+                                    />
+                                    Sign in with Google
+                                </button>
+                                <p className="text-xs text-center text-gray-500 dark:text-gray-400">
+                                    We only request read-only access to your Merchant Center data.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="p-6 border-t border-gray-200 dark:border-gray-700">
+                            <ThemeToggle />
+                        </div>
+                    </aside>
+
+                    {/* Main Content */}
+                    <main className="flex-1 ml-80 p-8 min-h-screen">
+                        <div className="w-full mx-auto">
+                            <div className="mb-8">
+                                <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-3">
+                                    Shopping Ads Performance
+                                </h1>
+                                <p className="text-lg text-gray-600 dark:text-gray-300">
+                                    Analyze your Shopping Ads performance and competitive intelligence.
+                                </p>
+                            </div>
+
+                            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-12 text-center">
+                                <div className="mx-auto w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-6">
+                                    <ShoppingCart className="w-8 h-8 text-gray-400 dark:text-gray-500" />
+                                </div>
+                                <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                                    Authentication Required
+                                </h2>
+                                <p className="text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+                                    Please sign in using the sidebar on the left to access your Merchant Center account and start analyzing your Shopping Ads data.
+                                </p>
+                            </div>
+                        </div>
+                    </main>
                 </div>
             </ThemeProvider>
         );
@@ -602,21 +827,6 @@ export default function ShoppingAdsPerformancePage() {
                                     ))}
                                 </select>
                             </div>
-
-                            {/* Competitive Intelligence Toggle */}
-                            <div className="flex items-end">
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={includeCompetitiveIntel}
-                                        onChange={(e) => setIncludeCompetitiveIntel(e.target.checked)}
-                                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                    />
-                                    <span className="text-sm text-gray-700 dark:text-gray-300">
-                                        Include Competitive Intelligence
-                                    </span>
-                                </label>
-                            </div>
                         </div>
 
                         {/* Custom Date Range */}
@@ -697,8 +907,8 @@ export default function ShoppingAdsPerformancePage() {
                         {/* Upload Status */}
                         {uploadStatus.message && (
                             <div className={`mt-4 rounded-lg p-3 text-sm flex items-center gap-2 ${uploadStatus.type === 'error'
-                                    ? 'bg-red-50 text-red-700 border border-red-200'
-                                    : 'bg-green-50 text-green-700 border border-green-200'
+                                ? 'bg-red-50 text-red-700 border border-red-200'
+                                : 'bg-green-50 text-green-700 border border-green-200'
                                 }`}>
                                 <AlertCircle className="h-4 w-4" />
                                 {uploadStatus.message}
@@ -771,34 +981,100 @@ export default function ShoppingAdsPerformancePage() {
                                     <table className="w-full">
                                         <thead className="bg-gray-50 dark:bg-gray-700">
                                             <tr>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-24">
+                                                    Actions
+                                                </th>
                                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600" onClick={() => handleSort("title")}>
-                                                    Product
+                                                    <div className="flex items-center gap-1">
+                                                        Product
+                                                        {sortField === "title" ? (
+                                                            sortDirection === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                                                        ) : (
+                                                            <ArrowUpDown className="w-3 h-3 opacity-30" />
+                                                        )}
+                                                    </div>
                                                 </th>
                                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600" onClick={() => handleSort("price")}>
-                                                    Price
+                                                    <div className="flex items-center gap-1">
+                                                        Price
+                                                        {sortField === "price" ? (
+                                                            sortDirection === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                                                        ) : (
+                                                            <ArrowUpDown className="w-3 h-3 opacity-30" />
+                                                        )}
+                                                    </div>
                                                 </th>
                                                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600" onClick={() => handleSort("clicks")}>
-                                                    Clicks
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        Clicks
+                                                        {sortField === "clicks" ? (
+                                                            sortDirection === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                                                        ) : (
+                                                            <ArrowUpDown className="w-3 h-3 opacity-30" />
+                                                        )}
+                                                    </div>
                                                 </th>
                                                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600" onClick={() => handleSort("impressions")}>
-                                                    Impr.
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        Impr.
+                                                        {sortField === "impressions" ? (
+                                                            sortDirection === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                                                        ) : (
+                                                            <ArrowUpDown className="w-3 h-3 opacity-30" />
+                                                        )}
+                                                    </div>
                                                 </th>
                                                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600" onClick={() => handleSort("ctr")}>
-                                                    CTR
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        CTR
+                                                        {sortField === "ctr" ? (
+                                                            sortDirection === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                                                        ) : (
+                                                            <ArrowUpDown className="w-3 h-3 opacity-30" />
+                                                        )}
+                                                    </div>
                                                 </th>
                                                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600" onClick={() => handleSort("conversions")}>
-                                                    Conv.
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        Conv.
+                                                        {sortField === "conversions" ? (
+                                                            sortDirection === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                                                        ) : (
+                                                            <ArrowUpDown className="w-3 h-3 opacity-30" />
+                                                        )}
+                                                    </div>
                                                 </th>
                                                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600" onClick={() => handleSort("cost")}>
-                                                    Cost
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        Cost
+                                                        {sortField === "cost" ? (
+                                                            sortDirection === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                                                        ) : (
+                                                            <ArrowUpDown className="w-3 h-3 opacity-30" />
+                                                        )}
+                                                    </div>
                                                 </th>
                                                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600" onClick={() => handleSort("roas")}>
-                                                    ROAS
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        ROAS
+                                                        {sortField === "roas" ? (
+                                                            sortDirection === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                                                        ) : (
+                                                            <ArrowUpDown className="w-3 h-3 opacity-30" />
+                                                        )}
+                                                    </div>
                                                 </th>
                                                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600" onClick={() => handleSort("cpa")}>
-                                                    CPA
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        CPA
+                                                        {sortField === "cpa" ? (
+                                                            sortDirection === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                                                        ) : (
+                                                            <ArrowUpDown className="w-3 h-3 opacity-30" />
+                                                        )}
+                                                    </div>
                                                 </th>
-                                                {includeCompetitiveIntel && (
+                                                {hasCompetitiveData && (
                                                     <>
                                                         <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                                                             Rank
@@ -819,6 +1095,35 @@ export default function ShoppingAdsPerformancePage() {
                                         <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                             {filteredProducts.map((product) => (
                                                 <tr key={product.productId} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                                    <td className="px-6 py-4">
+                                                        {product.competitiveData ? (
+                                                            <button
+                                                                onClick={() => fetchCompetitiveDataForProduct(product)}
+                                                                disabled={loadingCompetitiveData.has(product.productId)}
+                                                                className="p-2 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors disabled:opacity-50"
+                                                                title="Refresh competitive data"
+                                                            >
+                                                                {loadingCompetitiveData.has(product.productId) ? (
+                                                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                                                ) : (
+                                                                    <Search className="h-4 w-4" />
+                                                                )}
+                                                            </button>
+                                                        ) : (
+                                                            <button
+                                                                onClick={() => fetchCompetitiveDataForProduct(product)}
+                                                                disabled={loadingCompetitiveData.has(product.productId)}
+                                                                className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors disabled:opacity-50"
+                                                                title="Fetch competitive intelligence"
+                                                            >
+                                                                {loadingCompetitiveData.has(product.productId) ? (
+                                                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                                                ) : (
+                                                                    <Search className="h-4 w-4" />
+                                                                )}
+                                                            </button>
+                                                        )}
+                                                    </td>
                                                     <td className="px-6 py-4">
                                                         <div className="text-sm font-medium text-gray-900 dark:text-white">
                                                             {product.title}
@@ -853,7 +1158,7 @@ export default function ShoppingAdsPerformancePage() {
                                                     <td className="px-6 py-4 text-sm text-right text-gray-900 dark:text-white">
                                                         {formatCurrency(product.cpa, product.currency)}
                                                     </td>
-                                                    {includeCompetitiveIntel && (
+                                                    {hasCompetitiveData && (
                                                         <>
                                                             <td className="px-6 py-4 text-sm text-center">
                                                                 {product.competitiveData?.yourRank ? (

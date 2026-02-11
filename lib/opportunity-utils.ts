@@ -82,16 +82,22 @@ export function classifyAction(row: Omit<MergedOpportunityRow, 'action' | 'oppor
     const hasSignificantOrgData = impressions_org >= 100;
     const hasConversions = conversions_paid >= 1;
 
-    // SEO Focus criteria: meaningful PPC activity (clicks > 1 OR conversions > 1)
-    const hasMeaningfulPaidActivity = clicks_paid > 1 || conversions_paid > 1;
+    // SEO Focus criteria: meaningful PPC activity (clicks >= 1 OR conversions >= 1)
+    const hasMeaningfulPaidActivity = clicks_paid >= 1 || conversions_paid >= 1;
 
     // ROAS efficiency thresholds
     const isPaidProfitable = roas_paid !== null && roas_paid >= 2;
     const isPaidHighlyProfitable = roas_paid !== null && roas_paid >= 4;
     const isPaidUnprofitable = roas_paid !== null && roas_paid < 2;
 
-    // Match type checks (broad/phrase match with conversions = expansion opportunity)
-    const isBroadOrPhrase = matchType === 'broad' || matchType === 'phrase' || matchType === 'near_exact';
+    // Normalize matchType for comparison
+    const matchTypeLower = (matchType || '').toLowerCase();
+    const isBroadOrPhrase =
+        matchTypeLower === 'broad' ||
+        matchTypeLower === 'phrase' ||
+        matchTypeLower === 'b' ||
+        matchTypeLower === 'p' ||
+        matchTypeLower === 'near_exact';
 
     // Impression share checks (low share = scaling opportunity)
     const hasLowImpressionShare = impressionShare !== null && impressionShare !== undefined && impressionShare < 0.5;
@@ -120,14 +126,14 @@ export function classifyAction(row: Omit<MergedOpportunityRow, 'action' | 'oppor
 
     // --- PRIORITY 2: No organic presence but paid is converting ---
     // This is a clear SEO opportunity - proven demand with no organic capture
-    // Requires meaningful PPC activity (clicks > 1 OR conversions > 1)
+    // Requires meaningful PPC activity (clicks >= 1 OR conversions >= 1)
     if (position_org === 0 && hasMeaningfulPaidActivity) {
         return 'SEO Focus';
     }
 
     // --- PRIORITY 3: Striking distance (11-20) with proven demand ---
     // These should be SEO focus, NOT PPC activation
-    // Requires meaningful PPC activity (clicks > 1 OR conversions > 1)
+    // Requires meaningful PPC activity (clicks >= 1 OR conversions >= 1)
     if (position_org > 10 && position_org <= 20 && hasMeaningfulPaidActivity) {
         return 'SEO Focus';
     }
@@ -140,7 +146,7 @@ export function classifyAction(row: Omit<MergedOpportunityRow, 'action' | 'oppor
 
     // --- PRIORITY 5: Low organic ranking (20+) with paid conversions ---
     // Long-term SEO play for proven converting terms
-    // Requires meaningful PPC activity (clicks > 1 OR conversions > 1)
+    // Requires meaningful PPC activity (clicks >= 1 OR conversions >= 1)
     if (position_org > 20 && hasMeaningfulPaidActivity && isPaidProfitable) {
         return 'SEO Focus';
     }
@@ -153,8 +159,9 @@ export function classifyAction(row: Omit<MergedOpportunityRow, 'action' | 'oppor
 
     // --- PRIORITY 7: Ranking 11-20 with no paid data ---
     // Striking distance - push with SEO, don't start PPC
+    // Changed to No Action to strictly enforce "SEO Focus = >1 PPC Click" rule
     if (position_org > 10 && position_org <= 20 && cost_paid === 0) {
-        return 'SEO Focus';
+        return 'No Action';
     }
 
     // --- PRIORITY 8: Good organic with no paid activity ---
@@ -174,8 +181,8 @@ export function classifyAction(row: Omit<MergedOpportunityRow, 'action' | 'oppor
         return 'Consider PPC';
     }
 
-    // Default: Monitor for everything else
-    return 'Monitor';
+    // Default: No Action for everything else
+    return 'No Action';
 }
 
 /**
@@ -200,8 +207,8 @@ export function getActionReason(row: Omit<MergedOpportunityRow, 'action' | 'oppo
     const isBroadOrPhrase = matchType === 'broad' || matchType === 'phrase' || matchType === 'near_exact';
     const hasLowImpressionShare = impressionShare !== null && impressionShare !== undefined && impressionShare < 0.5;
 
-    // SEO Focus criteria: meaningful PPC activity (clicks > 1 OR conversions > 1)
-    const hasMeaningfulPaidActivity = clicks_paid > 1 || conversions_paid > 1;
+    // SEO Focus criteria: meaningful PPC activity (clicks >= 1 OR conversions >= 1)
+    const hasMeaningfulPaidActivity = clicks_paid >= 1 || conversions_paid >= 1;
 
     switch (action) {
         case 'Add Exact Match':
@@ -229,6 +236,9 @@ export function getActionReason(row: Omit<MergedOpportunityRow, 'action' | 'oppo
         case 'Monitor':
             if (position_org > 0 && position_org <= 10 && cost_paid === 0) return `Already winning organically (Top 10) with no ad spend. Maintain current performance.`;
             return `Current performance is stable. No immediate high-impact action required.`;
+        case 'No Action':
+            if (position_org > 10 && position_org <= 20 && cost_paid === 0) return `Ranking in striking distance (Page 2) with no paid activity. Not flagged as 'SEO Focus' due to lack of paid validation.`;
+            return `No specific opportunity flag triggered based on current data.`;
         default:
             return `General opportunity derived from performance analysis.`;
     }
@@ -316,6 +326,7 @@ export function computeOpportunityScore(row: Omit<MergedOpportunityRow, 'opportu
         'Activate PPC (Pos)': 1.0,   // Test opportunity
         'Consider PPC': 0.9,         // Speculative
         'Monitor': 0.6,              // Low priority: already optimized
+        'No Action': 0.1,            // Lowest priority
     };
     const actionMultiplier = actionMultipliers[action] ?? 1;
 
@@ -473,6 +484,7 @@ export function calculateSummary(data: MergedOpportunityRow[]): OpportunitySumma
         'Monitor': 0,
         'Add Exact Match': 0,
         'Scale Spend': 0,
+        'No Action': 0,
     };
 
     let totalSpend = 0;
@@ -596,6 +608,7 @@ export function prepareScatterData(data: MergedOpportunityRow[], limit = 200): S
         cost_paid: row.cost_paid,
         conversions_paid: row.conversions_paid,
         action: row.action,
+        cpa_paid: row.cpa_paid,
     }));
 }
 
@@ -768,6 +781,7 @@ export function getActionColor(action: OpportunityAction): string {
         'Reduce Spend': '#ef4444',      // Red
         'Pause PPC': '#ec4899',         // Pink
         'Monitor': '#cbd5e1',           // Light Gray
+        'No Action': '#f1f5f9',         // Very Light Gray / Slate 100
     };
     return colors[action];
 }
@@ -948,6 +962,14 @@ export function generateMockSerpAnalysis(query: string, action?: OpportunityActi
                 action: "Continue Current Strategy",
                 reasoning: "Metrics are stable and within acceptable range. No immediate action needed, but review monthly.",
                 impact: "Low - Maintain status quo",
+                difficulty: "Low"
+            }
+        ],
+        'No Action': [
+            {
+                action: "No Specific Action Required",
+                reasoning: "Current data does not indicate any significant opportunity or issue. Continue data collection.",
+                impact: "None",
                 difficulty: "Low"
             }
         ]
