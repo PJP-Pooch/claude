@@ -25,6 +25,7 @@ import {
     RefreshCw,
     ChevronDown,
     ChevronUp,
+    ChevronRight,
     ArrowUpDown,
     Filter,
     Loader2,
@@ -50,6 +51,9 @@ import {
     Upload,
     Check,
     Globe,
+    Tags,
+    FileText,
+    ExternalLink,
 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 
@@ -58,9 +62,11 @@ import {
     OpportunityAction,
     GscQueryRow,
     AdsSearchTermRow,
+    KeywordMetricsRow,
     GoogleAdsCustomer,
     DatePreset,
     SerpAnalysis,
+    CampaignReportRow,
 } from "@/lib/opportunity-types";
 import {
     mergeDatasets,
@@ -155,32 +161,54 @@ const ACTION_DEFINITIONS: Record<string, { definition: string; rule: string; col
         rule: "Organic position > 10 (or 0) AND meaningful paid activity (>=1 click/conv).",
         color: "#10b981"
     },
-    "Pause PPC": {
-        definition: "Keywords where organic ranking is strong enough to capture traffic, while paid ads are underperforming.",
-        rule: "Organic position 1-3 AND paid ROAS < 2.",
-        color: "#ec4899"
-    },
-    "Reduce Spend": {
-        definition: "Keywords with strong organic presence where PPC is stable but not highly profitable.",
-        rule: "Organic position 1-3 but paid ROAS < 4.",
+    "Test PPC Pause": {
+        definition: "Strong Organic presence (Pos 1-3) with unprofitable ads. Safe to test pausing if Coverage (COV) is high or NOT a brand term.",
+        rule: "Organic 1-3 + ROAS < Avg + (High COV or NOT Brand).",
         color: "#ef4444"
     },
-    "Investigate": {
-        definition: "Keywords with good organic rank but unexpectedly low CTR. Suggests title/meta tag or relevance issues.",
-        rule: "Organic position 1-10 but CTR < 50% of expected benchmark.",
+    "Reduce Spend": {
+        definition: "Strong organic presence where paid spend is inefficient. Prioritized if cross-channel coverage (Shopping/PMax) exists.",
+        rule: "Organic 1-3 + ROAS < Target + Multi-channel coverage.",
         color: "#f59e0b"
     },
-    "Increase Spend (CTR)": {
-        definition: "Profitable keywords with decent organic ranking on Page 1 that could benefit from more aggressive bidding.",
-        rule: "Organic position 4-10 and paid ROAS >= 4.",
+    "Investigate": {
+        definition: "Good organic ranking but suspiciously low CTR. Check for title issues or SERP feature displacement.",
+        rule: "Organic 1-10 + CTR < 50% of expected.",
         color: "#8b5cf6"
     },
+    "Increase Spend (CTR)": {
+        definition: "Winning organically (Pos 4-10) and profitable on paid. Push harder to dominate SERP.",
+        rule: "Organic 4-10 + High ROAS.",
+        color: "#ec4899"
+    },
     "Consider PPC": {
-        definition: "Potential opportunities where organic visibility is zero. Test with PPC to gauge conversion potential.",
-        rule: "Organic position 0, high impressions, but no existing paid data.",
+        definition: "No organic presence. Test small PPC budget to validate demand.",
+        rule: "Pos 0 + No Paid Data (but high impressions).",
         color: "#6366f1"
+    },
+    "Defend": {
+        definition: "Protect high-value terms where you have organic dominance but face intense auction pressure.",
+        rule: "Org 1-5 + Profitable Paid + Comp Score >= 60.",
+        color: "#7c3aed"
+    },
+    "Investigate PPC": {
+        definition: "High spend keywords with zero conversions. Significant waste that needs immediate stopping or reassessing.",
+        rule: "Cost > £50 + 0 Conversions.",
+        color: "#dc2626"
     }
 };
+
+const MARKET_OPTIONS = [
+    { value: "United Kingdom", emoji: "🇬🇧" },
+    { value: "United States", emoji: "🇺🇸" },
+    { value: "Canada", emoji: "🇨🇦" },
+    { value: "Australia", emoji: "🇦🇺" },
+    { value: "Germany", emoji: "🇩🇪" },
+    { value: "France", emoji: "🇫🇷" },
+    { value: "Spain", emoji: "🇪🇸" },
+    { value: "Italy", emoji: "🇮🇹" },
+    { value: "Netherlands", emoji: "🇳🇱" },
+];
 
 function ActionLegend({ expanded, onToggle }: { expanded: boolean; onToggle: () => void }) {
     return (
@@ -327,6 +355,10 @@ function QuickWinCard({
 export default function SeoPpcOpportunitiesPage() {
     const { data: session, status } = useSession();
 
+    useEffect(() => {
+        console.log("Session Status:", status);
+    }, [status]);
+
     // State
     const [mockMode, setMockMode] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -336,6 +368,7 @@ export default function SeoPpcOpportunitiesPage() {
     // GSC state
     const [gscProperties, setGscProperties] = useState<string[]>([]);
     const [selectedProperty, setSelectedProperty] = useState<string>("");
+    const [selectedLocation, setSelectedLocation] = useState<string>("United Kingdom");
 
     // Google Ads state
     const [adsCustomers, setAdsCustomers] = useState<GoogleAdsCustomer[]>([]);
@@ -350,20 +383,43 @@ export default function SeoPpcOpportunitiesPage() {
     const [data, setData] = useState<MergedOpportunityRow[]>([]);
     const [rawGscData, setRawGscData] = useState<GscQueryRow[]>([]);
     const [rawAdsData, setRawAdsData] = useState<AdsSearchTermRow[]>([]);
+    const [rawCampaignData, setRawCampaignData] = useState<CampaignReportRow[]>([]);
+    const [keywordMetricsData, setKeywordMetricsData] = useState<KeywordMetricsRow[]>([]);
     const [missingImpressionShareColumn, setMissingImpressionShareColumn] = useState<boolean>(false);
     const [currencyCode, setCurrencyCode] = useState<string>("GBP");
 
+    // Settings State
+    const [dfsLogin, setDfsLogin] = useState<string>("");
+    const [dfsPassword, setDfsPassword] = useState<string>("");
+    const [showSettings, setShowSettings] = useState(false);
+    const [showCsvRequirements, setShowCsvRequirements] = useState(false);
+
+    // Brand settings
+    const [brandTermsInput, setBrandTermsInput] = useState<string>("");
+    const [brandTerms, setBrandTerms] = useState<string[]>([]);
+
     // Table state
-    const [sortKey, setSortKey] = useState<keyof MergedOpportunityRow>("opportunity_score");
+    const [sortKey, setSortKey] = useState<keyof MergedOpportunityRow>("projected_savings_score");
     const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+    const [expandedQueries, setExpandedQueries] = useState<Set<string>>(new Set());
+
+    const toggleQueryExpansion = (query: string) => {
+        setExpandedQueries(prev => {
+            const next = new Set(prev);
+            if (next.has(query)) next.delete(query);
+            else next.add(query);
+            return next;
+        });
+    };
 
     // Merge data whenever raw sources change
+    // Also re-run when brand terms change
     useEffect(() => {
         if (rawGscData.length || rawAdsData.length) {
-            const merged = mergeDatasets(rawGscData, rawAdsData);
+            const merged = mergeDatasets(rawGscData, rawAdsData, brandTerms, keywordMetricsData, rawCampaignData);
             setData(merged);
         }
-    }, [rawGscData, rawAdsData]);
+    }, [rawGscData, rawAdsData, brandTerms, keywordMetricsData, rawCampaignData]);
     const [filterActions, setFilterActions] = useState<OpportunityAction[]>([]);
     const toggleAction = (action: OpportunityAction) => {
         setFilterActions(prev =>
@@ -375,14 +431,18 @@ export default function SeoPpcOpportunitiesPage() {
     const [filterCampaign, setFilterCampaign] = useState<string>("all");
     const [filterAdGroup, setFilterAdGroup] = useState<string>("all");
     const [searchQuery, setSearchQuery] = useState<string>("");
+    const [searchMode, setSearchMode] = useState<'contains' | 'equals' | 'regex'>('contains');
     const [showTop, setShowTop] = useState<number>(100);
 
     // File upload ref
     const fileInputRef = useRef<HTMLInputElement>(null);
     const fileInputRefGsc = useRef<HTMLInputElement>(null);
+    const fileInputRefKeyword = useRef<HTMLInputElement>(null);
+    const fileInputRefCampaign = useRef<HTMLInputElement>(null);
 
     // Analysis state
     const [analysisModalOpen, setAnalysisModalOpen] = useState(false);
+    const [selectedRow, setSelectedRow] = useState<MergedOpportunityRow | null>(null);
     const [analysisData, setAnalysisData] = useState<SerpAnalysis | null>(null);
     const [analysisLoading, setAnalysisLoading] = useState(false);
     const [analysisError, setAnalysisError] = useState<string | null>(null);
@@ -396,12 +456,16 @@ export default function SeoPpcOpportunitiesPage() {
         charts: true,
         table: true,
         legend: false, // Hidden by default
+        scoring: false, // Hidden by default
     });
 
     const clearAllData = useCallback(() => {
         setData([]);
+        setData([]);
         setRawGscData([]);
         setRawAdsData([]);
+        setKeywordMetricsData([]);
+        setRawCampaignData([]);
         setSelectedProperty("");
         setError(null);
         setProgress("");
@@ -433,6 +497,14 @@ export default function SeoPpcOpportunitiesPage() {
         return getDateRangeFromPreset(datePreset);
     }, [datePreset, customStartDate, customEndDate]);
 
+    // Sync brandTermsInput to brandTerms
+    useEffect(() => {
+        const terms = brandTermsInput.split(',')
+            .map(t => t.trim().toLowerCase())
+            .filter(t => t.length > 0);
+        setBrandTerms(terms);
+    }, [brandTermsInput]);
+
     // Fetch and update data
     const handleFetchData = useCallback(async () => {
         setLoading(true);
@@ -441,8 +513,10 @@ export default function SeoPpcOpportunitiesPage() {
 
         // Clear existing data to avoid stale state
         setData([]);
+        setData([]);
         setRawGscData([]);
         setRawAdsData([]);
+        setRawCampaignData([]);
 
         try {
             const startDate = formatDateForApi(dateRange.start);
@@ -539,6 +613,123 @@ export default function SeoPpcOpportunitiesPage() {
         }
     }, [mockMode, selectedProperty, selectedCustomer, dateRange]);
 
+    // Helper to clean currency/number strings
+    const cleanNum = (val: any): number => {
+        if (typeof val === 'number') return val;
+        if (!val) return 0;
+        // Handle commas, currency symbols, percentages
+        return parseFloat(String(val).replace(/[£$,%]/g, '').trim()) || 0;
+    };
+
+    // Helper for percentages (e.g. "10.5%" -> 0.105)
+    const cleanPercent = (val: any): number | null => {
+        if (val === null || val === undefined || val === '') return null;
+        const str = String(val).trim();
+        if (str === '--') return null;
+        if (str.includes('< 10%')) return 0.05;
+        if (str.includes('> 90%')) return 0.95;
+
+        const num = parseFloat(str.replace(/[%]/g, ''));
+        if (isNaN(num)) return null;
+
+        // Standardize: if string had %, divide by 100.
+        if (str.includes('%')) return num / 100;
+        return num <= 1 ? num : num / 100;
+    };
+
+    // Handle CSV Upload for Campaign Report
+    const handleCampaignFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        setProgress("Parsing Campaign CSV...");
+
+        Papa.parse(file, {
+            header: false,
+            skipEmptyLines: true,
+            complete: (results) => {
+                try {
+                    const rawData = results.data as string[][];
+                    if (!rawData || rawData.length === 0) {
+                        setError('Campaign CSV appears empty.');
+                        setProgress("");
+                        return;
+                    }
+
+                    // Find header row
+                    // Look for standard columns: Campaign, Cost, Clicks, etc.
+                    const headerIndex = rawData.findIndex(row =>
+                        row.some(cell => {
+                            const c = String(cell).toLowerCase().trim();
+                            return c === 'campaign' && row.some(x => String(x).toLowerCase().trim() === 'cost');
+                        })
+                    );
+
+                    if (headerIndex === -1 || !rawData[headerIndex]) {
+                        setError("Could not find Campaign Report headers (Campaign, Cost).");
+                        setProgress("");
+                        return;
+                    }
+
+                    const headers = rawData[headerIndex].map(h => String(h).trim().toLowerCase());
+                    const rows = rawData.slice(headerIndex + 1);
+                    const findCol = (names: string[]) => headers.findIndex(h => names.includes(h));
+
+                    const campIdx = findCol(['campaign']);
+                    const typeIdx = findCol(['campaign type']);
+                    const costIdx = findCol(['cost']);
+                    const clicksIdx = findCol(['clicks']);
+                    const convIdx = findCol(['conversions']);
+                    const valIdx = findCol(['conv. value', 'conversion value']);
+                    const isIdx = findCol(['search impr. share', 'impr. share']);
+                    const statusIdx = findCol(['campaign status', 'status']);
+                    const reasonsIdx = findCol(['status reasons']); // "Budget constrained" etc.
+                    const bidStratIdx = findCol(['bid strategy type']);
+                    const budgetIdx = findCol(['budget']);
+
+                    if (campIdx === -1) {
+                        setError("Campaign CSV must have 'Campaign' column.");
+                        setProgress("");
+                        return;
+                    }
+
+                    const campRows: CampaignReportRow[] = rows
+                        .filter(row => row[campIdx] && String(row[campIdx]).trim() !== '')
+                        .map(row => {
+                            return {
+                                campaign: String(row[campIdx]),
+                                campaignType: typeIdx >= 0 ? String(row[typeIdx]) : 'Search',
+                                cost: costIdx >= 0 ? cleanNum(row[costIdx]) : 0,
+                                clicks: clicksIdx >= 0 ? cleanNum(row[clicksIdx]) : 0,
+                                conversions: convIdx >= 0 ? cleanNum(row[convIdx]) : 0,
+                                convValue: valIdx >= 0 ? cleanNum(row[valIdx]) : 0,
+                                searchImprShare: isIdx >= 0 ? cleanPercent(row[isIdx]) : null,
+                                status: statusIdx >= 0 ? String(row[statusIdx]) : '',
+                                statusReasons: reasonsIdx >= 0 ? String(row[reasonsIdx]) : '',
+                                bidStrategyType: bidStratIdx >= 0 ? String(row[bidStratIdx]) : '',
+                                budget: budgetIdx >= 0 ? cleanNum(row[budgetIdx]) : null
+                            };
+                        });
+
+                    if (campRows.length === 0) {
+                        setError("No valid campaigns found.");
+                        setProgress("");
+                        return;
+                    }
+
+                    setRawCampaignData(campRows);
+                    setProgress("");
+                    setError(null);
+                    if (fileInputRefCampaign.current) fileInputRefCampaign.current.value = '';
+
+                } catch (e) {
+                    setError("Campaign CSV Parse Error: " + String(e));
+                    setProgress("");
+                }
+            }
+        });
+    };
+
     // Handle CSV Upload for GSC
     const handleGscFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -547,53 +738,62 @@ export default function SeoPpcOpportunitiesPage() {
         setProgress("Parsing GSC CSV...");
 
         Papa.parse(file, {
-            header: true,
+            header: false,
             skipEmptyLines: true,
             complete: (results) => {
                 try {
-                    const rows = results.data as Record<string, any>[];
-                    if (!rows || rows.length === 0) {
-                        setError('GSC CSV appears empty or invalid.');
+                    const rawData = results.data as string[][];
+                    if (!rawData || rawData.length === 0) {
+                        setError('GSC CSV appears empty.');
                         setProgress("");
                         return;
                     }
 
-                    // Helper to clean number strings
-                    const cleanNumber = (val: any): number => {
-                        if (typeof val === 'number') return val;
-                        if (!val) return 0;
-                        return parseFloat(String(val).replace(/[,%]/g, '').trim()) || 0;
-                    };
+                    // Find header row
+                    const headerIndex = rawData.findIndex(row =>
+                        row.some(cell => {
+                            const c = String(cell).toLowerCase().trim();
+                            return c === 'query' || c === 'top queries' || c === 'clicks';
+                        })
+                    );
+
+                    if (headerIndex === -1 || !rawData[headerIndex]) {
+                        setError("Could not find GSC headers. Expected 'Query' or 'Top queries'.");
+                        setProgress("");
+                        return;
+                    }
+
+                    const headers = rawData[headerIndex].map(h => String(h).trim().toLowerCase());
+                    const rows = rawData.slice(headerIndex + 1);
+
+                    const findCol = (names: string[]) => headers.findIndex(h => names.includes(h));
+                    const queryIdx = findCol(['query', 'top queries']);
+                    const clicksIdx = findCol(['clicks']);
+                    const imprIdx = findCol(['impressions']);
+                    const posIdx = findCol(['position']);
+
+                    if (queryIdx === -1 || clicksIdx === -1) {
+                        setError("GSC CSV missing required columns (Query, Clicks).");
+                        setProgress("");
+                        return;
+                    }
 
                     const gscRows: GscQueryRow[] = rows
-                        .filter(row => (row['Top queries'] || row['Query'] || row['query']))
+                        .filter(row => row[queryIdx] && String(row[queryIdx]).trim() !== '')
                         .map(row => {
-                            const query = row['Top queries'] || row['Query'] || row['query'] || '';
-                            const clicks = cleanNumber(row['Clicks'] || row['clicks']);
-                            const impressions = cleanNumber(row['Impressions'] || row['impressions']);
-                            const posVal = row['Position'] || row['position'];
-                            const position = cleanNumber(posVal);
-
-                            // Handle CTR %
-                            let finalCtr = 0;
-                            const ctrVal = row['CTR'] || row['ctr'];
-                            if (typeof ctrVal === 'string' && ctrVal.includes('%')) {
-                                finalCtr = parseFloat(ctrVal.replace('%', '')) / 100;
-                            } else {
-                                finalCtr = cleanNumber(ctrVal);
-                            }
-
+                            const clicks = cleanNum(row[clicksIdx]);
+                            const impressions = cleanNum(row[imprIdx]);
                             return {
-                                query,
+                                query: String(row[queryIdx]),
                                 clicks,
                                 impressions,
-                                ctr: finalCtr,
-                                position
+                                ctr: impressions > 0 ? clicks / impressions : 0,
+                                position: cleanNum(row[posIdx])
                             };
                         });
 
                     if (gscRows.length === 0) {
-                        setError("No valid queries found in CSV. Expected column 'Top queries' or 'Query'.");
+                        setError("No valid queries found in CSV.");
                         setProgress("");
                         return;
                     }
@@ -601,19 +801,11 @@ export default function SeoPpcOpportunitiesPage() {
                     setRawGscData(gscRows);
                     setProgress("");
                     setError(null);
-
-                    // Reset input
                     if (fileInputRefGsc.current) fileInputRefGsc.current.value = '';
-
                 } catch (e) {
-                    console.error("GSC CSV Parse Error:", e);
-                    setError("Failed to parse GSC CSV: " + String(e));
+                    setError("GSC Parse Error: " + String(e));
                     setProgress("");
                 }
-            },
-            error: (err) => {
-                setError("GSC CSV Error: " + err.message);
-                setProgress("");
             }
         });
     };
@@ -623,113 +815,78 @@ export default function SeoPpcOpportunitiesPage() {
         const file = event.target.files?.[0];
         if (!file) return;
 
-        setProgress("Parsing CSV...");
+        setProgress("Parsing Ads CSV...");
 
         Papa.parse(file, {
-            header: true,
+            header: false,
             skipEmptyLines: true,
             complete: (results) => {
                 try {
-                    const rows = results.data as Record<string, any>[];
-                    if (!rows || rows.length === 0) {
-                        setError('CSV appears empty or invalid.');
+                    const rawData = results.data as string[][];
+                    if (!rawData || rawData.length === 0) {
+                        setError('Ads CSV appears empty.');
                         setProgress("");
                         return;
                     }
 
-                    // Helper to clean currency/number strings
-                    const cleanNumber = (val: any): number => {
-                        if (typeof val === 'number') return val;
-                        if (!val) return 0;
-                        // Handle commas, currency symbols, percentages
-                        return parseFloat(String(val).replace(/[£$,%]/g, '').trim()) || 0;
-                    };
+                    const headerIndex = rawData.findIndex(row =>
+                        row.some(cell => {
+                            const c = String(cell).toLowerCase().trim();
+                            return c === 'search term' || c === 'search keyword' || c === 'cost';
+                        })
+                    );
 
-                    // Helper for percentages (e.g. "10.5%" -> 0.105, "< 10%" -> 0.05)
-                    const cleanPercent = (val: any): number | null => {
-                        if (val === null || val === undefined || val === '') return null;
-                        const str = String(val).trim();
-                        if (str === '--') return null;
-                        if (str.includes('< 10%')) return 0.05;
-                        if (str.includes('> 90%')) return 0.95;
+                    if (headerIndex === -1 || !rawData[headerIndex]) {
+                        setError("Could not find Ads headers.");
+                        setProgress("");
+                        return;
+                    }
 
-                        const num = parseFloat(str.replace(/[%]/g, ''));
-                        if (isNaN(num)) return null;
+                    const headers = rawData[headerIndex].map(h => String(h).trim().toLowerCase());
+                    const rows = rawData.slice(headerIndex + 1);
+                    const findCol = (names: string[]) => headers.findIndex(h => names.includes(h));
 
-                        // If string had %, divide by 100. If it was just "0.5", assume it's ratio? 
-                        // Actually, CSV export usually puts "10.5%" or just "10.5" meaning percent.
-                        // Standardize: if > 1, assume it's percentage (e.g. 10.5 -> 0.105). 
-                        // If < 1, ambiguity exists, but usually IS is > 1% if meaningful.
-                        // Safest assumption for Google Ads CSV: it's a percentage value (0-100).
-                        if (str.includes('%')) return num / 100;
-                        return num <= 1 ? num : num / 100;
-                    };
+                    const termIdx = findCol(['search term', 'search keyword', 'keyword']);
+                    const costIdx = findCol(['cost']);
+                    const clicksIdx = findCol(['clicks']);
+                    const imprIdx = findCol(['impressions', 'impr.']);
+                    const convIdx = findCol(['conversions']);
+                    const valIdx = findCol(['conv. value', 'conversion value', 'total conv. value']);
+                    const campIdx = findCol(['campaign', 'campaign name']);
+                    const agIdx = findCol(['ad group', 'ad group name']);
+                    const matchIdx = findCol(['match type']);
+                    const isIdx = findCol(['search impr. share', 'impr. share', 'search impression share']);
+                    const lostIdx = findCol(['search lost IS (rank)', 'lost IS (rank)']);
+                    const topIdx = findCol(['impr. (top) %']);
+                    const absTopIdx = findCol(['impr. (abs. top) %']);
 
-                    // Check for Impression Share column existence
-                    const sampleRow = rows[0] || {};
-                    const hasImpressionShare =
-                        'Search Impr. share' in sampleRow ||
-                        'Impr. share' in sampleRow ||
-                        'Search impression share' in sampleRow;
-
-                    const hasTopImpression = 'Impr. (Top) %' in sampleRow || 'Impr. (Abs. Top) %' in sampleRow;
+                    if (termIdx === -1 || costIdx === -1) {
+                        setError("Ads CSV missing required columns.");
+                        setProgress("");
+                        return;
+                    }
 
                     const adsRows: AdsSearchTermRow[] = rows
                         .filter(row => {
-                            const searchTerm = row['Search term'] || row['Search keyword'] || row['Keyword'];
-
-                            // Skip if no search term
-                            if (!searchTerm) return false;
-
-                            // Skip Google Ads metadata rows
-                            const term = String(searchTerm).toLowerCase().trim();
-
-                            // Skip header rows (e.g., "Search terms report", report titles)
-                            if (term.includes('report') || term.includes('january') || term.includes('february') ||
-                                term.includes('march') || term.includes('april') || term.includes('may') ||
-                                term.includes('june') || term.includes('july') || term.includes('august') ||
-                                term.includes('september') || term.includes('october') || term.includes('november') ||
-                                term.includes('december')) {
-                                return false;
-                            }
-
-                            // Skip total rows (e.g., "Total: Search terms", "Total: Other search terms")
-                            if (term.startsWith('total:') || term.startsWith('total ')) {
-                                return false;
-                            }
-
-                            return true;
+                            const term = String(row[termIdx] || '').trim().toLowerCase();
+                            return term && term !== 'total' && !term.startsWith('total:');
                         })
                         .map(row => {
-                            const cost = cleanNumber(row['Cost'] || row['cost']);
-                            const clicks = cleanNumber(row['Clicks'] || row['clicks']);
-                            const impressions = cleanNumber(row['Impr.'] || row['Impressions'] || row['impressions']);
-                            const conversions = cleanNumber(row['Conversions'] || row['conversions']);
-                            const convValue = cleanNumber(row['Conv. value'] || row['Total conv. value'] || row['conversion_value']);
+                            const cost = cleanNum(row[costIdx]);
+                            const impressions = cleanNum(row[imprIdx]);
+                            const clicks = cleanNum(row[clicksIdx]);
+                            const conversions = cleanNum(row[convIdx]);
+                            const convValue = cleanNum(row[valIdx]);
 
-                            // Try to get impression share from primary columns first
-                            let distinctImpressionShare = cleanPercent(
-                                row['Search Impr. share'] ||
-                                row['Impr. share'] ||
-                                row['Search impression share']
-                            );
-
-                            // If not found, use Top Impression % columns as fallback
-                            // Note: These are different metrics but can provide useful data
-                            if (distinctImpressionShare === null) {
-                                const topImpr = cleanPercent(row['Impr. (Top) %']);
-                                const absTopImpr = cleanPercent(row['Impr. (Abs. Top) %']);
-
-                                // Prefer Abs. Top if available, otherwise use Top
-                                if (absTopImpr !== null) {
-                                    distinctImpressionShare = absTopImpr;
-                                } else if (topImpr !== null) {
-                                    distinctImpressionShare = topImpr;
-                                }
+                            let isVal = cleanPercent(row[isIdx]);
+                            if (isVal === null) {
+                                const t = cleanPercent(row[topIdx]);
+                                const at = cleanPercent(row[absTopIdx]);
+                                isVal = at !== null ? at : t;
                             }
 
                             return {
-                                searchTerm: row['Search term'] || row['Search keyword'] || row['Keyword'] || '',
+                                searchTerm: String(row[termIdx]),
                                 costMicros: cost * 1_000_000,
                                 impressions,
                                 clicks,
@@ -737,147 +894,217 @@ export default function SeoPpcOpportunitiesPage() {
                                 conversionValue: convValue,
                                 ctr: impressions > 0 ? clicks / impressions : 0,
                                 averageCpc: clicks > 0 ? cost / clicks : 0,
-                                campaign: row['Campaign'] || 'Uploaded CSV',
-                                adGroup: row['Ad group'] || 'Uploaded CSV',
-                                matchType: row['Match type'] || 'Broad',
-                                impressionShare: distinctImpressionShare,
-                                budgetLostImpressionShare: cleanPercent(row['Search lost IS (budget)']),
-                                rankLostImpressionShare: cleanPercent(row['Search lost IS (rank)']),
+                                campaign: row[campIdx] ? String(row[campIdx]) : 'Uploaded CSV',
+                                adGroup: row[agIdx] ? String(row[agIdx]) : 'Uploaded CSV',
+                                matchType: row[matchIdx] ? String(row[matchIdx]) : 'Broad',
+                                impressionShare: isVal,
+                                budgetLostImpressionShare: null,
+                                rankLostImpressionShare: cleanPercent(row[lostIdx]),
                                 conversionRate: clicks > 0 ? conversions / clicks : 0
                             };
                         });
 
                     if (adsRows.length === 0) {
-                        setError("No valid search terms found in CSV. Expected column 'Search term'.");
+                        setError("No valid search terms found in CSV.");
                         setProgress("");
                         return;
                     }
 
                     setRawAdsData(adsRows);
-                    // Only flag as missing if we don't have ANY impression share data (neither main nor top columns)
-                    setMissingImpressionShareColumn(!hasImpressionShare && !hasTopImpression);
                     setProgress("");
                     setError(null);
-
-                    // Reset input
                     if (fileInputRef.current) fileInputRef.current.value = '';
-
                 } catch (e) {
-                    console.error("CSV Parse Error:", e);
-                    setError("Failed to parse CSV: " + String(e));
+                    setError("Ads Parse Error: " + String(e));
                     setProgress("");
                 }
-            },
-            error: (err) => {
-                setError("CSV Error: " + err.message);
-                setProgress("");
             }
         });
     };
 
-    // Unique campaigns and ad groups
+    // Handle CSV Upload for Keyword Metrics (Auction Insights)
+    const handleKeywordFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        setProgress("Parsing Keyword Auction CSV...");
+
+        Papa.parse(file, {
+            header: false,
+            skipEmptyLines: true,
+            complete: (results) => {
+                try {
+                    const rawData = results.data as string[][];
+                    const headerIndex = rawData.findIndex(row =>
+                        row.some(cell => String(cell).toLowerCase().trim() === 'keyword') &&
+                        row.some(cell => String(cell).toLowerCase().trim() === 'campaign')
+                    );
+
+                    if (headerIndex === -1 || !rawData[headerIndex]) {
+                        setError("Could not find Keyword Auction headers.");
+                        setProgress("");
+                        return;
+                    }
+
+                    const headers = rawData[headerIndex].map(h => String(h).trim().toLowerCase());
+                    const rows = rawData.slice(headerIndex + 1);
+                    const findCol = (names: string[]) => headers.findIndex(h => names.includes(h));
+
+                    const kwIdx = findCol(['keyword']);
+                    const campIdx = findCol(['campaign']);
+                    const agIdx = findCol(['ad group']);
+                    const isIdx = findCol(['search impr. share', 'impr. share']);
+                    const lostIdx = findCol(['search lost IS (rank)', 'lost IS (rank)']);
+                    const topIdx = findCol(['impr. (top) %']);
+                    const absTopIdx = findCol(['impr. (abs. top) %']);
+
+                    const kwRows: KeywordMetricsRow[] = rows
+                        .filter(row => row[kwIdx] && String(row[kwIdx]).trim() !== '')
+                        .map(row => ({
+                            keyword: String(row[kwIdx]),
+                            campaign: String(row[campIdx]),
+                            adGroup: row[agIdx] ? String(row[agIdx]) : '',
+                            searchImprShare: cleanPercent(row[isIdx]),
+                            searchLostIsRank: cleanPercent(row[lostIdx]),
+                            imprTopPct: cleanPercent(row[topIdx]),
+                            imprAbsTopPct: cleanPercent(row[absTopIdx])
+                        }));
+
+                    setKeywordMetricsData(kwRows);
+                    setProgress("");
+                    setError(null);
+                    if (fileInputRefKeyword.current) fileInputRefKeyword.current.value = '';
+                } catch (e) {
+                    setError("Keyword Parse Error: " + String(e));
+                    setProgress("");
+                }
+            }
+        });
+    };
+
+    const handleAnalyze = async (row: MergedOpportunityRow) => {
+        setSelectedRow(row);
+        setAnalysisModalOpen(true);
+        setAnalysisLoading(true);
+        setAnalysisData(null);
+        setAnalysisError(null);
+
+        try {
+            const res = await fetch("/api/serp-analysis", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    keyword: row.query,
+                    action: row.action,
+                    targetDomain: selectedProperty,
+                    location: selectedLocation,
+                    login: dfsLogin,
+                    password: dfsPassword
+                })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                setAnalysisData(data);
+            } else {
+                const errorData = await res.json().catch(() => ({}));
+                setAnalysisError(errorData.error || "Analysis failed. Please check API settings.");
+            }
+        } catch (e) {
+            setAnalysisError("Analysis Error: " + String(e));
+        } finally {
+            setAnalysisLoading(false);
+        }
+    };
+
+    // Memoized dataset views and metrics
     const uniqueCampaigns = useMemo(() => {
-        const campaigns = new Set(data.map(r => r.campaign).filter(Boolean));
+        const campaigns = new Set<string>();
+        data.forEach(r => { if (r.campaign) campaigns.add(r.campaign); });
         return Array.from(campaigns).sort();
     }, [data]);
 
     const uniqueAdGroups = useMemo(() => {
-        const groups = new Set(data.map(r => r.adGroup).filter(Boolean));
+        const groups = new Set<string>();
+        data.forEach(r => { if (r.adGroup) groups.add(r.adGroup); });
         return Array.from(groups).sort();
     }, [data]);
 
-    // Filtered and sorted data
-    const filteredData = useMemo(() => {
-        let result = [...data];
-
-        // Filter by action
-        if (filterActions.length > 0) {
-            result = result.filter((r) => filterActions.includes(r.action));
+    const filteredData = useMemo<MergedOpportunityRow[]>(() => {
+        const q = searchQuery.toLowerCase();
+        let searchRe: RegExp | null = null;
+        if (searchMode === 'regex' && searchQuery) {
+            try {
+                searchRe = new RegExp(searchQuery, 'i');
+            } catch (e) {
+                // Invalid regex, will fallback to matchesSearch = true
+            }
         }
 
-        // Filter by campaign
-        if (filterCampaign !== "all") {
-            result = result.filter((r) => r.campaign === filterCampaign);
-        }
+        const results = data.filter(row => {
+            const matchesAction = filterActions.length === 0 || filterActions.includes(row.action);
+            const matchesCampaign = filterCampaign === "all" || row.campaign === filterCampaign;
+            const matchesAdGroup = filterAdGroup === "all" || row.adGroup === filterAdGroup;
+            let matchesSearch = true;
+            if (searchQuery) {
+                const rowQ = row.query.toLowerCase();
 
-        // Filter by ad group
-        if (filterAdGroup !== "all") {
-            result = result.filter((r) => r.adGroup === filterAdGroup);
-        }
+                if (searchMode === 'equals') {
+                    matchesSearch = rowQ === q;
+                } else if (searchMode === 'regex') {
+                    matchesSearch = searchRe ? searchRe.test(row.query) : true;
+                } else {
+                    matchesSearch = rowQ.includes(q);
+                }
+            }
 
-        // Filter by search query
-        if (searchQuery) {
-            const q = searchQuery.toLowerCase();
-            result = result.filter((r) => r.query.toLowerCase().includes(q));
-        }
-        // Sort
-        result.sort((a, b) => {
+            return matchesAction && matchesCampaign && matchesAdGroup && matchesSearch;
+        });
+
+        return [...results].sort((a, b) => {
             const aVal = a[sortKey];
             const bVal = b[sortKey];
 
+            if (aVal === null || aVal === undefined) return sortDir === "asc" ? -1 : 1;
+            if (bVal === null || bVal === undefined) return sortDir === "asc" ? 1 : -1;
+
             if (typeof aVal === "string" && typeof bVal === "string") {
-                return sortDir === "asc"
-                    ? aVal.localeCompare(bVal)
-                    : bVal.localeCompare(aVal);
+                return sortDir === "asc" ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
             }
 
-            const aNum = Number(aVal) || 0;
-            const bNum = Number(bVal) || 0;
-            return sortDir === "asc" ? aNum - bNum : bNum - aNum;
+            return sortDir === "asc" ? (aVal as number) - (bVal as number) : (bVal as number) - (aVal as number);
         });
+    }, [data, filterActions, filterCampaign, filterAdGroup, searchQuery, searchMode, sortKey, sortDir]);
 
+    const visibleData = useMemo<MergedOpportunityRow[]>(() => {
+        const result: MergedOpportunityRow[] = [];
+        const topLevel = filteredData.filter(r => !r.parent_query);
+
+        topLevel.slice(0, showTop).forEach(parent => {
+            result.push(parent);
+            if (parent.is_total_row && expandedQueries.has(parent.query)) {
+                // Find children in the original merged data
+                const children = data.filter(r => r.parent_query === parent.query);
+                result.push(...children);
+            }
+        });
         return result;
-    }, [data, filterActions, filterCampaign, filterAdGroup, searchQuery, sortKey, sortDir]);
+    }, [filteredData, data, expandedQueries, showTop]);
 
-    // Summary stats - calculate from filtered data
     const summary = useMemo(() => calculateSummary(filteredData), [filteredData]);
-
-    // Quick Wins Logic (Top 5 based on current filters)
-    const quickWins = useMemo(() => {
-        if (!filteredData.length) return null;
-
-        // Use filtered dataset so quick wins reflect current view
-        const pausePpc = [...filteredData]
-            .filter(r => r.action === 'Pause PPC')
-            .sort((a, b) => b.cost_paid - a.cost_paid)
-            .slice(0, 5);
-
-        const scaleSpend = [...filteredData]
-            .filter(r => r.action === 'Scale Spend')
-            .sort((a, b) => (b.roas_paid || 0) - (a.roas_paid || 0))
-            .slice(0, 5);
-
-        const seoFocus = [...filteredData]
-            .filter(r => r.action === 'SEO Focus')
-            .sort((a, b) => b.conversions_paid - a.conversions_paid)
-            .slice(0, 5);
-
-        return { pausePpc, scaleSpend, seoFocus };
-    }, [filteredData]);
-
-    // Chart data - calculate from filtered data
     const actionChartData = useMemo(() => prepareActionChartData(filteredData), [filteredData]);
-
-
-    const scatterData = useMemo(() => {
-        let dataToUse = filteredData;
-
-        if (scatterPositionFilter === "top3") {
-            dataToUse = dataToUse.filter(r => r.position_org > 0 && r.position_org <= 3);
-        } else if (scatterPositionFilter === "top10") {
-            dataToUse = dataToUse.filter(r => r.position_org > 0 && r.position_org <= 10);
-        } else if (scatterPositionFilter === "pos11-20") {
-            dataToUse = dataToUse.filter(r => r.position_org >= 11 && r.position_org <= 20);
-        } else if (scatterPositionFilter === "no-rank") {
-            dataToUse = dataToUse.filter(r => r.position_org === 0);
-        }
-
-        return prepareScatterData(dataToUse, 200);
-    }, [filteredData, scatterPositionFilter]);
-
     const scoreDistribution = useMemo(() => prepareScoreDistribution(filteredData), [filteredData]);
+    const scatterData = useMemo(() => prepareScatterData(filteredData), [filteredData]);
 
-    // Handle sort
+    const quickWins = useMemo(() => {
+        if (!data.length) return null;
+        return {
+            pausePpc: [...data].filter(r => r.action === 'Test PPC Pause' || r.action === 'Test Multi-Channel Pause').sort((a, b) => b.cost_paid - a.cost_paid).slice(0, 5),
+            scaleSpend: [...data].filter(r => r.action === 'Scale Spend').sort((a, b) => (b.roas_paid || 0) - (a.roas_paid || 0)).slice(0, 5),
+            seoFocus: [...data].filter(r => r.action === 'SEO Focus').sort((a, b) => b.conversions_paid - a.conversions_paid).slice(0, 5),
+        };
+    }, [data]);
+
     const handleSort = (key: keyof MergedOpportunityRow) => {
         if (sortKey === key) {
             setSortDir(sortDir === "asc" ? "desc" : "asc");
@@ -887,150 +1114,16 @@ export default function SeoPpcOpportunitiesPage() {
         }
     };
 
-    // Export to CSV
-    const handleExportCsv = () => {
+    const handleExportCsv = useCallback(() => {
         if (!filteredData.length) return;
-
-        const headers = [
-            "Action",
-            "Campaign",
-            "Ad Group",
-            "Query",
-            "Organic Clicks",
-            "Organic Impressions",
-            "Organic CTR",
-            "Position",
-            "Paid Clicks",
-            "Paid Impressions",
-            "Paid CTR",
-            "Cost",
-            "Avg CPC",
-            "Conversions",
-            "Conv Value",
-            "CPA",
-            "ROAS",
-            "Opportunity Score",
-        ];
-
-        const rows = filteredData.map((r) => [
-            r.action,
-            r.campaign || "",
-            r.adGroup || "",
-            `"${r.query.replace(/"/g, '""')}"`,
-            r.clicks_org,
-            r.impressions_org,
-            formatPercent(r.ctr_org),
-            r.position_org.toFixed(1),
-            r.clicks_paid,
-            r.impressions_paid,
-            formatPercent(r.ctr_paid),
-            r.cost_paid.toFixed(2),
-            r.avg_cpc_paid.toFixed(2),
-            r.conversions_paid.toFixed(2),
-            r.conv_value_paid.toFixed(2),
-            r.cpa_paid?.toFixed(2) || "",
-            r.roas_paid?.toFixed(2) || "",
-            r.opportunity_score.toFixed(2),
-        ]);
-
-        const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
-        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        const csv = Papa.unparse(filteredData);
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `seo-ppc-opportunities-${formatDateForApi(new Date())}.csv`;
-        a.click();
-        URL.revokeObjectURL(url);
-    };
-
-
-
-
-
-    const handleAnalyzeQuery = async (query: string, action: OpportunityAction) => {
-        setAnalysisModalOpen(true);
-        setAnalysisLoading(true);
-        setAnalysisData(null);
-        setAnalysisError(null);
-
-        try {
-            // Get reasoning from local data
-            const row = data.find(r => r.query === query);
-            const reasoning = row
-                ? getActionReason(row, action)
-                : "Unable to retrieve specific performance metrics for this query.";
-
-            // Determine target domain from selected property
-            let targetDomain = selectedProperty || "";
-            if (targetDomain.startsWith('sc-domain:')) {
-                targetDomain = targetDomain.replace('sc-domain:', '');
-            } else if (targetDomain.startsWith('http')) {
-                try {
-                    targetDomain = new URL(targetDomain).hostname;
-                } catch (e) {
-                    console.warn("Could not parse target domain URL", e);
-                }
-            }
-
-            // Call API
-            const response = await fetch('/api/serp-analysis', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    keyword: query,
-                    targetDomain
-                })
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.error || `Failed to fetch SERP analysis: ${response.status}`);
-            }
-
-            const apiData = await response.json();
-
-            // Construct analysis object
-            // Use defaults for difficulty/volume if API doesn't return them yet
-            const analysis: SerpAnalysis = {
-                query,
-                action,
-                difficulty: apiData.difficulty || 45, // Placeholder
-                searchVolume: apiData.searchVolume || (row ? row.impressions_org + row.impressions_paid : 0),
-                intent: apiData.intent || "Commercial", // Placeholder
-                topResults: apiData.topResults || [],
-                paidResults: apiData.paidResults || [],
-                serpFeatures: apiData.serpFeatures || [],
-                aiRecommendation: {
-                    action: action,
-                    reasoning: reasoning, // Use our generated reason
-                    impact: "High", // Placeholder
-                    difficulty: "Medium" // Placeholder
-                },
-                targetRank: apiData.targetRank
-            };
-
-            setAnalysisData(analysis);
-
-        } catch (error) {
-            console.error("Analysis Error:", error);
-            const errorMessage = error instanceof Error ? error.message : String(error);
-
-            // Set specific error message for missing credentials
-            if (errorMessage.includes("Missing DataForSEO credentials") || errorMessage.includes("500")) {
-                setAnalysisError("DataForSEO credentials missing. Please add DATAFORSEO_LOGIN and DATAFORSEO_PASSWORD to your .env file.");
-                setAnalysisData(null); // Explicitly clear data so we don't show stale/mock data
-            } else {
-                // Fallback to mock data on other errors so user sees something
-                const fallback = generateMockSerpAnalysis(query, action);
-                setAnalysisData(fallback);
-                // Still set a warning message if needed, or maybe just log it
-            }
-        } finally {
-            setAnalysisLoading(false);
-        }
-    };
-
-
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `seo-ppc-opportunities-${new Date().toISOString().split('T')[0]}.csv`);
+        link.click();
+    }, [filteredData]);
 
     // Loading state
     if (status === "loading") {
@@ -1065,39 +1158,189 @@ export default function SeoPpcOpportunitiesPage() {
                             </p>
                         </div>
 
-                        <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg space-y-4">
-                            <h4 className="text-xs font-semibold uppercase text-gray-500 tracking-wider">Instructions</h4>
-                            <ul className="text-xs text-gray-600 dark:text-gray-400 space-y-2">
-                                <li className="flex gap-2">
-                                    <span className="text-blue-500 font-bold">1.</span>
-                                    <span>Export &apos;Top Queries&apos; from Search Console.</span>
-                                </li>
-                                <li className="flex gap-2">
-                                    <span className="text-blue-500 font-bold">2.</span>
-                                    <span>Export &apos;Search Terms&apos; from Google Ads.</span>
-                                </li>
-                                <li className="flex gap-2">
-                                    <span className="text-blue-500 font-bold">3.</span>
-                                    <span>Upload both files to see the combined analysis.</span>
-                                </li>
-                            </ul>
-                        </div>
-
                         {/* Action Legend moved here */}
                         <ActionLegend
                             expanded={expandedSections.legend}
                             onToggle={() => toggleSection('legend')}
                         />
+
+                        {/* Settings / API Keys */}
+                        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                            <button
+                                onClick={() => setShowSettings(!showSettings)}
+                                className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                            >
+                                <div className="flex items-center gap-2">
+                                    <div className="p-1.5 bg-purple-100 dark:bg-purple-900/30 rounded-lg text-purple-600 dark:text-purple-400">
+                                        <Zap className="w-4 h-4" />
+                                    </div>
+                                    <span className="font-semibold text-gray-900 dark:text-white text-sm">API Settings</span>
+                                    {dfsLogin && dfsPassword && (
+                                        <CheckCircle className="w-3.5 h-3.5 text-green-500" />
+                                    )}
+                                </div>
+                                {showSettings ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                            </button>
+
+                            {showSettings && (
+                                <div className="p-4 pt-0 space-y-3 bg-gray-50/50 dark:bg-gray-800/50">
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                        Enter DataForSEO credentials for live SERP analysis.
+                                        <a href="https://app.dataforseo.com/register" target="_blank" rel="noopener noreferrer" className="ml-1 text-blue-600 hover:underline">
+                                            Get API Key
+                                        </a>
+                                    </p>
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">API Login</label>
+                                        <input
+                                            type="text"
+                                            value={dfsLogin}
+                                            onChange={(e) => setDfsLogin(e.target.value)}
+                                            placeholder="email@example.com"
+                                            className="w-full px-3 py-1.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">API Password</label>
+                                        <input
+                                            type="password"
+                                            value={dfsPassword}
+                                            onChange={(e) => setDfsPassword(e.target.value)}
+                                            placeholder="API Password"
+                                            className="w-full px-3 py-1.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
+                                        />
+                                    </div>
+                                    {dfsLogin && dfsPassword && (
+                                        <div className="flex items-center gap-1.5 px-2 py-1 bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800 rounded text-[10px] text-green-700 dark:text-green-400 mt-2">
+                                            <CheckCircle className="w-3 h-3" />
+                                            <span>Credentials configured successfully</span>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* CSV Requirements Dropdown */}
+                        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden mb-3">
+                            <button
+                                onClick={() => setShowCsvRequirements(!showCsvRequirements)}
+                                className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                            >
+                                <div className="flex items-center gap-2">
+                                    <div className="p-1.5 bg-green-100 dark:bg-green-900/30 rounded-lg text-green-600 dark:text-green-400">
+                                        <FileText className="w-4 h-4" />
+                                    </div>
+                                    <span className="font-semibold text-gray-900 dark:text-white text-sm">CSV Requirements</span>
+                                </div>
+                                {showCsvRequirements ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                            </button>
+
+                            {showCsvRequirements && (
+                                <div className="p-4 pt-0 space-y-3 bg-gray-50/50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-700/50">
+                                    <div className="space-y-3 pt-3">
+                                        <div>
+                                            <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 mb-1">Google Search Console (Performance Report)</p>
+                                            <p className="text-[10px] text-gray-500 mb-1">Export "Queries" report. Required columns:</p>
+                                            <ul className="text-[10px] text-gray-600 dark:text-gray-400 list-disc pl-3 space-y-0.5">
+                                                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Top queries</code> or <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Query</code></li>
+                                                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Clicks</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Impressions</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Position</code></li>
+                                            </ul>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-bold text-purple-600 dark:text-purple-400 mb-1">Google Ads (Search Terms Report)</p>
+                                            <p className="text-[10px] text-gray-500 mb-1">Required for drill-down & conversion data:</p>
+                                            <ul className="text-[10px] text-gray-600 dark:text-gray-400 list-disc pl-3 space-y-0.5">
+                                                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Search term</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Cost</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Clicks</code></li>
+                                                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Conversions</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Conv. value</code></li>
+                                            </ul>
+                                            <p className="text-[10px] text-gray-500 mt-1">Recommended:</p>
+                                            <ul className="text-[10px] text-gray-600 dark:text-gray-400 list-disc pl-3 space-y-0.5">
+                                                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Campaign</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Ad group</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Match type</code></li>
+                                            </ul>
+                                        </div>
+                                        <div className="pt-2 border-t border-gray-100 dark:border-gray-700/50">
+                                            <p className="text-xs font-bold text-violet-600 dark:text-violet-400 mb-1">Google Ads (Auction Insights / Keywords)</p>
+                                            <p className="text-[10px] text-gray-500 mb-1">Required for Competition Scoring:</p>
+                                            <ul className="text-[10px] text-gray-600 dark:text-gray-400 list-disc pl-3 space-y-0.5">
+                                                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Keyword</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Campaign</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Ad group</code></li>
+                                                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Search Impr. share</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Search lost IS (rank)</code></li>
+                                            </ul>
+                                        </div>
+                                        <div className="pt-2 border-t border-gray-100 dark:border-gray-700/50">
+                                            <p className="text-xs font-bold text-pink-600 dark:text-pink-400 mb-1">Google Ads (Campaign Report)</p>
+                                            <p className="text-[10px] text-gray-500 mb-1">Required for Multi-Channel Pivot:</p>
+                                            <ul className="text-[10px] text-gray-600 dark:text-gray-400 list-disc pl-3 space-y-0.5">
+                                                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Campaign</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Campaign type</code> (e.g. Shopping/PMax)</li>
+                                                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Status</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Status reasons</code></li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Scoring Logic Dropdown */}
+                        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                            <button
+                                onClick={() => toggleSection('scoring')}
+                                className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                            >
+                                <div className="flex items-center gap-2">
+                                    <div className="p-1.5 bg-blue-100 dark:bg-blue-900/30 rounded-lg text-blue-600 dark:text-blue-400">
+                                        <Info className="w-4 h-4" />
+                                    </div>
+                                    <span className="font-semibold text-gray-900 dark:text-white text-sm">Scoring Logic</span>
+                                </div>
+                                {expandedSections.scoring ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                            </button>
+
+                            {expandedSections.scoring && (
+                                <div className="p-4 pt-0 space-y-3 bg-gray-50/50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-700/50">
+                                    <div className="space-y-3 pt-3">
+                                        <div className="space-y-2 text-xs text-gray-600 dark:text-gray-400">
+                                            <p className="font-medium text-emerald-600 dark:text-emerald-400 mb-2">
+                                                Higher Score (closer to 100) = Higher Priority
+                                            </p>
+                                            <div className="space-y-3">
+                                                <div>
+                                                    <p className="font-bold text-emerald-600 dark:text-emerald-400">Save Score (PV): Potential Waste</p>
+                                                    <ul className="pl-3 mt-1 space-y-1 list-disc text-gray-500">
+                                                        <li><span className="text-gray-700 dark:text-gray-300 font-medium">Inefficiency:</span> High Spend + Low ROAS (&lt;2.0) adds up to 80pts.</li>
+                                                        <li><span className="text-gray-700 dark:text-gray-300 font-medium">Cannibalization:</span> Organic Rank 1-3 adds 20-30pts.</li>
+                                                        <li><span className="text-indigo-600 dark:text-indigo-400 font-medium">Redundancy:</span> Multi-channel coverage (Shopping/PMax) adds 20pts if Organic Pos &lt; 3.</li>
+                                                        <li><span className="text-rose-600 dark:text-rose-500 font-medium">Brand Safety:</span> 90% penalty applied to brand terms (except Multi-Channel tests).</li>
+                                                    </ul>
+                                                </div>
+                                                <div>
+                                                    <p className="font-bold text-blue-600 dark:text-blue-400">Grow Score (OV): Revenue Potential</p>
+                                                    <ul className="pl-3 mt-1 space-y-1 list-disc text-gray-500">
+                                                        <li><span className="text-gray-700 dark:text-gray-300 font-medium">Profitability:</span> ROAS &gt; 4.0 adds 30pts; ROAS &gt; 2.0 adds 20pts.</li>
+                                                        <li><span className="text-gray-700 dark:text-gray-300 font-medium">Strategic Tiers:</span> High Intent (1.25x), Brand Core (1.15x), Commercial focus.</li>
+                                                        <li><span className="text-gray-700 dark:text-gray-300 font-medium">Revenue Gravity:</span> Logarithmic scaling ensures high-value terms float to the top.</li>
+                                                        <li><span className="text-purple-600 dark:text-purple-400 font-medium">Competition:</span> High Competition Score (&gt;60) triggers &quot;Defend&quot; priority.</li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+
+
+
+
                     </div>
                 </div>
 
                 <div className="p-6 border-t border-gray-200 dark:border-gray-700">
                     <ThemeToggle />
                 </div>
-            </aside>
+            </aside >
 
             {/* Main Content */}
-            <main className="flex-1 ml-80 p-8 min-h-screen">
+            < main className="flex-1 ml-80 p-8 min-h-screen" >
                 <div className="w-full mx-auto">
                     <div className="mb-8">
                         <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-3">
@@ -1132,7 +1375,30 @@ export default function SeoPpcOpportunitiesPage() {
                                     </label>
                                 </div>
 
-                                {/* Target Domain Input */}
+                                {/* Market Selector */}
+                                <div className="w-[180px]">
+                                    <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">
+                                        Market
+                                    </label>
+                                    <div className="relative">
+                                        <select
+                                            value={selectedLocation}
+                                            onChange={(e) => setSelectedLocation(e.target.value)}
+                                            className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg pl-3 pr-10 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 appearance-none transition-all"
+                                        >
+                                            {MARKET_OPTIONS.map(m => (
+                                                <option key={m.value} value={m.value}>
+                                                    {m.emoji} {m.value}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                            <ChevronDown className="h-4 w-4 text-gray-400" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                { /* Target Domain Input */}
                                 <div className="flex-1 min-w-[240px]">
                                     <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">
                                         Target Domain (for SERP Analysis)
@@ -1161,6 +1427,34 @@ export default function SeoPpcOpportunitiesPage() {
                                     </div>
                                 </div>
 
+                                {/* Brand Terms Input */}
+                                <div className="flex-1 min-w-[240px]">
+                                    <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                                        Brand Keywords
+                                        <div className="group relative">
+                                            <Info className="h-3 w-3 text-gray-400 cursor-help" />
+                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-gray-900 text-white text-[10px] rounded shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                                                Enter your brand names separated by commas (e.g. pooch, mutt). These will be used for Brand Defense logic.
+                                            </div>
+                                        </div>
+                                    </label>
+                                    <div className="relative group">
+                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                            <Tags className={`h-4 w-4 transition-colors ${brandTermsInput ? 'text-purple-500' : 'text-gray-400'}`} />
+                                        </div>
+                                        <input
+                                            type="text"
+                                            value={brandTermsInput}
+                                            onChange={(e) => setBrandTermsInput(e.target.value)}
+                                            placeholder="e.g. pooch, mutt, joint care"
+                                            className={`w-full pl-10 pr-10 bg-gray-50 dark:bg-gray-900 border rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 outline-none transition-all ${brandTermsInput
+                                                ? 'border-purple-500 ring-2 ring-purple-500/10'
+                                                : 'border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500'
+                                                }`}
+                                        />
+                                    </div>
+                                </div>
+
                                 <div className="flex items-center gap-3">
                                     <input type="file" ref={fileInputRefGsc} onChange={handleGscFileUpload} accept=".csv" className="hidden" />
                                     <button
@@ -1170,7 +1464,7 @@ export default function SeoPpcOpportunitiesPage() {
                                             : "bg-white dark:bg-gray-900 text-emerald-600 border border-emerald-200 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"}`}
                                     >
                                         <Upload className="w-4 h-4" />
-                                        {rawGscData.length > 0 ? `Uploaded GSC (${rawGscData.length})` : "Upload GSC CSV"}
+                                        {rawGscData.length > 0 ? `Queries (${rawGscData.length})` : "Upload GSC (Queries)"}
                                     </button>
 
                                     <input type="file" ref={fileInputRef} onChange={handleAdsFileUpload} accept=".csv" className="hidden" />
@@ -1181,7 +1475,29 @@ export default function SeoPpcOpportunitiesPage() {
                                             : "bg-white dark:bg-gray-900 text-purple-600 border border-purple-200 hover:bg-purple-50 dark:hover:bg-purple-900/20"}`}
                                     >
                                         <Upload className="w-4 h-4" />
-                                        {rawAdsData.length > 0 ? `Uploaded Ads (${rawAdsData.length})` : "Upload Ads CSV"}
+                                        {rawAdsData.length > 0 ? `Search Terms (${rawAdsData.length})` : "Upload Search Terms (Ads)"}
+                                    </button>
+
+                                    <input type="file" ref={fileInputRefKeyword} onChange={handleKeywordFileUpload} accept=".csv" className="hidden" />
+                                    <button
+                                        onClick={() => fileInputRefKeyword.current?.click()}
+                                        className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm active:scale-95 ${keywordMetricsData.length > 0
+                                            ? "bg-violet-600 hover:bg-violet-700 text-white"
+                                            : "bg-white dark:bg-gray-900 text-violet-600 border border-violet-200 hover:bg-violet-50 dark:hover:bg-violet-900/20"}`}
+                                    >
+                                        <Upload className="w-4 h-4" />
+                                        {keywordMetricsData.length > 0 ? `Keywords (${keywordMetricsData.length})` : "Upload Keywords (Auction Insights)"}
+                                    </button>
+
+                                    <input type="file" ref={fileInputRefCampaign} onChange={handleCampaignFileUpload} accept=".csv" className="hidden" />
+                                    <button
+                                        onClick={() => fileInputRefCampaign.current?.click()}
+                                        className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm active:scale-95 ${rawCampaignData.length > 0
+                                            ? "bg-pink-600 hover:bg-pink-700 text-white"
+                                            : "bg-white dark:bg-gray-900 text-pink-600 border border-pink-200 hover:bg-pink-50 dark:hover:bg-pink-900/20"}`}
+                                    >
+                                        <Upload className="w-4 h-4" />
+                                        {rawCampaignData.length > 0 ? `Campaigns (${rawCampaignData.length})` : "Upload Campaigns"}
                                     </button>
 
                                     {(rawGscData.length > 0 || rawAdsData.length > 0) && (
@@ -1259,13 +1575,13 @@ export default function SeoPpcOpportunitiesPage() {
                                         <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Quick Filters:</p>
                                         <div className="flex flex-wrap gap-2">
                                             <button
-                                                onClick={() => toggleAction("Pause PPC")}
-                                                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${filterActions.includes("Pause PPC")
+                                                onClick={() => toggleAction("Test PPC Pause")}
+                                                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${filterActions.includes("Test PPC Pause")
                                                     ? "bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800"
                                                     : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
                                                     }`}
                                             >
-                                                💰 Wasted Spend (Pause PPC)
+                                                💰 Wasted Spend (Test PPC Pause)
                                             </button>
                                             <button
                                                 onClick={() => toggleAction("Scale Spend")}
@@ -1311,6 +1627,15 @@ export default function SeoPpcOpportunitiesPage() {
                                                     }`}
                                             >
                                                 ⚠️ Needs Investigation
+                                            </button>
+                                            <button
+                                                onClick={() => toggleAction("Defend")}
+                                                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${filterActions.includes("Defend")
+                                                    ? "bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800"
+                                                    : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-violet-50 hover:text-violet-600 hover:border-violet-200 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-violet-900/20 dark:hover:text-violet-400"
+                                                    }`}
+                                            >
+                                                🛡️ Defend (High Competition)
                                             </button>
                                         </div>
                                     </div>
@@ -1427,14 +1752,14 @@ export default function SeoPpcOpportunitiesPage() {
                                                 />
                                                 <KpiCard
                                                     title="Avg. ROAS"
-                                                    value={summary.avgRoas !== null ? `${summary.avgRoas.toFixed(2)}x` : "-"}
+                                                    value={summary.avgRoas !== null && summary.avgRoas !== undefined ? `${summary.avgRoas.toFixed(2)}x` : "-"}
                                                     subtitle="Return on ad spend"
                                                     icon={TrendingUp}
-                                                    trend={summary.avgRoas !== null && summary.avgRoas >= 3 ? "up" : summary.avgRoas !== null && summary.avgRoas < 2 ? "down" : "neutral"}
+                                                    trend={summary.avgRoas !== null && summary.avgRoas !== undefined && summary.avgRoas >= 3 ? "up" : summary.avgRoas !== null && summary.avgRoas !== undefined && summary.avgRoas < 2 ? "down" : "neutral"}
                                                 />
                                                 <KpiCard
                                                     title="Avg. CPA"
-                                                    value={summary.avgCpa !== null ? formatCurrency(summary.avgCpa, currencyCode) : "-"}
+                                                    value={summary.avgCpa !== null && summary.avgCpa !== undefined ? formatCurrency(summary.avgCpa, currencyCode) : "-"}
                                                     subtitle="Cost per acquisition"
                                                     icon={Target}
                                                 />
@@ -1445,7 +1770,7 @@ export default function SeoPpcOpportunitiesPage() {
                                                 />
                                                 <KpiCard
                                                     title="Avg. Impr. Share"
-                                                    value={summary.avgImpressionShare !== null ? formatPercent(summary.avgImpressionShare) : "-"}
+                                                    value={summary.avgImpressionShare !== null && summary.avgImpressionShare !== undefined ? formatPercent(summary.avgImpressionShare) : "-"}
                                                     subtitle="Weighted by impressions"
                                                     icon={Eye}
                                                 />
@@ -1524,8 +1849,8 @@ export default function SeoPpcOpportunitiesPage() {
                                                 <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6">
                                                     <QuickWinCard
                                                         title="💰 Stop Wasting Spend"
-                                                        subtitle="Top 'Pause PPC' opportunities by cost"
-                                                        opportunities={quickWins.pausePpc}
+                                                        subtitle="Top cost-saving & multi-channel pause opportunities"
+                                                        opportunities={quickWins?.pausePpc || []}
                                                         icon={DollarSign}
                                                         iconColorClass="bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"
                                                         valueFormatter={(v) => formatCurrency(v, currencyCode)}
@@ -1534,19 +1859,19 @@ export default function SeoPpcOpportunitiesPage() {
                                                     <QuickWinCard
                                                         title="🚀 Scale Winners"
                                                         subtitle="Top 'Scale Spend' opportunities by ROAS"
-                                                        opportunities={quickWins.scaleSpend}
+                                                        opportunities={quickWins?.scaleSpend || []}
                                                         icon={TrendingUp}
-                                                        iconColorClass="bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400"
-                                                        valueFormatter={(v) => `ROAS: ${v?.toFixed(2)}x`}
+                                                        iconColorClass="bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-300"
+                                                        valueFormatter={(v) => `ROAS: ${(v || 0).toFixed(2)}x`}
                                                         valueKey="roas_paid"
                                                     />
                                                     <QuickWinCard
                                                         title="🎯 SEO Content Gaps"
                                                         subtitle="Top 'SEO Focus' opportunities by conversions"
-                                                        opportunities={quickWins.seoFocus}
+                                                        opportunities={quickWins?.seoFocus || []}
                                                         icon={Target}
                                                         iconColorClass="bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
-                                                        valueFormatter={(v) => `${v} Conv.`}
+                                                        valueFormatter={(v) => `${v || 0} Conv.`}
                                                         valueKey="conversions_paid"
                                                     />
                                                 </div>
@@ -1658,10 +1983,17 @@ export default function SeoPpcOpportunitiesPage() {
                                                                 itemStyle={{ color: "#F3F4F6" }}
                                                                 labelStyle={{ color: "#F3F4F6", fontWeight: "600", marginBottom: "0.25rem" }}
                                                             />
+                                                            <Legend />
                                                             <Bar
-                                                                dataKey="count"
-                                                                name="Queries"
-                                                                fill="#8b5cf6"
+                                                                dataKey="saveCount"
+                                                                name="Save/Optimise"
+                                                                fill="#f59e0b"
+                                                                radius={[4, 4, 0, 0]}
+                                                            />
+                                                            <Bar
+                                                                dataKey="growCount"
+                                                                name="Growth"
+                                                                fill="#10b981"
                                                                 radius={[4, 4, 0, 0]}
                                                             />
                                                         </BarChart>
@@ -1960,15 +2292,26 @@ export default function SeoPpcOpportunitiesPage() {
                                             {/* Table Controls */}
                                             <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex flex-wrap items-center gap-4">
                                                 {/* Search */}
-                                                <div className="relative flex-1 min-w-[200px]">
-                                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                                    <input
-                                                        type="text"
-                                                        placeholder="Search queries..."
-                                                        value={searchQuery}
-                                                        onChange={(e) => setSearchQuery(e.target.value)}
-                                                        className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg pl-10 pr-4 py-2 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                                                    />
+                                                <div className="relative flex-1 min-w-[300px] flex items-center gap-2">
+                                                    <div className="relative flex-1">
+                                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                                        <input
+                                                            type="text"
+                                                            placeholder={searchMode === 'regex' ? "Regex search..." : "Search queries..."}
+                                                            value={searchQuery}
+                                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                                            className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg pl-10 pr-4 py-2 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                                                        />
+                                                    </div>
+                                                    <select
+                                                        value={searchMode}
+                                                        onChange={(e) => setSearchMode(e.target.value as any)}
+                                                        className="bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-2 text-xs text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 outline-none"
+                                                    >
+                                                        <option value="contains">Contains</option>
+                                                        <option value="equals">Equals</option>
+                                                        <option value="regex">Regex</option>
+                                                    </select>
                                                 </div>
 
                                                 {/* Show Top N */}
@@ -2006,24 +2349,29 @@ export default function SeoPpcOpportunitiesPage() {
                                                                 AI
                                                             </th>
                                                             {[
-                                                                { key: "action", label: "Action", width: "120px" },
-                                                                { key: "query", label: "Query", width: "auto" },
-                                                                { key: "matchType", label: "Match", width: "70px" },
-                                                                { key: "position_org", label: "Pos", width: "60px" },
-                                                                { key: "clicks_org", label: "Org Clk", width: "70px" },
-                                                                { key: "clicks_paid", label: "Paid Clk", width: "75px" },
-                                                                { key: "cost_paid", label: "Cost", width: "85px" },
-                                                                { key: "conversions_paid", label: "Conv", width: "65px" },
-                                                                { key: "roas_paid", label: "ROAS", width: "70px" },
-                                                                { key: "conversionRate", label: "CVR", width: "65px" },
-                                                                { key: "impressionShare", label: "IS %", width: "65px" },
-                                                                { key: "opportunity_score", label: "Score", width: "70px" },
+                                                                { key: "action", label: "Action", width: "120px", title: "Recommended next step based on SEO and PPC performance" },
+                                                                { key: "query", label: "Query", width: "auto", title: "The search query or keyword being analyzed" },
+                                                                { key: "matchType", label: "Match", width: "70px", title: "The match type used in Google Ads" },
+                                                                { key: "position_org", label: "Pos", width: "60px", title: "Average Organic position from GSC" },
+                                                                { key: "clicks_org", label: "Org Clk", width: "70px", title: "Monthly organic clicks from GSC" },
+                                                                { key: "clicks_paid", label: "Paid Clk", width: "75px", title: "Monthly paid clicks from Google Ads" },
+                                                                { key: "cost_paid", label: "Cost", width: "85px", title: "Total spend for this query in Google Ads" },
+                                                                { key: "conversions_paid", label: "Conv", width: "65px", title: "Total conversions for this query" },
+                                                                { key: "roas_paid", label: "ROAS", width: "70px", title: "Return on Ad Spend (Value / Cost)" },
+                                                                { key: "conversionRate", label: "CVR", width: "65px", title: "Conversion Rate (Conversions / Clicks)" },
+                                                                { key: "impressionShare", label: "IS %", width: "65px", title: "Search Impression Share (how often your ad appeared vs available)" },
+                                                                { key: "projected_savings_score", label: "Save", width: "65px", title: "Saving Score: Priority for reducing spend (low ROAS or high organic rank)" },
+                                                                { key: "projected_growth_score", label: "Grow", width: "65px", title: "Growth Score: Priority for increasing spend or SEO effort" },
+                                                                { key: "competition_score", label: "Comp", width: "60px", title: "Competition Score: Estimate of auction intensity (0-100)" },
+                                                                { key: "coverage_score", label: "Cov", width: "60px", title: "Coverage Score: Measures channel presence (Search + Shopping + PMax). Higher = safer to optimize." },
+                                                                { key: "channel_group", label: "Chan", width: "70px", title: "Channel Group: Primary channel appearing for this keyword" },
                                                             ].map((col) => (
                                                                 <th
                                                                     key={col.key}
                                                                     className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600/50"
                                                                     style={{ width: col.width }}
                                                                     onClick={() => handleSort(col.key as keyof MergedOpportunityRow)}
+                                                                    title={col.title}
                                                                 >
                                                                     <div className="flex items-center gap-1">
                                                                         {col.label}
@@ -2036,25 +2384,68 @@ export default function SeoPpcOpportunitiesPage() {
                                                         </tr>
                                                     </thead>
                                                     <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                                                        {filteredData.slice(0, showTop).map((row, idx) => (
+                                                        {visibleData.map((row, idx) => (
                                                             <tr
-                                                                key={`${row.query}-${idx}`}
-                                                                className="hover:bg-gray-50 dark:hover:bg-gray-700/30"
+                                                                key={`${row.query}-${row.channel_group || 'total'}-${idx}`}
+                                                                className={`group transition-all duration-300 ${row.is_total_row
+                                                                    ? (expandedQueries.has(row.query)
+                                                                        ? 'bg-blue-200 dark:bg-blue-900 font-black border-y-2 border-blue-600 dark:border-blue-400 shadow-2xl z-20 relative'
+                                                                        : 'bg-gray-100 dark:bg-gray-800 font-bold border-t border-gray-300 dark:border-gray-600 shadow-sm')
+                                                                    : row.parent_query
+                                                                        ? 'bg-white dark:bg-slate-950 border-l-[10px] border-indigo-600 dark:border-indigo-400 border-b border-gray-200 dark:border-gray-800'
+                                                                        : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                                                                    }`}
                                                             >
                                                                 <td className="px-4 py-3">
-                                                                    <button
-                                                                        onClick={() => handleAnalyzeQuery(row.query, row.action)}
-                                                                        className="p-1 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded text-blue-600 dark:text-blue-400 transition-colors"
-                                                                        title="Analyze Query with AI"
-                                                                    >
-                                                                        <Sparkles className="w-4 h-4" />
-                                                                    </button>
+                                                                    {!row.parent_query && (
+                                                                        <button
+                                                                            onClick={() => handleAnalyze(row)}
+                                                                            className="p-1 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded text-blue-600 dark:text-blue-400 transition-colors"
+                                                                            title="Analyze Query with AI"
+                                                                        >
+                                                                            <Sparkles className="w-4 h-4" />
+                                                                        </button>
+                                                                    )}
                                                                 </td>
                                                                 <td className="px-3 py-3">
-                                                                    <ActionBadge action={row.action} />
+                                                                    {!row.parent_query && <ActionBadge action={row.action} />}
                                                                 </td>
-                                                                <td className="px-3 py-3 text-gray-900 dark:text-gray-100 max-w-[200px] truncate" title={row.query}>
-                                                                    {row.query}
+                                                                <td className="px-3 py-3 text-gray-900 dark:text-gray-100 max-w-[200px] truncate">
+                                                                    <div className="flex items-center gap-2">
+                                                                        {row.parent_query ? (
+                                                                            <div className="flex items-center">
+                                                                                <div className="w-10 h-1.5 bg-indigo-600 dark:bg-indigo-400 mr-3 shadow-sm" />
+                                                                                <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-black uppercase tracking-tighter mr-3 shrink-0 border-2 shadow-[3px_3px_0px_0px_rgba(0,0,0,0.15)] dark:shadow-[3px_3px_0px_0px_rgba(255,255,255,0.05)] ${row.channel_group?.toLowerCase().includes('search')
+                                                                                    ? 'bg-blue-600 text-white border-blue-700'
+                                                                                    : row.channel_group?.toLowerCase().includes('shopping')
+                                                                                        ? 'bg-amber-500 text-black border-amber-600'
+                                                                                        : row.channel_group?.toLowerCase().includes('max')
+                                                                                            ? 'bg-purple-600 text-white border-purple-700'
+                                                                                            : 'bg-black text-white border-gray-800'
+                                                                                    }`}>
+                                                                                    {row.channel_group}
+                                                                                </span>
+                                                                            </div>
+                                                                        ) : (
+                                                                            <>
+                                                                                {row.is_total_row && (
+                                                                                    <button
+                                                                                        onClick={() => toggleQueryExpansion(row.query)}
+                                                                                        className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+                                                                                    >
+                                                                                        {expandedQueries.has(row.query) ? (
+                                                                                            <ChevronDown className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                                                                                        ) : (
+                                                                                            <ChevronRight className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+                                                                                        )}
+                                                                                    </button>
+                                                                                )}
+                                                                                <span className="font-bold tracking-tight text-sm">
+                                                                                    {row.query}
+                                                                                </span>
+                                                                            </>
+                                                                        )}
+                                                                    </div>
                                                                 </td>
                                                                 <td className="px-3 py-3">
                                                                     {row.matchType ? (
@@ -2070,19 +2461,19 @@ export default function SeoPpcOpportunitiesPage() {
                                                                         <span className="text-gray-400">-</span>
                                                                     )}
                                                                 </td>
-                                                                <td className="px-3 py-3 text-gray-600 dark:text-gray-400">
+                                                                <td className={`px-3 py-3 ${row.parent_query ? 'text-sm text-gray-950 dark:text-white font-black' : 'text-gray-600 dark:text-gray-400'}`}>
                                                                     {row.position_org > 0 ? row.position_org.toFixed(1) : "-"}
                                                                 </td>
-                                                                <td className="px-3 py-3 text-gray-600 dark:text-gray-400">
+                                                                <td className={`px-3 py-3 ${row.parent_query ? 'text-sm text-gray-950 dark:text-white font-black' : 'text-gray-600 dark:text-gray-400'}`}>
                                                                     {row.clicks_org.toLocaleString()}
                                                                 </td>
-                                                                <td className="px-3 py-3 text-gray-600 dark:text-gray-400">
+                                                                <td className={`px-3 py-3 ${row.parent_query ? 'text-sm text-gray-950 dark:text-white font-black' : 'text-gray-600 dark:text-gray-400'}`}>
                                                                     {row.clicks_paid.toLocaleString()}
                                                                 </td>
-                                                                <td className="px-3 py-3 text-gray-600 dark:text-gray-400">
+                                                                <td className={`px-3 py-3 ${row.parent_query ? 'text-sm text-gray-950 dark:text-white font-black' : 'text-gray-600 dark:text-gray-400'}`}>
                                                                     {formatCurrency(row.cost_paid, currencyCode)}
                                                                 </td>
-                                                                <td className="px-3 py-3 text-gray-600 dark:text-gray-400">
+                                                                <td className={`px-3 py-3 ${row.parent_query ? 'text-sm text-gray-950 dark:text-white font-black' : 'text-gray-600 dark:text-gray-400'}`}>
                                                                     {row.conversions_paid.toFixed(1)}
                                                                 </td>
                                                                 <td className="px-3 py-3">
@@ -2128,9 +2519,71 @@ export default function SeoPpcOpportunitiesPage() {
                                                                         <span className="text-gray-400">-</span>
                                                                     )}
                                                                 </td>
-                                                                <td className="px-3 py-3 font-medium text-gray-900 dark:text-gray-100">
-                                                                    {row.opportunity_score.toFixed(0)}
+
+                                                                {/* Savings Score */}
+                                                                <td className="px-3 py-3">
+                                                                    <div
+                                                                        className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${row.projected_savings_score >= 80 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
+                                                                            row.projected_savings_score >= 50 ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/10 dark:text-emerald-500' :
+                                                                                'text-gray-400'
+                                                                            }`}
+                                                                        title="PPC Savings Score: High score means high potential to cut waste (Cannibalization or Inefficiency)"
+                                                                    >
+                                                                        {row.projected_savings_score > 0 ? row.projected_savings_score : '-'}
+                                                                    </div>
                                                                 </td>
+
+                                                                {/* Growth Score */}
+                                                                <td className="px-3 py-3">
+                                                                    <div
+                                                                        className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${row.projected_growth_score >= 80 ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                                                                            row.projected_growth_score >= 50 ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/10 dark:text-blue-500' :
+                                                                                'text-gray-400'
+                                                                            }`}
+                                                                        title="Growth Score: High score means high potential to capture NEW value (SEO Gaps or PPC Scaling)"
+                                                                    >
+                                                                        {row.projected_growth_score > 0 ? row.projected_growth_score : '-'}
+                                                                    </div>
+                                                                </td>
+
+                                                                {/* Comp Score */}
+                                                                <td className="px-3 py-3">
+                                                                    <div className="flex flex-col items-center">
+                                                                        <span className={`text-xs font-bold ${row.competition_score >= 70 ? 'text-red-600 dark:text-red-400' : row.competition_score >= 40 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                                                                            {row.competition_score.toFixed(0)}
+                                                                        </span>
+                                                                        <span className="text-[9px] text-gray-400 uppercase tracking-tighter">
+                                                                            {row.competition_source.replace('_level', '').replace('ad_group_fallback', 'fallback')}
+                                                                        </span>
+                                                                    </div>
+                                                                </td>
+
+                                                                {/* Coverage Score */}
+                                                                <td className="px-3 py-3">
+                                                                    {row.coverage_score !== undefined ? (
+                                                                        <div className="flex flex-col items-center">
+                                                                            <span className={`text-xs font-bold ${row.coverage_score >= 80 ? 'text-green-600' : 'text-gray-600'}`}>
+                                                                                {row.coverage_score.toFixed(0)}
+                                                                            </span>
+                                                                        </div>
+                                                                    ) : <span className="text-gray-400 text-xs">-</span>}
+                                                                </td>
+
+                                                                {/* Channel Group */}
+                                                                <td className="px-3 py-3">
+                                                                    {row.channel_group ? (
+                                                                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium uppercase ${row.channel_group === 'search' ? 'bg-blue-100 text-blue-700' :
+                                                                            row.channel_group === 'shopping' ? 'bg-pink-100 text-pink-700' :
+                                                                                row.channel_group === 'pmax' ? 'bg-purple-100 text-purple-700' :
+                                                                                    'bg-gray-100 text-gray-700'
+                                                                            }`}>
+                                                                            {row.channel_group}
+                                                                        </span>
+                                                                    ) : <span className="text-gray-400 text-xs">-</span>}
+                                                                </td>
+
+                                                                {/* Merge Level */}
+
                                                             </tr>
                                                         ))}
                                                     </tbody>
@@ -2178,13 +2631,23 @@ export default function SeoPpcOpportunitiesPage() {
                                                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                                                         AI Opportunity Analysis
                                                     </h3>
-                                                    <div className="flex items-center gap-2 mt-1">
-                                                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                                                            Analyzing query: <span className="font-medium text-gray-900 dark:text-gray-200">{analysisData?.query || "Loading..."}</span>
-                                                        </p>
-                                                        {analysisData?.action && (
-                                                            <ActionBadge action={analysisData.action} />
-                                                        )}
+                                                    <div className="flex flex-col mt-1">
+                                                        <div className="flex items-center gap-2">
+                                                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                                                                Analyzing query: <span className="font-medium text-gray-900 dark:text-gray-200">{selectedRow?.query || "Loading..."}</span>
+                                                            </p>
+                                                            {selectedRow?.action && (
+                                                                <ActionBadge action={selectedRow.action} />
+                                                            )}
+                                                        </div>
+                                                        <a
+                                                            href={`https://www.google.com/search?q=${encodeURIComponent(selectedRow?.query || "")}`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="text-[11px] text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline flex items-center gap-1 mt-0.5 w-fit"
+                                                        >
+                                                            View live on Google <ExternalLink className="w-2.5 h-2.5" />
+                                                        </a>
                                                     </div>
                                                 </div>
                                             </div>
@@ -2207,7 +2670,7 @@ export default function SeoPpcOpportunitiesPage() {
                                                     <AlertCircle className="w-12 h-12 mb-4 text-red-500 opacity-50" />
                                                     <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">Analysis Failed</h3>
                                                     <p className="max-w-md text-gray-600 dark:text-gray-300 mb-4">{analysisError}</p>
-                                                    {analysisError.includes("credentials") && (
+                                                    {analysisError?.includes("credentials") && (
                                                         <div className="p-4 bg-gray-100 dark:bg-gray-800 rounded text-left text-sm text-gray-700 dark:text-gray-300 font-mono border border-gray-200 dark:border-gray-700">
                                                             DATAFORSEO_LOGIN=...<br />
                                                             DATAFORSEO_PASSWORD=...
@@ -2224,41 +2687,41 @@ export default function SeoPpcOpportunitiesPage() {
                                                         <div className="grid md:grid-cols-2 gap-6">
                                                             <div>
                                                                 <h5 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
-                                                                    {analysisData.aiRecommendation.action}
+                                                                    {analysisData?.aiRecommendation?.action}
                                                                 </h5>
                                                                 <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
-                                                                    {analysisData.aiRecommendation.reasoning}
+                                                                    {analysisData?.aiRecommendation?.reasoning}
                                                                 </p>
                                                             </div>
                                                             <div className="space-y-3">
                                                                 <div className="flex justify-between items-center gap-4 p-3 bg-white/50 dark:bg-black/20 rounded-lg border border-purple-100 dark:border-purple-800/50">
                                                                     <span className="text-sm font-medium text-gray-500 dark:text-gray-400 shrink-0">Predicted Impact</span>
-                                                                    <span className="text-sm font-semibold text-purple-700 dark:text-purple-300 text-right">{analysisData.aiRecommendation.impact}</span>
+                                                                    <span className="text-sm font-semibold text-purple-700 dark:text-purple-300 text-right">{analysisData?.aiRecommendation?.impact}</span>
                                                                 </div>
                                                                 <div className="flex justify-between items-center gap-4 p-3 bg-white/50 dark:bg-black/20 rounded-lg border border-purple-100 dark:border-purple-800/50">
                                                                     <span className="text-sm font-medium text-gray-500 dark:text-gray-400 shrink-0">Difficulty</span>
-                                                                    <span className={`text-sm font-semibold px-2 py-0.5 rounded ${analysisData.aiRecommendation.difficulty === 'Low' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
-                                                                        analysisData.aiRecommendation.difficulty === 'Medium' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' :
+                                                                    <span className={`text-sm font-semibold px-2 py-0.5 rounded ${analysisData?.aiRecommendation?.difficulty === 'Low' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
+                                                                        analysisData?.aiRecommendation?.difficulty === 'Medium' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' :
                                                                             'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
-                                                                        }`}>{analysisData.aiRecommendation.difficulty}</span>
+                                                                        }`}>{analysisData?.aiRecommendation?.difficulty}</span>
                                                                 </div>
                                                             </div>
                                                         </div>
                                                     </div>
 
                                                     {/* Metrics Grid */}
-                                                    <div className={`grid grid-cols-1 md:grid-cols-${analysisData.targetRank ? '4' : '3'} gap-4`}>
-                                                        {analysisData.targetRank && (
-                                                            <div className={`p-4 rounded-xl border transition-all duration-300 ${analysisData.targetRank === 1
-                                                                    ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 shadow-sm ring-1 ring-emerald-500/20'
-                                                                    : 'bg-purple-50 dark:bg-purple-900/10 border-purple-200 dark:border-purple-800/30'
+                                                    <div className={`grid grid-cols-1 md:grid-cols-${analysisData?.targetRank ? '3' : '2'} gap-4`}>
+                                                        {analysisData?.targetRank && (
+                                                            <div className={`p-4 rounded-xl border transition-all duration-300 ${analysisData?.targetRank === 1
+                                                                ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 shadow-sm ring-1 ring-emerald-500/20'
+                                                                : 'bg-purple-50 dark:bg-purple-900/10 border-purple-200 dark:border-purple-800/30'
                                                                 }`}>
-                                                                <p className={`text-xs uppercase font-bold tracking-wider ${analysisData.targetRank === 1 ? 'text-emerald-600 dark:text-emerald-400' : 'text-purple-600 dark:text-purple-400'
+                                                                <p className={`text-xs uppercase font-bold tracking-wider ${analysisData?.targetRank === 1 ? 'text-emerald-600 dark:text-emerald-400' : 'text-purple-600 dark:text-purple-400'
                                                                     }`}>Organic Rank</p>
                                                                 <div className="flex items-center gap-2 mt-1">
-                                                                    <p className={`text-3xl font-black ${analysisData.targetRank === 1 ? 'text-emerald-700 dark:text-emerald-300' : 'text-gray-900 dark:text-white'
-                                                                        }`}>#{analysisData.targetRank}</p>
-                                                                    {analysisData.targetRank === 1 && (
+                                                                    <p className={`text-3xl font-black ${analysisData?.targetRank === 1 ? 'text-emerald-700 dark:text-emerald-300' : 'text-gray-900 dark:text-white'
+                                                                        }`}>#{analysisData?.targetRank}</p>
+                                                                    {analysisData?.targetRank === 1 && (
                                                                         <div className="bg-emerald-100 dark:bg-emerald-800 text-emerald-700 dark:text-emerald-300 p-1 rounded-full">
                                                                             <Sparkles className="w-4 h-4" />
                                                                         </div>
@@ -2266,7 +2729,8 @@ export default function SeoPpcOpportunitiesPage() {
                                                                 </div>
                                                             </div>
                                                         )}
-                                                        <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
+                                                        {/* Keyword Difficulty Removed as per request */}
+                                                        {/* <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
                                                             <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-medium">Keyword Difficulty</p>
                                                             <div className="flex items-end gap-2 mt-1">
                                                                 <span className="text-2xl font-bold text-gray-900 dark:text-white">{analysisData.difficulty}/100</span>
@@ -2277,14 +2741,14 @@ export default function SeoPpcOpportunitiesPage() {
                                                                     />
                                                                 </div>
                                                             </div>
-                                                        </div>
+                                                        </div> */}
                                                         <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
                                                             <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-medium">Search Intent</p>
-                                                            <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1 capitalize">{analysisData.intent}</p>
+                                                            <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1 capitalize">{analysisData?.intent}</p>
                                                         </div>
                                                         <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
                                                             <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-medium">Est. Volume</p>
-                                                            <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{formatNumber(analysisData.searchVolume)}</p>
+                                                            <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{formatNumber(analysisData?.searchVolume || 0)}</p>
                                                         </div>
                                                     </div>
 
@@ -2292,7 +2756,7 @@ export default function SeoPpcOpportunitiesPage() {
                                                     <div>
                                                         <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3 uppercase tracking-wider">Present SERP Features</h4>
                                                         <div className="flex flex-wrap gap-2">
-                                                            {analysisData.serpFeatures.map(feature => (
+                                                            {analysisData?.serpFeatures?.map(feature => (
                                                                 <span key={feature} className="px-3 py-1 bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300 rounded-full text-sm font-medium border border-blue-100 dark:border-blue-800/30">
                                                                     {feature}
                                                                 </span>
@@ -2366,7 +2830,7 @@ export default function SeoPpcOpportunitiesPage() {
                                                                         </tr>
                                                                     </thead>
                                                                     <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                                                                        {analysisData.topResults.map((result) => {
+                                                                        {analysisData?.topResults?.map((result) => {
                                                                             const isTarget = selectedProperty && result.url.toLowerCase().includes(selectedProperty.toLowerCase());
                                                                             return (
                                                                                 <tr key={result.rank} className={`hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors ${isTarget ? 'bg-emerald-50/50 dark:bg-emerald-900/20' : ''}`}>
@@ -2405,7 +2869,7 @@ export default function SeoPpcOpportunitiesPage() {
                         }
                     </div>
                 </div>
-            </main>
-        </div>
+            </main >
+        </div >
     );
 }
