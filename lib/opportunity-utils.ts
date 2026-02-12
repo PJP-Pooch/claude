@@ -170,7 +170,7 @@ export function classifyAction(
     const hasCoveragePressure = row.has_shopping_coverage || row.has_pmax_coverage;
     const campaignStatusPressure = row.campaign_status_reasons && row.campaign_status_reasons.length > 0;
 
-    if (position_org > 0 && position_org <= 5 && (isPaidProfitable || (isBrand && isMarginallyProfitable))) {
+    if (position_org > 0 && position_org <= 3 && (isPaidProfitable || (isBrand && isMarginallyProfitable))) {
         // Trigger Defend if high competition OR we are seeing coverage pressure from other channels
         if (isHighCompetition || hasCoveragePressure || campaignStatusPressure) {
             return 'Defend';
@@ -192,7 +192,7 @@ export function classifyAction(
     }
 
     // --- PRIORITY 4: High-performing organic with inefficient paid ---
-    if (position_org > 0 && position_org <= 5) {
+    if (position_org > 0 && position_org <= 3) {
         if (isBrand) {
             // BRAND RULE: If we are #1 organically, consider reducing spend to test cannibalization
             // even if ROAS is okay, unless it's "Highly Profitable".
@@ -233,8 +233,14 @@ export function classifyAction(
 
     // --- PRIORITY 5: Investigate (High position, but CTR Gap) ---
     // Escalated priority for top-5 positions with poor CTR as requested
-    if (position_org > 0 && position_org <= 5 && ctrRatio < 0.5 && hasSignificantOrgData) {
+    if (position_org > 0 && position_org <= 3 && ctrRatio < 0.5 && hasSignificantOrgData) {
         return 'Investigate';
+    }
+
+    // --- NEW PRIORITY 5.5: Scale Spend (CTR) (Profitable but not dominant) ---
+    // If we rank well (3-10) and the keyword is profitable, we should push harder
+    if (position_org > 3 && position_org <= 10 && isPaidProfitable && hasSignificantPaidData) {
+        return 'Scale Spend';
     }
 
     // --- PRIORITY 6: SEO Focus (Proven demand, poor organic) ---
@@ -246,13 +252,13 @@ export function classifyAction(
     }
 
     // --- PRIORITY 7: Investigate (General organic rank, poor CTR) ---
-    if (position_org > 5 && position_org <= 10 && ctrRatio < 0.6 && hasSignificantOrgData) {
+    if (position_org > 3 && position_org <= 10 && ctrRatio < 0.6 && hasSignificantOrgData) {
         return 'Investigate';
     }
 
-    // --- PRIORITY 8: Monitor (Winning organically, no current spend) ---
+    // --- PRIORITY 8: Baseline dominance (Winning organically, no current spend) ---
     if (position_org > 0 && position_org <= 3 && cost_paid === 0) {
-        return 'Monitor';
+        return 'No Action';
     }
 
     // Default: No Action should ONLY be for Profitable & Stable terms
@@ -260,8 +266,8 @@ export function classifyAction(
         return 'No Action';
     }
 
-    // If it's loss making but doesn't hit thresholds, still flag it as Reduce
-    if (isPaidUnprofitable && cost_paid > 25) {
+    // If it's loss making but doesn't hit thresholds, still flag it as Reduce IF it has dominance
+    if (isPaidUnprofitable && cost_paid > 25 && position_org > 0 && position_org <= 3) {
         return 'Reduce Spend';
     }
 
@@ -299,13 +305,13 @@ export function getActionReason(row: Omit<MergedOpportunityRow, 'action' | 'oppo
         case 'Scale Spend':
             return `High ROAS (>4) but low Impression Share (<50%). Significant opportunity to capture more profitable volume by increasing budget/bids.`;
         case 'Test PPC Pause':
-            return `Strong Organic presence (Pos 1-3) and low competition (Score < 40). Paid Ads are likely cannibalizing organic traffic. Safe to test pause.`;
+            return `Strong Organic presence (Pos < 3) and low competition (Score < 40). Paid Ads are likely cannibalizing organic traffic. Safe to test pause.`;
         case 'Test Multi-Channel Pause':
-            return `Severe Redundancy: You are paying for multiple ad placements (Search + Shopping/PMax) while dominating organically (Pos 1-3). The second ad placement is highly likely to be wasted spend.`;
+            return `Severe Redundancy: You are paying for multiple ad placements (Search + Shopping/PMax) while dominating organically (Pos < 3). The second ad placement is highly likely to be wasted spend.`;
         case 'Reduce Spend':
-            return `Strong Organic presence (Pos 1-3) with moderate competition (Score < 50). Can reduce ad spend without losing traffic.`;
+            return `Strong Organic presence (Pos < 3) with moderate competition (Score < 50). Can reduce ad spend without losing traffic.`;
         case "Defend":
-            return `Protect high-value terms where you have organic dominance but face intense auction pressure. Org 1-3 + ROAS >= 4 + Comp Score >= 60. Maintain detailed defense strategy to prevent competitors from stealing clicks.`;
+            return `Protect high-value terms where you have organic dominance but face intense auction pressure. Org < 3 + ROAS >= 4 + Comp Score >= 60. Maintain detailed defense strategy to prevent competitors from stealing clicks.`;
         case 'Investigate PPC':
             return `High spend keywords with zero conversions (Cost > £40). Significant waste that needs immediate stopping or reassessing.`;
         case 'SEO Focus':
@@ -320,14 +326,8 @@ export function getActionReason(row: Omit<MergedOpportunityRow, 'action' | 'oppo
             if (position_org === 0) return `No organic visibility yet. Test viability with a small PPC campaign to gauge conversion potential before investing in SEO.`;
             if (clicks_org === 0 && impressions_org < 50) return `Low organic volume. PPC can help validate keyword demand and gather initial data.`;
             return `Potential gap in coverage. Consider testing Ads to capture traffic.`;
-        case 'Increase Spend (CTR)':
-            return `Good organic ranking (Pos 4-10) and highly profitable ads. Increasing ad spend can maximize capture while working on organic improvements.`;
-        case 'Monitor':
-            if (position_org > 0 && position_org <= 10 && cost_paid === 0) return `Already winning organically (Top 10) with no ad spend. Maintain current performance.`;
-            return `Current performance is stable. No immediate high-impact action required.`;
         case 'No Action':
-            if (position_org > 10 && position_org <= 20 && cost_paid === 0) return `Ranking in striking distance (Page 2) with no paid activity. Not flagged as 'SEO Focus' due to lack of paid validation.`;
-            return `No specific opportunity flag triggered based on current data.`;
+            return `Current performance is stable or keyword lacks sufficient signals for a specific recommendation. Maintain current monitoring.`;
         default:
             return `General opportunity derived from performance analysis.`;
     }
@@ -463,10 +463,7 @@ export function computeOpportunityScore(row: Omit<MergedOpportunityRow, 'opportu
         'Scale Spend': 1.25,
         'Add Exact Match': 1.1,
         'Defend': 1.2,
-        'Activate PPC (Pos)': 1.15,
-        'Increase Spend (CTR)': 1.1,
         'Consider PPC': 1.0,
-        'Monitor': 1.0,
         'No Action': 1.0
     };
 
@@ -664,12 +661,21 @@ export function mergeDatasets(
     for (const query of Array.from(queries)) {
         if (!query) continue;
         const gsc = gscMap.get(query);
-        const adsRowsForQuery = adsByQuery.get(query) || [];
+        let adsRowsForQuery = adsByQuery.get(query) || [];
 
         // If no Ads data but has GSC, create one dummy row for merging
         if (adsRowsForQuery.length === 0) {
-            adsRowsForQuery.push({ channel: 'n/a', data: null as any });
+            adsRowsForQuery = [{ channel: 'n/a', data: null as any }];
         }
+
+        // Filter out rows with zero organic AND zero paid clicks
+        const clicks_org_check = gsc?.clicks ?? 0;
+        adsRowsForQuery = adsRowsForQuery.filter(row => {
+            const clicks_paid = row.data?.clicks ?? 0;
+            return clicks_org_check > 0 || clicks_paid > 0;
+        });
+
+        if (adsRowsForQuery.length === 0) continue;
 
         // Identify "Primary" (highest spend) for GSC metrics ownership
         let maxSpend = -1;
@@ -907,14 +913,11 @@ export function mergeDatasets(
 export function calculateSummary(data: MergedOpportunityRow[]): OpportunitySummary {
     const actionBreakdown: Record<OpportunityAction, number> = {
         'SEO Focus': 0,
-        'Activate PPC (Pos)': 0,
         'Consider PPC': 0,
         'Investigate': 0,
         'Investigate PPC': 0,
-        'Increase Spend (CTR)': 0,
         'Reduce Spend': 0,
         'Test PPC Pause': 0,
-        'Monitor': 0,
         'Add Exact Match': 0,
         'Scale Spend': 0,
         'Defend': 0,
@@ -993,7 +996,7 @@ export function calculateSummary(data: MergedOpportunityRow[]): OpportunitySumma
     const blendedCtr = totalImpressions > 0 ? totalClicks / totalImpressions : 0;
 
     // Count opportunities (non-Monitor actions)
-    const opportunityCount = data.filter(r => r.action !== 'Monitor').length;
+    const opportunityCount = data.filter(r => r.action !== 'No Action').length;
 
     // Calculate weighted averages
     const avgRoas = roasCount > 0 ? roasSum / roasCount : null;
@@ -1074,7 +1077,7 @@ export function prepareScoreDistribution(data: MergedOpportunityRow[]): ScoreDis
         'Reduce Spend',
         'Investigate',
         'Investigate PPC',
-        'Monitor' // Often implies cost saving/maintenance
+        'Test Multi-Channel Pause'
     ]);
 
     for (const row of data) {
@@ -1237,16 +1240,13 @@ export function getActionColor(action: OpportunityAction): string {
         'Add Exact Match': '#06b6d4',  // Cyan
         'Scale Spend': '#22c55e',      // Lime Green
         'SEO Focus': '#10b981',        // Green
-        'Activate PPC (Pos)': '#3b82f6', // Blue
         'Consider PPC': '#6366f1',      // Indigo
         'Investigate': '#f59e0b',       // Amber
         'Investigate PPC': '#dc2626',   // Bright Red (Critical)
-        'Increase Spend (CTR)': '#8b5cf6', // Purple
         'Reduce Spend': '#f97316',      // Orange
         'Defend': '#7c3aed',            // Violet
         'Test PPC Pause': '#ec4899',
         'Test Multi-Channel Pause': '#f43f5e',
-        'Monitor': '#cbd5e1',
         'No Action': '#f1f5f9',
     };
     return colors[action] || '#cccccc';
@@ -1387,20 +1387,6 @@ export function generateMockSerpAnalysis(query: string, action?: OpportunityActi
                 difficulty: "Medium"
             }
         ],
-        'Activate PPC (Pos)': [
-            {
-                action: "Launch Targeted PPC Campaign",
-                reasoning: "Organic rank is page 1 but not top 3. PPC can capture additional traffic that's going to top-3 competitors.",
-                impact: "High - Capture 20-30% more clicks with blended approach",
-                difficulty: "Low"
-            },
-            {
-                action: "Test Shopping Ads",
-                reasoning: "If this is a product keyword, Shopping ads often have lower CPCs and higher intent than text ads.",
-                impact: "Medium - Often more cost-effective than search ads",
-                difficulty: "Medium"
-            }
-        ],
         'Consider PPC': [
             {
                 action: "Run Test Campaign (2 Weeks)",
@@ -1420,28 +1406,6 @@ export function generateMockSerpAnalysis(query: string, action?: OpportunityActi
                 action: "Review Search Terms Report",
                 reasoning: "This keyword may be triggering for irrelevant queries. Add negative keywords to improve targeting.",
                 impact: "Medium - Cleaner traffic, better ROAS",
-                difficulty: "Low"
-            }
-        ],
-        'Increase Spend (CTR)': [
-            {
-                action: "Improve Ad Copy & Extensions",
-                reasoning: "CTR is below benchmark for this position. Test new headlines with USPs, pricing, and urgency.",
-                impact: "Medium - CTR improvement of 0.5-1%",
-                difficulty: "Low"
-            },
-            {
-                action: "Add All Relevant Ad Extensions",
-                reasoning: "Ensure sitelinks, callouts, structured snippets, and price extensions are active. These increase ad real estate.",
-                impact: "Medium - Higher CTR and Quality Score",
-                difficulty: "Low"
-            }
-        ],
-        'Monitor': [
-            {
-                action: "Continue Current Strategy",
-                reasoning: "Metrics are stable and within acceptable range. No immediate action needed, but review monthly.",
-                impact: "Low - Maintain status quo",
                 difficulty: "Low"
             }
         ],
@@ -1570,14 +1534,6 @@ export function getAiRecommendation(query: string, action: OpportunityAction): A
                 difficulty: "Low"
             }
         ],
-        'Activate PPC (Pos)': [
-            {
-                action: "Turn on PPC with Low Bid",
-                reasoning: "You have no organic or paid presence, but there is demand. Start small to see if it converts.",
-                impact: "Medium",
-                difficulty: "Low"
-            }
-        ],
         'Consider PPC': [
             {
                 action: "Run Test Campaign (2 Weeks)",
@@ -1592,22 +1548,6 @@ export function getAiRecommendation(query: string, action: OpportunityAction): A
                 reasoning: "Metrics are inconsistent. Check landing page experience, bounce rate, and conversion funnel for issues.",
                 impact: "Variable - Depends on what you find",
                 difficulty: "Medium"
-            }
-        ],
-        'Increase Spend (CTR)': [
-            {
-                action: "Improve Ad Copy & Extensions",
-                reasoning: "CTR is below benchmark for this position. Test new headlines with USPs, pricing, and urgency.",
-                impact: "Medium - CTR improvement of 0.5-1%",
-                difficulty: "Low"
-            }
-        ],
-        'Monitor': [
-            {
-                action: "Continue Current Strategy",
-                reasoning: "Metrics are stable and within acceptable range. No immediate action needed, but review monthly.",
-                impact: "Low - Maintain status quo",
-                difficulty: "Low"
             }
         ],
         'Investigate PPC': [

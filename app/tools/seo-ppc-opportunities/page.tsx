@@ -162,24 +162,19 @@ const ACTION_DEFINITIONS: Record<string, { definition: string; rule: string; col
         color: "#10b981"
     },
     "Test PPC Pause": {
-        definition: "Strong Organic presence (Pos 1-3) with unprofitable ads. Safe to test pausing if Coverage (COV) is high or NOT a brand term.",
-        rule: "Organic 1-3 + ROAS < Avg + (High COV or NOT Brand).",
+        definition: "Strong Organic presence (Pos < 3) with unprofitable ads. Safe to test pausing if Coverage (COV) is high or NOT a brand term.",
+        rule: "Organic < 3 + ROAS < Avg + (High COV or NOT Brand).",
         color: "#ef4444"
     },
     "Reduce Spend": {
-        definition: "Strong organic presence where paid spend is inefficient. Prioritized if cross-channel coverage (Shopping/PMax) exists.",
-        rule: "Organic 1-3 + ROAS < Target + Multi-channel coverage.",
+        definition: "Strong organic presence (Pos < 3) where paid spend is inefficient. Prioritized if cross-channel coverage (Shopping/PMax) exists.",
+        rule: "Organic < 3 + ROAS < Target + Multi-channel coverage.",
         color: "#f59e0b"
     },
     "Investigate": {
         definition: "Good organic ranking but suspiciously low CTR. Check for title issues or SERP feature displacement.",
         rule: "Organic 1-10 + CTR < 50% of expected.",
         color: "#8b5cf6"
-    },
-    "Increase Spend (CTR)": {
-        definition: "Winning organically (Pos 4-10) and profitable on paid. Push harder to dominate SERP.",
-        rule: "Organic 4-10 + High ROAS.",
-        color: "#ec4899"
     },
     "Consider PPC": {
         definition: "No organic presence. Test small PPC budget to validate demand.",
@@ -188,7 +183,7 @@ const ACTION_DEFINITIONS: Record<string, { definition: string; rule: string; col
     },
     "Defend": {
         definition: "Protect high-value terms where you have organic dominance but face intense auction pressure.",
-        rule: "Org 1-5 + Profitable Paid + Comp Score >= 60.",
+        rule: "Org < 3 + Profitable Paid + Comp Score >= 60.",
         color: "#7c3aed"
     },
     "Investigate PPC": {
@@ -380,7 +375,7 @@ export default function SeoPpcOpportunitiesPage() {
     const [customEndDate, setCustomEndDate] = useState<string>("");
 
     // Data state
-    const [data, setData] = useState<MergedOpportunityRow[]>([]);
+    // Derived from raw sources using useMemo to avoid state synchronization loops
     const [rawGscData, setRawGscData] = useState<GscQueryRow[]>([]);
     const [rawAdsData, setRawAdsData] = useState<AdsSearchTermRow[]>([]);
     const [rawCampaignData, setRawCampaignData] = useState<CampaignReportRow[]>([]);
@@ -413,12 +408,9 @@ export default function SeoPpcOpportunitiesPage() {
     };
 
     // Merge data whenever raw sources change
-    // Also re-run when brand terms change
-    useEffect(() => {
-        if (rawGscData.length || rawAdsData.length) {
-            const merged = mergeDatasets(rawGscData, rawAdsData, brandTerms, keywordMetricsData, rawCampaignData);
-            setData(merged);
-        }
+    const data = useMemo(() => {
+        if (!rawGscData.length && !rawAdsData.length) return [];
+        return mergeDatasets(rawGscData, rawAdsData, brandTerms, keywordMetricsData, rawCampaignData);
     }, [rawGscData, rawAdsData, brandTerms, keywordMetricsData, rawCampaignData]);
     const [filterActions, setFilterActions] = useState<OpportunityAction[]>([]);
     const toggleAction = (action: OpportunityAction) => {
@@ -432,7 +424,7 @@ export default function SeoPpcOpportunitiesPage() {
     const [filterAdGroup, setFilterAdGroup] = useState<string>("all");
     const [searchQuery, setSearchQuery] = useState<string>("");
     const [searchMode, setSearchMode] = useState<'contains' | 'equals' | 'regex'>('contains');
-    const [showTop, setShowTop] = useState<number>(100);
+    const [showTop, setShowTop] = useState<number>(10);
 
     // File upload ref
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -460,8 +452,6 @@ export default function SeoPpcOpportunitiesPage() {
     });
 
     const clearAllData = useCallback(() => {
-        setData([]);
-        setData([]);
         setRawGscData([]);
         setRawAdsData([]);
         setKeywordMetricsData([]);
@@ -497,12 +487,23 @@ export default function SeoPpcOpportunitiesPage() {
         return getDateRangeFromPreset(datePreset);
     }, [datePreset, customStartDate, customEndDate]);
 
-    // Sync brandTermsInput to brandTerms
+    // Sync brandTermsInput to brandTerms with debounce
     useEffect(() => {
-        const terms = brandTermsInput.split(',')
-            .map(t => t.trim().toLowerCase())
-            .filter(t => t.length > 0);
-        setBrandTerms(terms);
+        const timer = setTimeout(() => {
+            const terms = brandTermsInput.split(',')
+                .map(t => t.trim().toLowerCase())
+                .filter(t => t.length > 0);
+
+            // Only update if actually changed to avoid unnecessary re-merges
+            setBrandTerms(prev => {
+                if (prev.length === terms.length && prev.every((t, i) => t === terms[i])) {
+                    return prev;
+                }
+                return terms;
+            });
+        }, 800);
+
+        return () => clearTimeout(timer);
     }, [brandTermsInput]);
 
     // Fetch and update data
@@ -512,8 +513,6 @@ export default function SeoPpcOpportunitiesPage() {
         setProgress("Starting data fetch...");
 
         // Clear existing data to avoid stale state
-        setData([]);
-        setData([]);
         setRawGscData([]);
         setRawAdsData([]);
         setRawCampaignData([]);

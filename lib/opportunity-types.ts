@@ -5,19 +5,16 @@
 // Action classifications for opportunities
 export type OpportunityAction =
     | 'SEO Focus'
-    | 'Activate PPC (Pos)'
     | 'Consider PPC'
     | 'Investigate'
-    | 'Increase Spend (CTR)'
     | 'Reduce Spend'
     | 'Test PPC Pause'
-    | 'Monitor'
-    | 'No Action'         // New: Default when no specific flag is triggered
-    | 'Add Exact Match'   // New: Broad match with conversions
-    | 'Scale Spend'       // New: High ROAS with low impression share
-    | 'Defend'            // New: High ROAS and High Competition
-    | 'Investigate PPC'   // New: High spend with low performance
-    | 'Test Multi-Channel Pause'; // New: Search + Shopping active + Strong Organic
+    | 'No Action'
+    | 'Add Exact Match'
+    | 'Scale Spend'
+    | 'Defend'
+    | 'Investigate PPC'
+    | 'Test Multi-Channel Pause';
 
 export type StrategicTier = 'Brand Core' | 'High Intent' | 'Mid Funnel' | 'Informational';
 
