@@ -560,7 +560,7 @@ export default function SeoPpcOpportunitiesPage() {
     const [showGlossary, setShowGlossary] = useState(false);
 
     // Table state
-    const [sortKey, setSortKey] = useState<keyof MergedOpportunityRow>("opportunity_score");
+    const [sortKey, setSortKey] = useState<keyof MergedOpportunityRow>("projected_growth_score");
     const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
     const [expandedQueries, setExpandedQueries] = useState<Set<string>>(new Set());
 
@@ -2388,7 +2388,7 @@ export default function SeoPpcOpportunitiesPage() {
                                             {/* Score Distribution */}
                                             <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700">
                                                 <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
-                                                    Opportunity Score Distribution
+                                                    Save vs. Grow Distribution
                                                 </h3>
                                                 <div className="h-64">
                                                     <ResponsiveContainer width="100%" height="100%">
@@ -2805,7 +2805,8 @@ export default function SeoPpcOpportunitiesPage() {
                                                                 { key: "roas_paid", label: "ROAS", width: "70px", title: "Return on Ad Spend (Value / Cost)" },
                                                                 { key: "conversionRate", label: "CVR", width: "65px", title: "Conversion Rate (Conversions / Clicks)" },
                                                                 { key: "impressionShare", label: "IS %", width: "65px", title: "Search Impression Share (how often your ad appeared vs available)" },
-                                                                { key: "opportunity_score", label: "Score", width: "65px", title: "Opportunity Score (Combined Potential)" },
+                                                                { key: "projected_savings_score", label: "Save", width: "60px", title: "Save Score: Priority for reducing wasted spend (0-100)" },
+                                                                { key: "projected_growth_score", label: "Grow", width: "60px", title: "Grow Score: Priority for capturing new value (0-100)" },
                                                                 { key: "confidence", label: "Conf", width: "60px", title: "Algorithm Confidence Level" },
                                                                 { key: "competition_score", label: "Comp", width: "60px", title: "Competition Score: Estimate of auction intensity (0-100)" },
                                                                 { key: "coverage_score", label: "Cov", width: "60px", title: "Coverage Score: Measures channel presence (Search + Shopping + PMax). Higher = safer to optimize." },
@@ -2964,15 +2965,28 @@ export default function SeoPpcOpportunitiesPage() {
                                                                         <span className="text-gray-400">-</span>
                                                                     )}
                                                                 </td>
+                                                                {/* Save Score */}
                                                                 <td className="px-3 py-3">
                                                                     <div
-                                                                        className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${(row.opportunity_score || 0) >= 80 ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400" :
-                                                                            (row.opportunity_score || 0) >= 50 ? "bg-purple-50 text-purple-600 dark:bg-purple-900/10 dark:text-purple-500" :
+                                                                        className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${(row.projected_savings_score || 0) >= 70 ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" :
+                                                                            (row.projected_savings_score || 0) >= 40 ? "bg-orange-50 text-orange-600 dark:bg-orange-900/10 dark:text-orange-500" :
                                                                                 "text-gray-400"
                                                                             }`}
-                                                                        title="Opportunity Score"
+                                                                        title="Save Score: Potential waste reduction"
                                                                     >
-                                                                        {row.opportunity_score || "-"}
+                                                                        {row.projected_savings_score || "-"}
+                                                                    </div>
+                                                                </td>
+                                                                {/* Grow Score */}
+                                                                <td className="px-3 py-3">
+                                                                    <div
+                                                                        className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${(row.projected_growth_score || 0) >= 70 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" :
+                                                                            (row.projected_growth_score || 0) >= 40 ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/10 dark:text-emerald-500" :
+                                                                                "text-gray-400"
+                                                                            }`}
+                                                                        title="Grow Score: Growth potential"
+                                                                    >
+                                                                        {row.projected_growth_score || "-"}
                                                                     </div>
                                                                 </td>
                                                                 <td className="px-3 py-3">
