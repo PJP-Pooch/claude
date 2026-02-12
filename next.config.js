@@ -16,6 +16,19 @@ const nextConfig = {
       },
     ],
   },
+  // Build optimizations
+  swcMinify: true, // Use SWC for faster minification
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production' ? {
+      exclude: ['error', 'warn'],
+    } : false,
+  },
+  // Reduce bundle size
+  experimental: {
+    optimizePackageImports: ['lucide-react', 'recharts'],
+  },
+  // Disable source maps in production for faster builds
+  productionBrowserSourceMaps: false,
   // Security headers
   async headers() {
     return [

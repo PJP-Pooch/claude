@@ -5,9 +5,19 @@ services:
     region: frankfurt
     plan: starter
     branch: claude/serp-query-clustering-app-011CUNsdMyBEmq6BaSMBTc3C
-    buildCommand: npm install && npm run build
+    buildCommand: npm ci --legacy-peer-deps && npm run build
     startCommand: npm start
     healthCheckPath: /
+    buildFilter:
+      paths:
+        - app/**
+        - lib/**
+        - public/**
+        - package.json
+        - package-lock.json
+        - next.config.js
+        - tsconfig.json
+        - tailwind.config.ts
     envVars:
       - key: NODE_VERSION
         value: 18
