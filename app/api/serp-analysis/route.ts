@@ -266,7 +266,7 @@ export async function POST(request: Request) {
             intent,
             searchVolume,
             difficulty,
-            aiRecommendation: getAiRecommendation(keyword, action || 'No Action')
+            aiRecommendation: getAiRecommendation(keyword, action || 'No Action', targetRank || body.position || 0)
         });
 
     } catch (error: any) {

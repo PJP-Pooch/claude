@@ -1479,7 +1479,7 @@ export function generateMockSerpAnalysis(query: string, action?: OpportunityActi
         difficulty: "Medium"
     };
 
-    const aiRecommendation = getAiRecommendation(query, action || 'No Action');
+    const aiRecommendation = getAiRecommendation(query, action || 'No Action', Math.random() * 50);
 
     return {
         query,
@@ -1497,14 +1497,21 @@ export function generateMockSerpAnalysis(query: string, action?: OpportunityActi
 /**
  * Get a structured AI recommendation based on the determined action and SERP context
  */
-export function getAiRecommendation(query: string, action: OpportunityAction): AiRecommendation {
+export function getAiRecommendation(query: string, action: OpportunityAction, position: number = 0): AiRecommendation {
+    const isPage1 = position > 0 && position <= 10;
+    const isStrikingDistance = position > 10 && position <= 25;
+
     const actionRecommendations: Record<OpportunityAction, Array<Omit<AiRecommendation, 'action'> & { action: string }>> = {
         'SEO Focus': [
             {
-                action: "Optimize Content for Top 3",
-                reasoning: "You are already ranking on page 1. Subtle improvements to H1s, internal linking, and content depth could push you into the top 3 and eliminate the need for PPC spend on this term.",
-                impact: "High - Potential to save 100% of PPC spend",
-                difficulty: "Medium"
+                action: isPage1 ? "Optimize Content for Top 3" : (isStrikingDistance ? "Push to Page 1" : "Build Organic Visibility"),
+                reasoning: isPage1
+                    ? "You are already ranking on page 1. Subtle improvements to H1s, internal linking, and content depth could push you into the top 3 and eliminate the need for PPC spend on this term."
+                    : (isStrikingDistance
+                        ? "You are currently ranking on page 2. Improving the page relevance, adding more internal links, and enhancing content depth can push you onto page 1 where traffic volume is significantly higher."
+                        : "You have low or no organic visibility for this term. Since it's proven to convert via PPC, consider creating or optimizing a dedicated landing page to capture this traffic organically."),
+                impact: isPage1 ? "High - Potential to save 100% of PPC spend" : "High - Significant organic traffic growth potential",
+                difficulty: isPage1 ? "Medium" : (isStrikingDistance ? "Medium" : "High")
             },
             {
                 action: "Target Featured Snippet",

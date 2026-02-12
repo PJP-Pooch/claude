@@ -184,7 +184,7 @@ function UploadWizard() {
                                 <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
                                     Go to <strong>Google Search Console &gt; Performance &gt; Search Results</strong>.<br />
                                     Select your date range (e.g., Last 3 Months).<br />
-                                    Click <strong>Export &gt; Download CSV</strong>. Use the "Queries.csv" file.
+                                    Click <strong>Export &gt; Download CSV</strong>. Use the &quot;Queries.csv&quot; file.
                                 </p>
                             </div>
                         </div>
@@ -1097,6 +1097,7 @@ export default function SeoPpcOpportunitiesPage() {
                     action: row.action,
                     targetDomain: selectedProperty,
                     location: selectedLocation,
+                    position: row.position_org,
                     login: dfsLogin,
                     password: dfsPassword
                 })
