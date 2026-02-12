@@ -349,20 +349,24 @@ function ActionLegend({ expanded, onToggle, config }: { expanded: boolean; onTog
     };
 
     return (
-        <div className="space-y-2">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
             <button
                 onClick={onToggle}
-                className="w-full flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors group"
+                className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
             >
                 <div className="flex items-center gap-2">
-                    <LucideTarget className="w-4 h-4 text-blue-500" />
-                    <span className="text-sm font-bold text-gray-900 dark:text-white">Action Legend</span>
+                    <div className="p-1.5 bg-blue-100 dark:bg-blue-900/30 rounded-lg text-blue-600 dark:text-blue-400">
+                        <LucideTarget className="w-4 h-4" />
+                    </div>
+                    <span className="font-semibold text-gray-900 dark:text-white text-sm">Action Legend</span>
+                    <span className="text-[9px] font-medium px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-full uppercase tracking-wide">Info</span>
                 </div>
                 {expanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
             </button>
 
             {expanded && (
-                <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm space-y-4 animate-in slide-in-from-top-2 duration-200">
+                <div className="p-4 pt-0 space-y-3 bg-gray-50/50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-700/50">
+                    <div className="space-y-4 pt-3">
                     <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-700">
                         <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Opportunity Rules (Live)</span>
                     </div>
@@ -380,6 +384,7 @@ function ActionLegend({ expanded, onToggle, config }: { expanded: boolean; onTog
                             </div>
                         </div>
                     ))}
+                    </div>
                 </div>
             )}
         </div>
