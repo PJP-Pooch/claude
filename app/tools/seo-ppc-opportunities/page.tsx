@@ -60,6 +60,7 @@ import {
     FileText,
     ExternalLink,
     Users,
+    Settings,
 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 
@@ -88,6 +89,7 @@ import {
     getActionColor,
     getActionReason,
 } from "@/lib/opportunity-utils";
+import { SCORING_CONFIG_V2, ScoringConfig } from "@/lib/scoring-config-v2";
 
 // Date preset options
 const DATE_PRESETS: { value: DatePreset; label: string }[] = [
@@ -137,7 +139,9 @@ function formatDateForApi(date: Date): string {
 // Action badge component
 function ActionBadge({ action, row }: { action: OpportunityAction; row?: MergedOpportunityRow }) {
     const color = getActionColor(action);
-    const reason = row ? getActionReason(row, action) : "Action recommended based on score analysis.";
+    const reason = row?.reasons?.length
+        ? row.reasons.join(". ")
+        : (row ? getActionReason(row, action) : "Action recommended based on score analysis.");
     return (
         <span
             className="group relative inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap border cursor-help"
@@ -254,6 +258,44 @@ const ACTION_DEFINITIONS: Record<string, { definition: string; rule: string; col
     }
 };
 
+const ACTION_DEFINITIONS_V2: Record<string, { definition: string; rule: string; color: string }> = {
+    "Investigate": {
+        definition: "Critical audit needed. High spend with 0 conversions OR ranking well but poor CTR.",
+        rule: "Cost > £50 & 0 Conv OR Pos <= 6 & CTR < 50% exp.",
+        color: "#f59e0b"
+    },
+    "Defend": {
+        definition: "Protect high-value terms where you dominate organic (#1-2) but face competition.",
+        rule: "Pos <= 2 + (High ROAS or CPA < Med) + High Comp.",
+        color: "#7c3aed"
+    },
+    "Reduce Spend": {
+        definition: "Cut spend on strong organic terms (#1-2) where paid is inefficient or redundant.",
+        rule: "Pos <= 2 + Cost > £75 + (Low ROAS < 2.0 or Coverage).",
+        color: "#f97316"
+    },
+    "Add Exact Match": {
+        definition: "Refine targeting for performing broad/phrase terms.",
+        rule: "Broad/Phrase + >10 Clicks + Profitable.",
+        color: "#06b6d4"
+    },
+    "Scale Spend": {
+        definition: "Increase volume for highly profitable terms.",
+        rule: "ROAS >= 4.0 + Low Impr Share (<90%).",
+        color: "#22c55e"
+    },
+    "SEO Focus": {
+        definition: "Target keywords with proven paid performance but low organic rank.",
+        rule: "Pos > 2 (Page 2+ focus) + Cost > £0.",
+        color: "#10b981"
+    },
+    "Consider PPC": {
+        definition: "Test paid ads for terms with no organic visibility.",
+        rule: "Pos 0 or > 20 + High Volume.",
+        color: "#6366f1"
+    }
+};
+
 const MARKET_OPTIONS = [
     { value: "United Kingdom", emoji: "🇬🇧" },
     { value: "United States", emoji: "🇺🇸" },
@@ -266,7 +308,46 @@ const MARKET_OPTIONS = [
     { value: "Netherlands", emoji: "🇳🇱" },
 ];
 
-function ActionLegend({ expanded, onToggle }: { expanded: boolean; onToggle: () => void }) {
+function ActionLegend({ expanded, onToggle, config }: { expanded: boolean; onToggle: () => void; config: ScoringConfig }) {
+    // Generate dynamic definitions based on current config
+    const definitions: Record<string, { definition: string; rule: string; color: string }> = {
+        "Investigate": {
+            definition: "Critical audit needed. High spend with 0 conversions OR ranking well but poor CTR.",
+            rule: `Cost > £${config.investigate_cost_threshold} & 0 Conv OR Pos <= 6 & CTR < 50% exp.`,
+            color: "#f59e0b"
+        },
+        "Defend": {
+            definition: `Protect high-value terms where you dominate organic (#1-${config.organic_strong_pos}) but face competition.`,
+            rule: `Pos <= ${config.organic_strong_pos} + (ROAS >= ${config.high_roas} or CPA < Med) + Comp >= ${config.defend_comp_threshold}`,
+            color: "#7c3aed"
+        },
+        "Reduce Spend": {
+            definition: `Cut spend on strong organic terms (#1-${config.organic_strong_pos}) where paid is inefficient or redundant.`,
+            rule: `Pos <= ${config.organic_near_strong_pos} + Cost > £${config.reduce_cost_threshold} + (ROAS < ${config.low_roas} or Coverage)`,
+            color: "#f97316"
+        },
+        "Add Exact Match": {
+            definition: "Refine targeting for performing broad/phrase terms.",
+            rule: `Broad/Phrase + >${config.min_clicks_exact} Clicks + ROAS >= ${config.profitable_roas}`,
+            color: "#06b6d4"
+        },
+        "Scale Spend": {
+            definition: "Increase volume for highly profitable terms.",
+            rule: `ROAS >= ${config.high_roas} + Low Impr Share or Budget Limited`,
+            color: "#22c55e"
+        },
+        "SEO Focus": {
+            definition: "Target keywords with proven paid performance but low organic rank.",
+            rule: `Pos > ${config.organic_weak_pos} or Pos = 0 + Paid activity exists`,
+            color: "#10b981"
+        },
+        "Consider PPC": {
+            definition: "Test paid ads for terms with no organic visibility.",
+            rule: "Good organic traffic (Pos 1-10) but £0 spend + High Volume",
+            color: "#6366f1"
+        }
+    };
+
     return (
         <div className="space-y-2">
             <button
@@ -282,7 +363,10 @@ function ActionLegend({ expanded, onToggle }: { expanded: boolean; onToggle: () 
 
             {expanded && (
                 <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm space-y-4 animate-in slide-in-from-top-2 duration-200">
-                    {Object.entries(ACTION_DEFINITIONS).map(([action, info]) => (
+                    <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-700">
+                        <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Opportunity Rules (Live)</span>
+                    </div>
+                    {Object.entries(definitions).map(([action, info]) => (
                         <div key={action} className="space-y-1 pb-3 border-b border-gray-100 dark:border-gray-700 last:border-0 last:pb-0">
                             <div className="flex items-center gap-2">
                                 <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: info.color }}></div>
@@ -428,6 +512,7 @@ export default function SeoPpcOpportunitiesPage() {
 
     // State
     const [mockMode, setMockMode] = useState(false);
+    const [scoringConfig, setScoringConfig] = useState<ScoringConfig>(SCORING_CONFIG_V2);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [progress, setProgress] = useState<string>("");
@@ -489,10 +574,44 @@ export default function SeoPpcOpportunitiesPage() {
     };
 
     // Merge data whenever raw sources change
-    const data = useMemo(() => {
+    const mergedData = useMemo(() => {
         if (!rawGscData.length && !rawAdsData.length) return [];
-        return mergeDatasets(rawGscData, rawAdsData, brandTerms, keywordMetricsData, rawCampaignData);
-    }, [rawGscData, rawAdsData, brandTerms, keywordMetricsData, rawCampaignData]);
+        return mergeDatasets(rawGscData, rawAdsData, brandTerms, keywordMetricsData, rawCampaignData, scoringConfig);
+    }, [rawGscData, rawAdsData, brandTerms, keywordMetricsData, rawCampaignData, scoringConfig]);
+
+    const data = useMemo(() => {
+        return mergedData.map(row => ({
+            ...row,
+            action: row.action_v2 || row.action,
+            opportunity_score: row.score_v2 || row.opportunity_score
+        }));
+    }, [mergedData]);
+
+    // V2 Distribution Logging
+    useEffect(() => {
+        if (data.length === 0) return;
+
+        const counts = data.reduce((acc, row) => {
+            const action = row.action || 'No Action';
+            acc[action] = (acc[action] || 0) + 1;
+            return acc;
+        }, {} as Record<string, number>);
+
+        console.log("--- Scoring V2 Distribution ---", counts);
+
+        // Check for balance
+        const total = data.length;
+        const defendCount = counts['Defend'] || 0;
+        const reduceCount = counts['Reduce Spend'] || 0;
+
+        if (defendCount < (total * 0.01)) {
+            console.warn("V2 Warning: 'Defend' action is very rare (<1%). Check thresholds.");
+        }
+        if (reduceCount < (total * 0.01)) {
+            console.warn("V2 Warning: 'Reduce Spend' action is very rare (<1%). Check thresholds.");
+        }
+
+    }, [data]);
     const [filterActions, setFilterActions] = useState<OpportunityAction[]>([]);
     const toggleAction = (action: OpportunityAction) => {
         setFilterActions(prev =>
@@ -1255,14 +1374,15 @@ export default function SeoPpcOpportunitiesPage() {
         );
     }
 
-    // Not logged in - now handled inside the main layout
-
     return (
         <div className="flex min-h-screen bg-gray-100 dark:bg-gray-900 transition-colors">
             {/* Sidebar */}
             <aside className="w-80 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex-shrink-0 flex flex-col fixed h-full z-10">
                 <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-                    <Link href="/" className="flex items-center text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+                    <Link
+                        href="/"
+                        className="flex items-center text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                    >
                         <ArrowLeft className="w-5 h-5 mr-2" />
                         <span className="font-medium">Back to Tools</span>
                     </Link>
@@ -1283,6 +1403,7 @@ export default function SeoPpcOpportunitiesPage() {
                         <ActionLegend
                             expanded={expandedSections.legend}
                             onToggle={() => toggleSection('legend')}
+                            config={scoringConfig}
                         />
 
                         {/* Settings / API Keys */}
@@ -1443,7 +1564,7 @@ export default function SeoPpcOpportunitiesPage() {
                             )}
                         </div>
 
-                        {/* Scoring Logic Dropdown */}
+                        {/* Scoring Configuration Tweak */}
                         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
                             <button
                                 onClick={() => toggleSection('scoring')}
@@ -1451,41 +1572,123 @@ export default function SeoPpcOpportunitiesPage() {
                             >
                                 <div className="flex items-center gap-2">
                                     <div className="p-1.5 bg-blue-100 dark:bg-blue-900/30 rounded-lg text-blue-600 dark:text-blue-400">
-                                        <Info className="w-4 h-4" />
+                                        <Settings className="w-4 h-4" />
                                     </div>
-                                    <span className="font-semibold text-gray-900 dark:text-white text-sm">Scoring Logic</span>
+                                    <span className="font-semibold text-gray-900 dark:text-white text-sm">Fine-Tune Scoring</span>
                                 </div>
                                 {expandedSections.scoring ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
                             </button>
 
                             {expandedSections.scoring && (
-                                <div className="p-4 pt-0 space-y-3 bg-gray-50/50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-700/50">
-                                    <div className="space-y-3 pt-3">
-                                        <div className="space-y-2 text-xs text-gray-600 dark:text-gray-400">
-                                            <p className="font-medium text-emerald-600 dark:text-emerald-400 mb-2">
-                                                Higher Score (closer to 100) = Higher Priority
-                                            </p>
-                                            <div className="space-y-3">
-                                                <div>
-                                                    <p className="font-bold text-orange-600 dark:text-orange-400">Save Score: Spend Efficiency</p>
-                                                    <ul className="pl-3 mt-1 space-y-1 list-disc text-gray-500">
-                                                        <li><span className="text-gray-700 dark:text-gray-300 font-medium">Materiality:</span> Thresholds applied (£50/£75) to reduce noise.</li>
-                                                        <li><span className="text-gray-700 dark:text-gray-300 font-medium">Cannibalization:</span> Organic Rank 1-4 with Shopp/PMax adds safety check.</li>
-                                                        <li><span className="text-indigo-600 dark:text-indigo-400 font-medium">Redundancy:</span> Low ROAS (&lt; 2) + Multi-channel adds up to 30pts.</li>
-                                                        <li><span className="text-rose-600 dark:text-rose-500 font-medium">Brand Safety:</span> High penalty (90%) for brand unless redundancy is clear.</li>
-                                                    </ul>
-                                                </div>
-                                                <div>
-                                                    <p className="font-bold text-emerald-600 dark:text-emerald-400">Grow Score: Revenue Magnitude</p>
-                                                    <ul className="pl-3 mt-1 space-y-1 list-disc text-gray-500">
-                                                        <li><span className="text-gray-700 dark:text-gray-300 font-medium">Revenue Weight:</span> Normalized LOG weighting for conversion value.</li>
-                                                        <li><span className="text-blue-600 dark:text-blue-400 font-medium">Striking Distance:</span> Organic Pos 11-25 gets +35pts (High Leverage).</li>
-                                                        <li><span className="text-gray-700 dark:text-gray-300 font-medium">Strategic Tiers:</span> High Intent (1.1x scaling), Brand (0.9x scaling).</li>
-                                                        <li><span className="text-purple-600 dark:text-purple-400 font-medium">Defend Bias:</span> High ROI + High Comp terms promoted to Defend.</li>
-                                                    </ul>
-                                                </div>
+                                <div className="p-4 pt-0 space-y-4 bg-gray-50/50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-700/50">
+                                    <div className="pt-3 space-y-4">
+                                        {/* Organic Position Thresholds */}
+                                        <div className="space-y-3 pb-3 border-b border-gray-200 dark:border-gray-700">
+                                            <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Organic Position Thresholds</p>
+
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                    Strong Position (1-N) - For Defend/Reduce logic
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    step="1"
+                                                    min="1"
+                                                    max="10"
+                                                    value={scoringConfig.organic_strong_pos}
+                                                    onChange={(e) => setScoringConfig(prev => ({ ...prev, organic_strong_pos: parseInt(e.target.value) || 1 }))}
+                                                    className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                                                />
+                                                <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">Default: 2 (positions 1-2 are "strong")</p>
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                    Near-Strong Position (1-N) - For Reduce Spend consideration
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    step="1"
+                                                    min="1"
+                                                    max="10"
+                                                    value={scoringConfig.organic_near_strong_pos}
+                                                    onChange={(e) => setScoringConfig(prev => ({ ...prev, organic_near_strong_pos: parseInt(e.target.value) || 2 }))}
+                                                    className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                                                />
+                                                <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">Default: 4 (positions 3-4 are "near-strong")</p>
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                    Weak Position Threshold - For SEO Focus
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    step="1"
+                                                    min="5"
+                                                    max="50"
+                                                    value={scoringConfig.organic_weak_pos}
+                                                    onChange={(e) => setScoringConfig(prev => ({ ...prev, organic_weak_pos: parseInt(e.target.value) || 10 }))}
+                                                    className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                                                />
+                                                <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">Default: 10 (positions beyond 10 are "weak")</p>
                                             </div>
                                         </div>
+
+                                        {/* ROAS Thresholds */}
+                                        <div className="space-y-3 pb-3 border-b border-gray-200 dark:border-gray-700">
+                                            <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">ROAS Thresholds</p>
+
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                    High ROAS Goal (defend/scale)
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    step="0.1"
+                                                    value={scoringConfig.high_roas}
+                                                    onChange={(e) => setScoringConfig(prev => ({ ...prev, high_roas: parseFloat(e.target.value) || 0 }))}
+                                                    className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                    Low ROAS Threshold (waste/reduce)
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    step="0.1"
+                                                    value={scoringConfig.low_roas}
+                                                    onChange={(e) => setScoringConfig(prev => ({ ...prev, low_roas: parseFloat(e.target.value) || 0 }))}
+                                                    className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Cost Threshold */}
+                                        <div>
+                                            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                Wasted Spend Threshold (£)
+                                            </label>
+                                            <input
+                                                type="number"
+                                                value={scoringConfig.reduce_cost_threshold}
+                                                onChange={(e) => setScoringConfig(prev => ({ ...prev, reduce_cost_threshold: parseInt(e.target.value) || 0 }))}
+                                                className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                                            />
+                                        </div>
+
+                                        <div className="p-2 bg-amber-50 dark:bg-amber-900/10 rounded border border-amber-100 dark:border-amber-900/30">
+                                            <p className="text-[10px] text-amber-700 dark:text-amber-400 leading-tight">
+                                                Adjusting these values will immediately recalculate all opportunity scores and actions.
+                                            </p>
+                                        </div>
+                                        <button
+                                            onClick={() => setScoringConfig(SCORING_CONFIG_V2)}
+                                            className="w-full py-1.5 text-xs text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                                        >
+                                            Reset to Defaults
+                                        </button>
                                     </div>
                                 </div>
                             )}
@@ -1541,6 +1744,8 @@ export default function SeoPpcOpportunitiesPage() {
                                         </span>
                                     </label>
                                 </div>
+
+                                {/* Demographic filters could go here if needed */}
 
                                 {/* Market Selector */}
                                 <div className="w-[180px]">
@@ -1751,21 +1956,22 @@ export default function SeoPpcOpportunitiesPage() {
                                             <Filter className="w-5 h-5 text-gray-500" />
                                             <h3 className="text-sm font-medium text-gray-900 dark:text-white">Filters</h3>
                                         </div>
-                                        {(filterActions.length > 0 || filterCampaign !== "all" || filterAdGroup !== "all" || filterMinRoas !== '' || filterMinClicks !== '' || filterMinConversions !== '') && (
-                                            <button
-                                                onClick={() => {
-                                                    setFilterActions([]);
-                                                    setFilterCampaign("all");
-                                                    setFilterAdGroup("all");
-                                                    setFilterMinRoas('');
-                                                    setFilterMinClicks('');
-                                                    setFilterMinConversions('');
-                                                }}
-                                                className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                                            >
-                                                Clear Filters
-                                            </button>
-                                        )}
+                                        {
+                                            (filterActions.length > 0 || filterCampaign !== "all" || filterAdGroup !== "all" || filterMinRoas !== '' || filterMinClicks !== '' || filterMinConversions !== '') && (
+                                                <button
+                                                    onClick={() => {
+                                                        setFilterActions([]);
+                                                        setFilterCampaign("all");
+                                                        setFilterAdGroup("all");
+                                                        setFilterMinRoas('');
+                                                        setFilterMinClicks('');
+                                                        setFilterMinConversions('');
+                                                    }}
+                                                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                                                >
+                                                    Clear Filters
+                                                </button>
+                                            )}
                                     </div>
 
                                     {/* Quick Filter Presets */}
@@ -1937,8 +2143,7 @@ export default function SeoPpcOpportunitiesPage() {
                                         </div>
                                     </div>
                                 </div>
-                            )
-                        }
+                            )}
 
 
 
@@ -2103,8 +2308,7 @@ export default function SeoPpcOpportunitiesPage() {
                                         </>
                                     )}
                                 </section>
-                            )
-                        }
+                            )}
 
                         {/* Charts */}
                         {
@@ -2336,8 +2540,7 @@ export default function SeoPpcOpportunitiesPage() {
                                         </div>
                                     )}
                                 </section>
-                            )
-                        }
+                            )}
 
                         {/* Quick Wins Section */}
                         {
@@ -2495,8 +2698,7 @@ export default function SeoPpcOpportunitiesPage() {
                                         )}
                                     </div>
                                 </section>
-                            )
-                        }
+                            )}
                         {
                             data.length > 0 && (
                                 <section>
@@ -2603,8 +2805,8 @@ export default function SeoPpcOpportunitiesPage() {
                                                                 { key: "roas_paid", label: "ROAS", width: "70px", title: "Return on Ad Spend (Value / Cost)" },
                                                                 { key: "conversionRate", label: "CVR", width: "65px", title: "Conversion Rate (Conversions / Clicks)" },
                                                                 { key: "impressionShare", label: "IS %", width: "65px", title: "Search Impression Share (how often your ad appeared vs available)" },
-                                                                { key: "projected_savings_score", label: "Save", width: "65px", title: "Saving Score: Priority for reducing spend (low ROAS or high organic rank)" },
-                                                                { key: "projected_growth_score", label: "Grow", width: "65px", title: "Growth Score: Priority for increasing spend or SEO effort" },
+                                                                { key: "opportunity_score", label: "Score", width: "65px", title: "Opportunity Score (Combined Potential)" },
+                                                                { key: "confidence", label: "Conf", width: "60px", title: "Algorithm Confidence Level" },
                                                                 { key: "competition_score", label: "Comp", width: "60px", title: "Competition Score: Estimate of auction intensity (0-100)" },
                                                                 { key: "coverage_score", label: "Cov", width: "60px", title: "Coverage Score: Measures channel presence (Search + Shopping + PMax). Higher = safer to optimize." },
                                                                 { key: "channel_group", label: "Chan", width: "70px", title: "Channel Group: Primary channel appearing for this keyword" },
@@ -2725,7 +2927,7 @@ export default function SeoPpcOpportunitiesPage() {
                                                                             ? 'text-green-600 dark:text-green-400'
                                                                             : row.roas_paid >= 2
                                                                                 ? 'text-blue-600 dark:text-blue-400'
-                                                                                : row.roas_paid >= 1
+                                                                                : row.roas_paid >= scoringConfig.low_roas
                                                                                     ? 'text-amber-600 dark:text-amber-400'
                                                                                     : 'text-red-600 dark:text-red-400'
                                                                             }`}>
@@ -2762,34 +2964,25 @@ export default function SeoPpcOpportunitiesPage() {
                                                                         <span className="text-gray-400">-</span>
                                                                     )}
                                                                 </td>
-
-                                                                {/* Savings Score */}
                                                                 <td className="px-3 py-3">
                                                                     <div
-                                                                        className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${row.projected_savings_score >= 80 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
-                                                                            row.projected_savings_score >= 50 ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/10 dark:text-emerald-500' :
-                                                                                'text-gray-400'
+                                                                        className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${(row.opportunity_score || 0) >= 80 ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400" :
+                                                                            (row.opportunity_score || 0) >= 50 ? "bg-purple-50 text-purple-600 dark:bg-purple-900/10 dark:text-purple-500" :
+                                                                                "text-gray-400"
                                                                             }`}
-                                                                        title="PPC Savings Score: High score means high potential to cut waste (Cannibalization or Inefficiency)"
+                                                                        title="Opportunity Score"
                                                                     >
-                                                                        {row.projected_savings_score > 0 ? row.projected_savings_score : '-'}
+                                                                        {row.opportunity_score || "-"}
                                                                     </div>
                                                                 </td>
-
-                                                                {/* Growth Score */}
                                                                 <td className="px-3 py-3">
-                                                                    <div
-                                                                        className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${row.projected_growth_score >= 80 ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
-                                                                            row.projected_growth_score >= 50 ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/10 dark:text-blue-500' :
-                                                                                'text-gray-400'
-                                                                            }`}
-                                                                        title="Growth Score: High score means high potential to capture NEW value (SEO Gaps or PPC Scaling)"
-                                                                    >
-                                                                        {row.projected_growth_score > 0 ? row.projected_growth_score : '-'}
-                                                                    </div>
+                                                                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider ${row.confidence === "high" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300" :
+                                                                        row.confidence === "med" ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300" :
+                                                                            "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+                                                                        }`}>
+                                                                        {row.confidence || "-"}
+                                                                    </span>
                                                                 </td>
-
-                                                                {/* Comp Score */}
                                                                 <td className="px-3 py-3">
                                                                     <div className="flex flex-col items-center">
                                                                         <span className={`text-xs font-bold ${row.competition_score >= 70 ? 'text-red-600 dark:text-red-400' : row.competition_score >= 40 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
@@ -2803,13 +2996,15 @@ export default function SeoPpcOpportunitiesPage() {
 
                                                                 {/* Coverage Score */}
                                                                 <td className="px-3 py-3">
-                                                                    {row.coverage_score !== undefined ? (
-                                                                        <div className="flex flex-col items-center">
-                                                                            <span className={`text-xs font-bold ${row.coverage_score >= 80 ? 'text-green-600' : 'text-gray-600'}`}>
-                                                                                {row.coverage_score.toFixed(0)}
-                                                                            </span>
-                                                                        </div>
-                                                                    ) : <span className="text-gray-400 text-xs">-</span>}
+                                                                    {
+                                                                        row.coverage_score !== undefined ? (
+                                                                            <div className="flex flex-col items-center">
+                                                                                <span className={`text-xs font-bold ${row.coverage_score >= 80 ? 'text-green-600' : 'text-gray-600'}`}>
+                                                                                    {row.coverage_score.toFixed(0)}
+                                                                                </span>
+                                                                            </div>
+                                                                        ) : <span className="text-gray-400 text-xs">-</span>
+                                                                    }
                                                                 </td>
 
                                                                 {/* Channel Group */}
@@ -2841,8 +3036,7 @@ export default function SeoPpcOpportunitiesPage() {
                                         </div>
                                     )}
                                 </section>
-                            )
-                        }
+                            )}
 
                         {/* Empty State */}
                         {
@@ -2856,8 +3050,7 @@ export default function SeoPpcOpportunitiesPage() {
                                         Upload your Google Search Console and Google Ads CSV reports using the buttons above to identify SEO and PPC optimization opportunities.
                                     </p>
                                 </div>
-                            )
-                        }
+                            )}
 
 
                         {/* Analysis Modal */}
@@ -2945,6 +3138,21 @@ export default function SeoPpcOpportunitiesPage() {
                                                         </div>
                                                     </div>
 
+                                                    {/* Target Domain Notice */}
+                                                    {!selectedProperty && (
+                                                        <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 rounded-xl p-4 flex items-start gap-3">
+                                                            <Info className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+                                                            <div>
+                                                                <p className="text-sm font-semibold text-amber-800 dark:text-amber-300 mb-1">
+                                                                    Target Domain Not Set
+                                                                </p>
+                                                                <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
+                                                                    Enter your target domain in the sidebar (e.g., "example.com") to see your organic ranking position and identify your site in the competitive landscape tables below.
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
                                                     {/* Metrics Grid */}
                                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                                                         {analysisData?.targetRank ? (
@@ -2972,7 +3180,7 @@ export default function SeoPpcOpportunitiesPage() {
                                                         )}
 
                                                         <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
-                                                            <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-medium">Est. Impressions</p>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-medium">Monthly Search Volume</p>
                                                             <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{formatNumber(analysisData?.searchVolume || 0)}</p>
                                                         </div>
 
@@ -3031,10 +3239,12 @@ export default function SeoPpcOpportunitiesPage() {
                                                                                             </div>
                                                                                         </td>
                                                                                         <td className="px-4 py-3">
-                                                                                            <a href={result.url} target="_blank" rel="noopener noreferrer" className={`text-sm font-medium hover:underline block truncate max-w-xs ${isTarget ? 'text-emerald-600 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400'}`}>
-                                                                                                {result.title}
-                                                                                            </a>
-                                                                                            <p className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-xs mt-0.5">{result.snippet}</p>
+                                                                                            <div className="flex flex-col">
+                                                                                                <a href={result.url} target="_blank" rel="noopener noreferrer" className={`text-sm font-medium hover:underline block truncate max-w-xs ${isTarget ? 'text-emerald-600 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400'}`}>
+                                                                                                    {result.title}
+                                                                                                </a>
+                                                                                                <p className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-xs mt-0.5">{result.snippet}</p>
+                                                                                            </div>
                                                                                         </td>
                                                                                     </tr>
                                                                                 );

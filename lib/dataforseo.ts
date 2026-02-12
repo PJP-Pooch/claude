@@ -136,6 +136,7 @@ export async function fetchSerpResult(
       return {
         q: query,
         top10: [],
+        paidAds: undefined,
         aiOverview: 'unknown',
         targetPageOnPage1: false,
         sameDomainOnPage1: false,
@@ -155,6 +156,18 @@ export async function fetchSerpResult(
         url: normalizeUrl(item.url), // Normalize URL to strip tracking parameters
         title: item.title,
         snippet: item.description,
+      }));
+
+    // Extract paid ads
+    const paidItems = items.filter((item: { type: string }) => item.type === 'paid');
+
+    const paidAds = paidItems
+      .map((item: { rank_absolute?: number; rank_group?: number; url: string; title: string; description?: string; domain?: string }) => ({
+        position: item.rank_absolute || item.rank_group || 0,
+        url: normalizeUrl(item.url),
+        title: item.title,
+        snippet: item.description,
+        domain: item.domain || extractDomain(item.url),
       }));
 
     // Extract AI Overview data
@@ -224,6 +237,7 @@ export async function fetchSerpResult(
     const finalResult = {
       q: query,
       top10: organicResults,
+      paidAds: paidAds.length > 0 ? paidAds : undefined,
       aiOverview,
       aiOverviewData,
       targetPageOnPage1,
@@ -449,9 +463,28 @@ export function getMockSerpResults(queries: string[], targetPageUrl: string): Se
       social: `**${q}** uses social platforms to connect with your audience, build your brand, and drive website traffic. Core strategies include:\n\n• **Platform Selection**: Choose networks where your audience is active\n• **Content Strategy**: Share engaging, valuable content consistently\n• **Community Engagement**: Respond to comments and messages promptly\n• **Paid Advertising**: Amplify reach with targeted ads\n• **Analytics**: Monitor performance and adjust strategy accordingly\n\nStrong social media presence builds brand awareness, fosters community, and supports business objectives.`
     };
 
+    // Create mock paid ads (show ads for 60% of queries)
+    const mockPaidAds = index % 5 !== 0 ? [
+      {
+        position: 1,
+        url: pattern[0] || '',
+        title: `${q} - Top Solution | Ad`,
+        snippet: `Get started with ${q} today. Free trial available.`,
+        domain: new URL(pattern[0] || 'https://example.com').hostname,
+      },
+      {
+        position: 2,
+        url: pattern[1] || '',
+        title: `${q} - Expert Services | Sponsored`,
+        snippet: `Professional ${q} services. Contact us for a quote.`,
+        domain: new URL(pattern[1] || 'https://example.com').hostname,
+      }
+    ] : undefined;
+
     return {
       q,
       top10: mockResults,
+      paidAds: mockPaidAds,
       aiOverview: index % 3 === 0 ? 'present' : 'absent', // Show AI overviews for 1/3 of queries
       aiOverviewData: index % 3 === 0 ? {
         text: aiOverviewTexts[clusterType as keyof typeof aiOverviewTexts],

@@ -453,6 +453,35 @@ Low semantic similarity. Create separate content piece with:
 - Targeted keywords
 - Unique value proposition
 
+## Scoring V2 (New)
+
+The application now supports an enhanced scoring model ("Scoring V2") designed to better prioritize High-Value actions.
+
+### Key Features
+- **Priority-Based Logic**: Actions are evaluated in a specific order (Investigate -> Defend -> Reduce Spend -> etc.) to prevent conflicts.
+- **Explainability**: Each recommendation comes with explicit "Reasons" and a "Confidence Level".
+- **Configurable Thresholds**: All scoring parameters are centralized in `lib/scoring-config-v2.ts`.
+
+### Action Definitions (V2)
+- **Investigate**: High spend with 0 conversions OR ranking well (Top 6) with poor CTR (<50% expected).
+- **Defend**: Protect high-value terms (High ROAS) where you rank well organically (#1-2) but face competition.
+- **Reduce Spend**: Cut spend on strong organic terms (#1-2) where paid is inefficient (Low ROAS) or redundant (Cannibalization).
+- **Scale Spend**: Increase volume for highly profitable terms (ROAS > 4.0) with low Impression Share.
+- **Add Exact Match**: Refine targeting for performing Broad/Phrase terms.
+- **SEO Focus**: Target keywords with proven paid performance but low organic rank.
+- **Consider PPC**: Test paid ads for terms with good organic visibility but zero paid spend.
+
+### Tuning
+You can adjust thresholds in `lib/scoring-config-v2.ts`:
+```typescript
+export const SCORING_CONFIG_V2 = {
+    organic_strong_pos: 2,
+    high_roas: 4.0,
+    reduce_cost_threshold: 75,
+    // ...
+};
+```
+
 ## Troubleshooting
 
 ### "Fan-out failed"

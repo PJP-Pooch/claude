@@ -20,6 +20,9 @@ import {
     CampaignReportRow
 } from './opportunity-types';
 
+import { SCORING_CONFIG_V2, ScoringConfig } from './scoring-config-v2';
+import { classifyActionV2 } from './opportunity-utils-v2';
+
 /**
  * Normalize a query string for matching
  * - Lowercase
@@ -524,7 +527,8 @@ export function mergeDatasets(
     adsData: AdsSearchTermRow[],
     userBrandTerms: string[] = [], // Optional: Passed from UI
     keywordMetricsData: KeywordMetricsRow[] = [], // Optional: New Keyword Auction Data
-    campaignData: CampaignReportRow[] = [] // Optional: New Campaign Report Data
+    campaignData: CampaignReportRow[] = [], // Optional: New Campaign Report Data
+    scoringConfig: ScoringConfig = SCORING_CONFIG_V2
 ): MergedOpportunityRow[] {
     // Create maps keyed by normalized query
     const gscMap = new Map<string, GscQueryRow>();
@@ -691,14 +695,23 @@ export function mergeDatasets(
     // Track which campaigns are matched to queries
     const usedCampaigns = new Set<string>();
 
+
+
     // Calculate global metrics once for use in classification and scoring
     const allCosts = adsData.map(r => microsToAmount(r.costMicros)).filter(c => c > 0);
     const allConvValues = adsData.map(r => r.conversionValue).filter(v => v > 0);
     const allLogRevs = adsData.map(r => Math.log(1 + r.conversionValue));
 
+    // New metrics for V2
+    const allCpcs = adsData.map(r => r.clicks > 0 ? (microsToAmount(r.costMicros) / r.clicks) : 0).filter(c => c > 0);
+    const allCpas = adsData.map(r => r.conversions > 0 ? (microsToAmount(r.costMicros) / r.conversions) : 0).filter(c => c > 0);
+
     const globalMedianCost = calculateMedian(allCosts);
     const globalMedianConvValue = calculateMedian(allConvValues);
     const globalMaxLogRev = allLogRevs.length > 0 ? allLogRevs.reduce((max, val) => Math.max(max, val), 0) : 0;
+
+    const globalMedianCpc = calculateMedian(allCpcs);
+    const globalMedianCpa = calculateMedian(allCpas);
 
     for (const query of Array.from(queries)) {
         if (!query) continue;
@@ -896,13 +909,36 @@ export function mergeDatasets(
             const action = classifyAction({ ...partialRow, strategic_tier }, accountAvgRoas, globalMedianCost, globalMedianConvValue);
             const scores = computeOpportunityScore({ ...partialRow, action, strategic_tier, isBrand }, globalMaxLogRev);
 
+            // V2 Classification
+            const v2Result = classifyActionV2(
+                { ...partialRow, strategic_tier, action, opportunity_score: scores.opportunity_score, projected_growth_score: scores.projected_growth_score, projected_savings_score: scores.projected_savings_score, isBrand, revenueWeight, hasOrganic: !!gsc, hasPaid: !!ads, is_primary_channel },
+                accountAvgRoas,
+                globalMedianCost,
+                globalMedianConvValue,
+                globalMedianCpc,
+                globalMedianCpa,
+                scoringConfig
+            );
+            const v2Scores = computeOpportunityScore({
+                ...partialRow,
+                action: v2Result.action,
+                strategic_tier,
+                isBrand
+            }, globalMaxLogRev);
+
             rowsForThisQuery.push({
                 ...partialRow,
                 ...scores,
                 action,
                 strategic_tier,
                 isBrand,
-                parent_query: adsRowsForQuery.length > 1 ? query : undefined
+                parent_query: adsRowsForQuery.length > 1 ? query : undefined,
+                // V2 Fields
+                action_v2: v2Result.action,
+                reasons: v2Result.reasons,
+                missing_signals: v2Result.missing_signals,
+                confidence: v2Result.confidence,
+                score_v2: v2Scores.opportunity_score
             });
         }
 
@@ -950,6 +986,29 @@ export function mergeDatasets(
             totalRow.opportunity_score = scores.opportunity_score;
             totalRow.projected_savings_score = scores.projected_savings_score;
             totalRow.projected_growth_score = scores.projected_growth_score;
+
+            // V2 Classification for Total Row
+            const v2Result = classifyActionV2(
+                { ...totalRow, strategic_tier },
+                accountAvgRoas,
+                globalMedianCost,
+                globalMedianConvValue,
+                globalMedianCpc,
+                globalMedianCpa,
+                scoringConfig
+            );
+            const v2Scores = computeOpportunityScore({
+                ...totalRow,
+                action: v2Result.action,
+                strategic_tier,
+                isBrand
+            }, globalMaxLogRev);
+
+            totalRow.action_v2 = v2Result.action;
+            totalRow.reasons = v2Result.reasons;
+            totalRow.missing_signals = v2Result.missing_signals;
+            totalRow.confidence = v2Result.confidence;
+            totalRow.score_v2 = v2Scores.opportunity_score;
 
             merged.push(totalRow);
         }

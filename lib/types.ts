@@ -53,6 +53,16 @@ export const OrganicResultSchema = z.object({
 
 export type OrganicResult = z.infer<typeof OrganicResultSchema>;
 
+export const PaidResultSchema = z.object({
+  position: z.number(),
+  url: z.string(),
+  title: z.string(),
+  snippet: z.string().nullish(),
+  domain: z.string().optional(),
+});
+
+export type PaidResult = z.infer<typeof PaidResultSchema>;
+
 export const AIOverviewSchema = z.enum(['present', 'absent', 'unknown']);
 export type AIOverview = z.infer<typeof AIOverviewSchema>;
 
@@ -69,6 +79,7 @@ export type AIOverviewData = z.infer<typeof AIOverviewDataSchema>;
 export const SerpResultSchema = z.object({
   q: z.string(),
   top10: z.array(OrganicResultSchema),
+  paidAds: z.array(PaidResultSchema).optional(),
   aiOverview: AIOverviewSchema,
   aiOverviewData: AIOverviewDataSchema,
   targetPageOnPage1: z.boolean(),

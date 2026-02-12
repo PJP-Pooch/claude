@@ -151,6 +151,13 @@ export interface MergedOpportunityRow {
     isBrand: boolean;
     revenueWeight: number;
 
+    // V2 Scoring
+    action_v2?: OpportunityAction;
+    score_v2?: number;
+    reasons?: string[];
+    missing_signals?: string[];
+    confidence?: 'high' | 'med' | 'low';
+
     // Hierarchy / Pivot support
     is_total_row?: boolean;       // True if this is an aggregate row for a query with multiple channels
     parent_query?: string;        // Used to link individual channel rows back to a total row
