@@ -1400,129 +1400,20 @@ export default function SeoPpcOpportunitiesPage() {
                             </p>
                         </div>
 
-                        {/* Action Legend moved here */}
-                        <ActionLegend
-                            expanded={expandedSections.legend}
-                            onToggle={() => toggleSection('legend')}
-                            config={scoringConfig}
-                        />
-
-                        {/* Scoring Methodology Dropdown */}
-                        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-                            <button
-                                onClick={() => toggleSection('methodology')}
-                                className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                            >
-                                <div className="flex items-center gap-2">
-                                    <div className="p-1.5 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg text-indigo-600 dark:text-indigo-400">
-                                        <TrendingUp className="w-4 h-4" />
-                                    </div>
-                                    <span className="font-semibold text-gray-900 dark:text-white text-sm">How Scoring Works</span>
-                                </div>
-                                {expandedSections.methodology ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
-                            </button>
-
-                            {expandedSections.methodology && (
-                                <div className="p-4 pt-0 space-y-4 bg-gray-50/50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-700/50">
-                                    <div className="pt-3 space-y-4">
-                                        {/* Save Score Section */}
-                                        <div className="space-y-2 p-3 bg-orange-50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-800/30 rounded-lg">
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-6 h-6 rounded-full bg-orange-500 flex items-center justify-center text-white text-xs font-bold">S</div>
-                                                <h4 className="text-sm font-bold text-orange-900 dark:text-orange-300">Save Score (0-100)</h4>
-                                            </div>
-                                            <p className="text-[11px] text-orange-800 dark:text-orange-400 leading-relaxed">
-                                                Identifies opportunities to <strong>reduce wasted ad spend</strong> by highlighting queries where:
-                                            </p>
-                                            <ul className="text-[10px] text-orange-700 dark:text-orange-500 space-y-1 pl-4 list-disc">
-                                                <li>You already rank organically in top positions (1-{scoringConfig.organic_strong_pos})</li>
-                                                <li>Paid ads have low ROAS (&lt; {scoringConfig.high_roas}x) or high cost with minimal conversion benefit</li>
-                                                <li>Organic CTR is strong, meaning users prefer your organic result</li>
-                                                <li>Cost exceeds £{scoringConfig.reduce_cost_threshold} with position ≤ {scoringConfig.organic_near_strong_pos}</li>
-                                            </ul>
-                                            <p className="text-[10px] text-orange-700 dark:text-orange-500 pt-1 italic">
-                                                💡 <strong>Higher Save Score</strong> = Greater potential to cut costs without losing visibility
-                                            </p>
-                                        </div>
-
-                                        {/* Grow Score Section */}
-                                        <div className="space-y-2 p-3 bg-green-50 dark:bg-green-900/10 border border-green-100 dark:border-green-800/30 rounded-lg">
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center text-white text-xs font-bold">G</div>
-                                                <h4 className="text-sm font-bold text-green-900 dark:text-green-300">Grow Score (0-100)</h4>
-                                            </div>
-                                            <p className="text-[11px] text-green-800 dark:text-green-400 leading-relaxed">
-                                                Identifies opportunities to <strong>capture new value</strong> through increased investment or SEO effort:
-                                            </p>
-                                            <ul className="text-[10px] text-green-700 dark:text-green-500 space-y-1 pl-4 list-disc">
-                                                <li>High ROAS (&gt; {scoringConfig.high_roas}x) or strong conversion performance</li>
-                                                <li>Low Impression Share (&lt; {scoringConfig.low_impression_share}%) = untapped search volume</li>
-                                                <li>Weak organic position (&gt; {scoringConfig.organic_weak_pos}) = SEO upside potential</li>
-                                                <li>High search volume + proven conversion rate = scalable opportunity</li>
-                                            </ul>
-                                            <p className="text-[10px] text-green-700 dark:text-green-500 pt-1 italic">
-                                                💡 <strong>Higher Grow Score</strong> = Greater potential to increase traffic and revenue
-                                            </p>
-                                        </div>
-
-                                        {/* How Scores Drive Actions */}
-                                        <div className="space-y-2 p-3 bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800/30 rounded-lg">
-                                            <h4 className="text-sm font-bold text-blue-900 dark:text-blue-300">🎯 How Actions are Determined</h4>
-                                            <p className="text-[10px] text-blue-800 dark:text-blue-400 leading-relaxed">
-                                                Each query is evaluated across multiple dimensions (organic position, ROAS, competition, impression share) to assign a <strong>strategic action</strong>:
-                                            </p>
-                                            <div className="space-y-1.5 pt-2">
-                                                <div className="flex items-start gap-2">
-                                                    <span className="text-[9px] font-bold text-purple-600 dark:text-purple-400 px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/30 rounded">DEFEND</span>
-                                                    <span className="text-[10px] text-blue-700 dark:text-blue-400">Protect #1-{scoringConfig.organic_strong_pos} rankings with high competition</span>
-                                                </div>
-                                                <div className="flex items-start gap-2">
-                                                    <span className="text-[9px] font-bold text-red-600 dark:text-red-400 px-1.5 py-0.5 bg-red-100 dark:bg-red-900/30 rounded">REDUCE</span>
-                                                    <span className="text-[10px] text-blue-700 dark:text-blue-400">Cut spend on strong organic positions (≤{scoringConfig.organic_near_strong_pos}) + cost &gt; £{scoringConfig.reduce_cost_threshold}</span>
-                                                </div>
-                                                <div className="flex items-start gap-2">
-                                                    <span className="text-[9px] font-bold text-green-600 dark:text-green-400 px-1.5 py-0.5 bg-green-100 dark:bg-green-900/30 rounded">SCALE</span>
-                                                    <span className="text-[10px] text-blue-700 dark:text-blue-400">Increase spend on high ROAS (&gt;{scoringConfig.high_roas}x) + low IS% (&lt;{scoringConfig.low_impression_share}%)</span>
-                                                </div>
-                                                <div className="flex items-start gap-2">
-                                                    <span className="text-[9px] font-bold text-blue-600 dark:text-blue-400 px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/30 rounded">SEO</span>
-                                                    <span className="text-[10px] text-blue-700 dark:text-blue-400">Improve rankings for weak positions (&gt;{scoringConfig.organic_weak_pos}) with search volume</span>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Priority Logic */}
-                                        <div className="space-y-2 p-3 bg-gray-100 dark:bg-gray-900/30 border border-gray-200 dark:border-gray-700/30 rounded-lg">
-                                            <h4 className="text-xs font-bold text-gray-900 dark:text-gray-300">⚙️ Priority & Scoring Logic</h4>
-                                            <p className="text-[10px] text-gray-700 dark:text-gray-400 leading-relaxed">
-                                                The system uses a <strong>multi-factor weighted model</strong> considering:
-                                            </p>
-                                            <ul className="text-[10px] text-gray-600 dark:text-gray-500 space-y-0.5 pl-4 list-disc">
-                                                <li><strong>Financial Impact:</strong> Cost, ROAS, conversion value, CPA</li>
-                                                <li><strong>Organic Performance:</strong> Position, CTR, clicks, impressions</li>
-                                                <li><strong>Market Dynamics:</strong> Competition score, impression share, search volume</li>
-                                                <li><strong>Strategic Fit:</strong> Brand defense, multi-channel coverage, opportunity tier</li>
-                                            </ul>
-                                            <p className="text-[10px] text-gray-600 dark:text-gray-500 pt-2 italic">
-                                                📊 Scores are normalized 0-100, with higher scores indicating higher priority for action.
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
+                        {/* ========== CONFIGURATION SECTIONS (Require Input) ========== */}
 
                         {/* Settings / API Keys */}
-                        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                        <div className="bg-white dark:bg-gray-800 rounded-xl border-2 border-purple-200 dark:border-purple-800/50 overflow-hidden shadow-sm">
                             <button
                                 onClick={() => setShowSettings(!showSettings)}
-                                className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                                className="w-full flex items-center justify-between p-4 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors"
                             >
                                 <div className="flex items-center gap-2">
                                     <div className="p-1.5 bg-purple-100 dark:bg-purple-900/30 rounded-lg text-purple-600 dark:text-purple-400">
                                         <Zap className="w-4 h-4" />
                                     </div>
                                     <span className="font-semibold text-gray-900 dark:text-white text-sm">API Settings</span>
+                                    <span className="text-[9px] font-bold px-2 py-0.5 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded-full uppercase tracking-wide">Configure</span>
                                     {dfsLogin && dfsPassword && (
                                         <CheckCircle className="w-3.5 h-3.5 text-green-500" />
                                     )}
@@ -1531,7 +1422,7 @@ export default function SeoPpcOpportunitiesPage() {
                             </button>
 
                             {showSettings && (
-                                <div className="p-4 pt-0 space-y-3 bg-gray-50/50 dark:bg-gray-800/50">
+                                <div className="p-4 pt-0 space-y-3 bg-purple-50/30 dark:bg-purple-900/10">
                                     <p className="text-xs text-gray-500 dark:text-gray-400">
                                         Enter DataForSEO credentials for live SERP analysis.
                                         <a href="https://app.dataforseo.com/register" target="_blank" rel="noopener noreferrer" className="ml-1 text-blue-600 hover:underline">
@@ -1568,82 +1459,24 @@ export default function SeoPpcOpportunitiesPage() {
                             )}
                         </div>
 
-                        {/* CSV Requirements Dropdown */}
-                        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden mb-3">
-                            <button
-                                onClick={() => setShowCsvRequirements(!showCsvRequirements)}
-                                className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                            >
-                                <div className="flex items-center gap-2">
-                                    <div className="p-1.5 bg-green-100 dark:bg-green-900/30 rounded-lg text-green-600 dark:text-green-400">
-                                        <FileText className="w-4 h-4" />
-                                    </div>
-                                    <span className="font-semibold text-gray-900 dark:text-white text-sm">CSV Requirements</span>
-                                </div>
-                                {showCsvRequirements ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
-                            </button>
-
-                            {showCsvRequirements && (
-                                <div className="p-4 pt-0 space-y-3 bg-gray-50/50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-700/50">
-                                    <div className="space-y-3 pt-3">
-                                        <div>
-                                            <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 mb-1">Google Search Console (Performance Report)</p>
-                                            <p className="text-[10px] text-gray-500 mb-1">Export &quot;Queries&quot; report. Required columns:</p>
-                                            <ul className="text-[10px] text-gray-600 dark:text-gray-400 list-disc pl-3 space-y-0.5">
-                                                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Top queries</code> or <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Query</code></li>
-                                                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Clicks</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Impressions</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Position</code></li>
-                                            </ul>
-                                        </div>
-                                        <div>
-                                            <p className="text-xs font-bold text-purple-600 dark:text-purple-400 mb-1">Google Ads (Search Terms Report)</p>
-                                            <p className="text-[10px] text-gray-500 mb-1">Required for drill-down & conversion data:</p>
-                                            <ul className="text-[10px] text-gray-600 dark:text-gray-400 list-disc pl-3 space-y-0.5">
-                                                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Search term</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Cost</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Clicks</code></li>
-                                                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Conversions</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Conv. value</code></li>
-                                            </ul>
-                                            <p className="text-[10px] text-gray-500 mt-1">Recommended:</p>
-                                            <ul className="text-[10px] text-gray-600 dark:text-gray-400 list-disc pl-3 space-y-0.5">
-                                                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Campaign</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Ad group</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Match type</code></li>
-                                            </ul>
-                                        </div>
-                                        <div className="pt-2 border-t border-gray-100 dark:border-gray-700/50">
-                                            <p className="text-xs font-bold text-violet-600 dark:text-violet-400 mb-1">Google Ads (Auction Insights / Keywords)</p>
-                                            <p className="text-[10px] text-gray-500 mb-1">Required for Competition Scoring:</p>
-                                            <ul className="text-[10px] text-gray-600 dark:text-gray-400 list-disc pl-3 space-y-0.5">
-                                                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Keyword</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Campaign</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Ad group</code></li>
-                                                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Search Impr. share</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Search lost IS (rank)</code></li>
-                                            </ul>
-                                        </div>
-                                        <div className="pt-2 border-t border-gray-100 dark:border-gray-700/50">
-                                            <p className="text-xs font-bold text-pink-600 dark:text-pink-400 mb-1">Google Ads (Campaign Report)</p>
-                                            <p className="text-[10px] text-gray-500 mb-1">Required for Multi-Channel Pivot:</p>
-                                            <ul className="text-[10px] text-gray-600 dark:text-gray-400 list-disc pl-3 space-y-0.5">
-                                                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Campaign</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Campaign type</code> (e.g. Shopping/PMax)</li>
-                                                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Status</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Status reasons</code></li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
                         {/* Scoring Configuration Tweak */}
-                        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                        <div className="bg-white dark:bg-gray-800 rounded-xl border-2 border-blue-200 dark:border-blue-800/50 overflow-hidden shadow-sm">
                             <button
                                 onClick={() => toggleSection('scoring')}
-                                className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                                className="w-full flex items-center justify-between p-4 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
                             >
                                 <div className="flex items-center gap-2">
                                     <div className="p-1.5 bg-blue-100 dark:bg-blue-900/30 rounded-lg text-blue-600 dark:text-blue-400">
                                         <Settings className="w-4 h-4" />
                                     </div>
                                     <span className="font-semibold text-gray-900 dark:text-white text-sm">Fine-Tune Scoring</span>
+                                    <span className="text-[9px] font-bold px-2 py-0.5 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-full uppercase tracking-wide">Configure</span>
                                 </div>
                                 {expandedSections.scoring ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
                             </button>
 
                             {expandedSections.scoring && (
-                                <div className="p-4 pt-0 space-y-4 bg-gray-50/50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-700/50">
+                                <div className="p-4 pt-0 space-y-4 bg-blue-50/30 dark:bg-blue-900/10 border-t border-blue-100 dark:border-blue-900/30">
                                     <div className="pt-3 space-y-4">
                                         {/* Organic Position Thresholds */}
                                         <div className="space-y-3 pb-3 border-b border-gray-200 dark:border-gray-700">
@@ -1757,6 +1590,191 @@ export default function SeoPpcOpportunitiesPage() {
                             )}
                         </div>
 
+                        {/* Divider between Configuration and Informational sections */}
+                        <div className="relative py-4">
+                            <div className="absolute inset-0 flex items-center">
+                                <div className="w-full border-t-2 border-gray-200 dark:border-gray-700"></div>
+                            </div>
+                            <div className="relative flex justify-center text-xs uppercase">
+                                <span className="bg-gray-50 dark:bg-gray-900 px-3 py-1 text-gray-500 dark:text-gray-400 font-semibold tracking-wider rounded-full border border-gray-200 dark:border-gray-700">
+                                    Information & Guides
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Action Legend */}
+                        <ActionLegend
+                            expanded={expandedSections.legend}
+                            onToggle={() => toggleSection('legend')}
+                            config={scoringConfig}
+                        />
+
+                        {/* Scoring Methodology Dropdown */}
+                        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                            <button
+                                onClick={() => toggleSection('methodology')}
+                                className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                            >
+                                <div className="flex items-center gap-2">
+                                    <div className="p-1.5 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg text-indigo-600 dark:text-indigo-400">
+                                        <TrendingUp className="w-4 h-4" />
+                                    </div>
+                                    <span className="font-semibold text-gray-900 dark:text-white text-sm">How Scoring Works</span>
+                                    <span className="text-[9px] font-medium px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-full uppercase tracking-wide">Info</span>
+                                </div>
+                                {expandedSections.methodology ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                            </button>
+
+                            {expandedSections.methodology && (
+                                <div className="p-4 pt-0 space-y-4 bg-gray-50/50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-700/50">
+                                    <div className="pt-3 space-y-4">
+                                        {/* Save Score Section */}
+                                        <div className="space-y-2 p-3 bg-orange-50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-800/30 rounded-lg">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-6 h-6 rounded-full bg-orange-500 flex items-center justify-center text-white text-xs font-bold">S</div>
+                                                <h4 className="text-sm font-bold text-orange-900 dark:text-orange-300">Save Score (0-100)</h4>
+                                            </div>
+                                            <p className="text-[11px] text-orange-800 dark:text-orange-400 leading-relaxed">
+                                                Identifies opportunities to <strong>reduce wasted ad spend</strong> by highlighting queries where:
+                                            </p>
+                                            <ul className="text-[10px] text-orange-700 dark:text-orange-500 space-y-1 pl-4 list-disc">
+                                                <li>You already rank organically in top positions (1-{scoringConfig.organic_strong_pos})</li>
+                                                <li>Paid ads have low ROAS (&lt; {scoringConfig.high_roas}x) or high cost with minimal conversion benefit</li>
+                                                <li>Organic CTR is strong, meaning users prefer your organic result</li>
+                                                <li>Cost exceeds £{scoringConfig.reduce_cost_threshold} with position ≤ {scoringConfig.organic_near_strong_pos}</li>
+                                            </ul>
+                                            <p className="text-[10px] text-orange-700 dark:text-orange-500 pt-1 italic">
+                                                💡 <strong>Higher Save Score</strong> = Greater potential to cut costs without losing visibility
+                                            </p>
+                                        </div>
+
+                                        {/* Grow Score Section */}
+                                        <div className="space-y-2 p-3 bg-green-50 dark:bg-green-900/10 border border-green-100 dark:border-green-800/30 rounded-lg">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center text-white text-xs font-bold">G</div>
+                                                <h4 className="text-sm font-bold text-green-900 dark:text-green-300">Grow Score (0-100)</h4>
+                                            </div>
+                                            <p className="text-[11px] text-green-800 dark:text-green-400 leading-relaxed">
+                                                Identifies opportunities to <strong>capture new value</strong> through increased investment or SEO effort:
+                                            </p>
+                                            <ul className="text-[10px] text-green-700 dark:text-green-500 space-y-1 pl-4 list-disc">
+                                                <li>High ROAS (&gt; {scoringConfig.high_roas}x) or strong conversion performance</li>
+                                                <li>Low Impression Share (&lt; {scoringConfig.low_impression_share}%) = untapped search volume</li>
+                                                <li>Weak organic position (&gt; {scoringConfig.organic_weak_pos}) = SEO upside potential</li>
+                                                <li>High search volume + proven conversion rate = scalable opportunity</li>
+                                            </ul>
+                                            <p className="text-[10px] text-green-700 dark:text-green-500 pt-1 italic">
+                                                💡 <strong>Higher Grow Score</strong> = Greater potential to increase traffic and revenue
+                                            </p>
+                                        </div>
+
+                                        {/* How Scores Drive Actions */}
+                                        <div className="space-y-2 p-3 bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800/30 rounded-lg">
+                                            <h4 className="text-sm font-bold text-blue-900 dark:text-blue-300">🎯 How Actions are Determined</h4>
+                                            <p className="text-[10px] text-blue-800 dark:text-blue-400 leading-relaxed">
+                                                Each query is evaluated across multiple dimensions (organic position, ROAS, competition, impression share) to assign a <strong>strategic action</strong>:
+                                            </p>
+                                            <div className="space-y-1.5 pt-2">
+                                                <div className="flex items-start gap-2">
+                                                    <span className="text-[9px] font-bold text-purple-600 dark:text-purple-400 px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/30 rounded">DEFEND</span>
+                                                    <span className="text-[10px] text-blue-700 dark:text-blue-400">Protect #1-{scoringConfig.organic_strong_pos} rankings with high competition</span>
+                                                </div>
+                                                <div className="flex items-start gap-2">
+                                                    <span className="text-[9px] font-bold text-red-600 dark:text-red-400 px-1.5 py-0.5 bg-red-100 dark:bg-red-900/30 rounded">REDUCE</span>
+                                                    <span className="text-[10px] text-blue-700 dark:text-blue-400">Cut spend on strong organic positions (≤{scoringConfig.organic_near_strong_pos}) + cost &gt; £{scoringConfig.reduce_cost_threshold}</span>
+                                                </div>
+                                                <div className="flex items-start gap-2">
+                                                    <span className="text-[9px] font-bold text-green-600 dark:text-green-400 px-1.5 py-0.5 bg-green-100 dark:bg-green-900/30 rounded">SCALE</span>
+                                                    <span className="text-[10px] text-blue-700 dark:text-blue-400">Increase spend on high ROAS (&gt;{scoringConfig.high_roas}x) + low IS% (&lt;{scoringConfig.low_impression_share}%)</span>
+                                                </div>
+                                                <div className="flex items-start gap-2">
+                                                    <span className="text-[9px] font-bold text-blue-600 dark:text-blue-400 px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/30 rounded">SEO</span>
+                                                    <span className="text-[10px] text-blue-700 dark:text-blue-400">Improve rankings for weak positions (&gt;{scoringConfig.organic_weak_pos}) with search volume</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Priority Logic */}
+                                        <div className="space-y-2 p-3 bg-gray-100 dark:bg-gray-900/30 border border-gray-200 dark:border-gray-700/30 rounded-lg">
+                                            <h4 className="text-xs font-bold text-gray-900 dark:text-gray-300">⚙️ Priority & Scoring Logic</h4>
+                                            <p className="text-[10px] text-gray-700 dark:text-gray-400 leading-relaxed">
+                                                The system uses a <strong>multi-factor weighted model</strong> considering:
+                                            </p>
+                                            <ul className="text-[10px] text-gray-600 dark:text-gray-500 space-y-0.5 pl-4 list-disc">
+                                                <li><strong>Financial Impact:</strong> Cost, ROAS, conversion value, CPA</li>
+                                                <li><strong>Organic Performance:</strong> Position, CTR, clicks, impressions</li>
+                                                <li><strong>Market Dynamics:</strong> Competition score, impression share, search volume</li>
+                                                <li><strong>Strategic Fit:</strong> Brand defense, multi-channel coverage, opportunity tier</li>
+                                            </ul>
+                                            <p className="text-[10px] text-gray-600 dark:text-gray-500 pt-2 italic">
+                                                📊 Scores are normalized 0-100, with higher scores indicating higher priority for action.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* CSV Requirements Dropdown */}
+                        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden mb-3">
+                            <button
+                                onClick={() => setShowCsvRequirements(!showCsvRequirements)}
+                                className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                            >
+                                <div className="flex items-center gap-2">
+                                    <div className="p-1.5 bg-green-100 dark:bg-green-900/30 rounded-lg text-green-600 dark:text-green-400">
+                                        <FileText className="w-4 h-4" />
+                                    </div>
+                                    <span className="font-semibold text-gray-900 dark:text-white text-sm">CSV Requirements</span>
+                                    <span className="text-[9px] font-medium px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-full uppercase tracking-wide">Info</span>
+                                </div>
+                                {showCsvRequirements ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                            </button>
+
+                            {showCsvRequirements && (
+                                <div className="p-4 pt-0 space-y-3 bg-gray-50/50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-700/50">
+                                    <div className="space-y-3 pt-3">
+                                        <div>
+                                            <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 mb-1">Google Search Console (Performance Report)</p>
+                                            <p className="text-[10px] text-gray-500 mb-1">Export &quot;Queries&quot; report. Required columns:</p>
+                                            <ul className="text-[10px] text-gray-600 dark:text-gray-400 list-disc pl-3 space-y-0.5">
+                                                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Top queries</code> or <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Query</code></li>
+                                                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Clicks</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Impressions</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Position</code></li>
+                                            </ul>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-bold text-purple-600 dark:text-purple-400 mb-1">Google Ads (Search Terms Report)</p>
+                                            <p className="text-[10px] text-gray-500 mb-1">Required for drill-down & conversion data:</p>
+                                            <ul className="text-[10px] text-gray-600 dark:text-gray-400 list-disc pl-3 space-y-0.5">
+                                                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Search term</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Cost</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Clicks</code></li>
+                                                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Conversions</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Conv. value</code></li>
+                                            </ul>
+                                            <p className="text-[10px] text-gray-500 mt-1">Recommended:</p>
+                                            <ul className="text-[10px] text-gray-600 dark:text-gray-400 list-disc pl-3 space-y-0.5">
+                                                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Campaign</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Ad group</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Match type</code></li>
+                                            </ul>
+                                        </div>
+                                        <div className="pt-2 border-t border-gray-100 dark:border-gray-700/50">
+                                            <p className="text-xs font-bold text-violet-600 dark:text-violet-400 mb-1">Google Ads (Auction Insights / Keywords)</p>
+                                            <p className="text-[10px] text-gray-500 mb-1">Required for Competition Scoring:</p>
+                                            <ul className="text-[10px] text-gray-600 dark:text-gray-400 list-disc pl-3 space-y-0.5">
+                                                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Keyword</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Campaign</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Ad group</code></li>
+                                                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Search Impr. share</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Search lost IS (rank)</code></li>
+                                            </ul>
+                                        </div>
+                                        <div className="pt-2 border-t border-gray-100 dark:border-gray-700/50">
+                                            <p className="text-xs font-bold text-pink-600 dark:text-pink-400 mb-1">Google Ads (Campaign Report)</p>
+                                            <p className="text-[10px] text-gray-500 mb-1">Required for Multi-Channel Pivot:</p>
+                                            <ul className="text-[10px] text-gray-600 dark:text-gray-400 list-disc pl-3 space-y-0.5">
+                                                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Campaign</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Campaign type</code> (e.g. Shopping/PMax)</li>
+                                                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Status</code>, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">Status reasons</code></li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
                         {/* Metric Glossary Dropdown */}
                         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
                             <button
@@ -1768,6 +1786,7 @@ export default function SeoPpcOpportunitiesPage() {
                                         <Book className="w-4 h-4" />
                                     </div>
                                     <span className="font-semibold text-gray-900 dark:text-white text-sm">Metric Glossary</span>
+                                    <span className="text-[9px] font-medium px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-full uppercase tracking-wide">Info</span>
                                 </div>
                                 {expandedSections.glossary ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
                             </button>
