@@ -404,16 +404,25 @@ export function computeOpportunityScore(row: Omit<MergedOpportunityRow, 'opportu
         savingsScore = savingsScore * 0.1; // Crush score for standard brand terms
     }
 
-    const projected_savings_score = Math.min(Math.round(savingsScore), 100);
+    // COST GRAVITY: Scale the savings score by the actual amount of spend.
+    // Low spend = low priority for savings, regardless of organic dominance.
+    // A query with £0 spend has £0 save potential.
+    const costFactor = cost_paid === 0 ? 0 : Math.min(1.5, Math.log10(1 + cost_paid) / 1.3);
+    const projected_savings_score = Math.min(Math.round(savingsScore * costFactor), 100);
 
 
     // --- Helper: Calculate Growth Score (Revenue Potential) ---
     let growthScore = 0;
 
     // 1. Efficiency/ROAS (Max 30 pts)
-    if (roas_paid !== null && roas_paid >= 4) growthScore += 30;
-    else if (roas_paid !== null && roas_paid >= 2) growthScore += 20;
-    else if (conversions_paid > 0) growthScore += 10;
+    // Relaxed thresholds to prioritize growth on moderately profitable terms
+    if (roas_paid !== null) {
+        if (roas_paid >= 3.0) growthScore += 30;      // Was 4.0
+        else if (roas_paid >= 2.0) growthScore += 25; // Was 20
+        else if (roas_paid >= 1.2) growthScore += 20; // New: 1.2x is "Good" growth potential
+        else if (roas_paid >= 0.8) growthScore += 15; // New: Marginally unprofitable is still "Okay" grow if volume is there
+        else if (conversions_paid > 0) growthScore += 10;
+    }
 
     // 2. Volume/Revenue Potential (Max 40 pts)
     // REVENUE WEIGHTING: Use the new revenue multiplier
@@ -424,15 +433,27 @@ export function computeOpportunityScore(row: Omit<MergedOpportunityRow, 'opportu
         growthScore += Math.min((impressions_paid + impressions_org) / 500, 20);
     }
 
-    // 3. Low Rank Opportunity (Max 30 pts)
+    // 3. Low Rank Opportunity (Max 35 pts)
+    // Boosted striking distance (11-20) as it's the highest leverage SEO growth area
     if (position_org === 0) growthScore += 30;
-    else if (position_org > 10) growthScore += 20;
-    else if (position_org > 3) growthScore += 10;
+    else if (position_org >= 11 && position_org <= 25) growthScore += 35; // Striking distance (weighted higher)
+    else if (position_org > 25) growthScore += 20;
+    else if (position_org > 3) growthScore += 15; // Page 1 but not top 3
+
+    // 4. CTR Gap Opportunity (Max 25 pts)
+    // If we rank well but have poor CTR, there is a big opportunity to grow traffic
+    const expectedCtr = getExpectedCtr(position_org);
+    const ctrRatio = (expectedCtr > 0 && row.ctr_org !== undefined) ? (row.ctr_org / expectedCtr) : 1;
+    if (position_org > 0 && position_org <= 10 && ctrRatio < 0.7) {
+        growthScore += Math.max(0, 25 - (ctrRatio * 35));
+    }
 
     const projected_growth_score = Math.min(Math.round(growthScore), 100);
 
     // --- Main Opportunity Score Logic ---
-    const isCostSavingAction = action === 'Reduce Spend' || action === 'Investigate';
+    // Logic: If action is Reduce/Investigate AND there is actual cost, use savings score as base.
+    // If it's Investigate but cost is £0, it's likely an Organic CTR issue (Growth).
+    const isCostSavingAction = (action === 'Reduce Spend' || action === 'Investigate') && cost_paid > 0;
 
     let baseScore = isCostSavingAction ? projected_savings_score : projected_growth_score;
 

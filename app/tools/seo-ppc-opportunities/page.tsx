@@ -326,6 +326,17 @@ function QuickWinCard({
                                 <span>Pos: {op.position_org > 0 ? op.position_org.toFixed(1) : '-'}</span>
                                 <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
                                 <span>Vol: {formatNumber(op.impressions_paid + op.impressions_org)}</span>
+                                {op.channel_group && (
+                                    <>
+                                        <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+                                        <span className={`px-1 rounded-[2px] uppercase text-[9px] font-bold ${op.channel_group.toLowerCase().includes('shopping') ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
+                                            op.channel_group.toLowerCase().includes('pmax') ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' :
+                                                'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                                            }`}>
+                                            {op.channel_group}
+                                        </span>
+                                    </>
+                                )}
                             </p>
                         </div>
                         <div className="text-right whitespace-nowrap">
@@ -1118,10 +1129,12 @@ export default function SeoPpcOpportunitiesPage() {
 
     const quickWins = useMemo(() => {
         if (!data.length) return null;
+        // Combine queries by considering only the total rows or independent rows
+        const consolidatedData = data.filter(r => !r.parent_query);
         return {
-            pausePpc: [...data].filter(r => r.action === 'Reduce Spend').sort((a, b) => b.cost_paid - a.cost_paid).slice(0, 5),
-            scaleSpend: [...data].filter(r => r.action === 'Scale Spend').sort((a, b) => (b.roas_paid || 0) - (a.roas_paid || 0)).slice(0, 5),
-            seoFocus: [...data].filter(r => r.action === 'SEO Focus').sort((a, b) => b.conversions_paid - a.conversions_paid).slice(0, 5),
+            pausePpc: consolidatedData.filter(r => r.action === 'Reduce Spend').sort((a, b) => b.cost_paid - a.cost_paid).slice(0, 5),
+            scaleSpend: consolidatedData.filter(r => r.action === 'Scale Spend').sort((a, b) => (b.roas_paid || 0) - (a.roas_paid || 0)).slice(0, 5),
+            seoFocus: consolidatedData.filter(r => r.action === 'SEO Focus').sort((a, b) => b.conversions_paid - a.conversions_paid).slice(0, 5),
         };
     }, [data]);
 
@@ -2174,7 +2187,7 @@ export default function SeoPpcOpportunitiesPage() {
                                                 </thead>
                                                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                                                     {data
-                                                        .filter(r => r.position_org > 0 && r.position_org <= 3 && r.cost_paid > 0)
+                                                        .filter(r => !r.parent_query && r.position_org > 0 && r.position_org <= 3 && r.cost_paid > 0)
                                                         .sort((a, b) => b.cost_paid - a.cost_paid)
                                                         .slice(0, 5)
                                                         .map((row, idx) => (
@@ -2247,6 +2260,7 @@ export default function SeoPpcOpportunitiesPage() {
                                                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                                                     {data
                                                         .filter(r =>
+                                                            !r.parent_query &&
                                                             r.roas_paid !== null &&
                                                             r.roas_paid >= 3 &&
                                                             r.impressionShare !== null &&
