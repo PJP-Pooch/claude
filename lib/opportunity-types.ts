@@ -8,13 +8,10 @@ export type OpportunityAction =
     | 'Consider PPC'
     | 'Investigate'
     | 'Reduce Spend'
-    | 'Test PPC Pause'
     | 'No Action'
     | 'Add Exact Match'
     | 'Scale Spend'
-    | 'Defend'
-    | 'Investigate PPC'
-    | 'Test Multi-Channel Pause';
+    | 'Defend';
 
 export type StrategicTier = 'Brand Core' | 'High Intent' | 'Mid Funnel' | 'Informational';
 

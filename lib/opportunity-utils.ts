@@ -147,7 +147,7 @@ export function classifyAction(
     // If we've spent a significant amount with ZERO conversions, flag it immediately.
     // Raised threshold to 50 to avoid noise.
     if (cost_paid > 50 && conversions_paid === 0 && clicks_paid >= 10) {
-        return 'Investigate PPC';
+        return 'Investigate';
     }
 
     // --- NEW PRIORITY: Test Multi-Channel Pause ---
@@ -156,7 +156,7 @@ export function classifyAction(
     const hasShoppingOrPmax = (row as MergedOpportunityRow).has_shopping_coverage || (row as MergedOpportunityRow).has_pmax_coverage;
 
     if (position_org > 0 && position_org <= 3 && isMultiChannel && hasShoppingOrPmax && cost_paid > 20) {
-        return 'Test Multi-Channel Pause';
+        return 'Reduce Spend';
     }
 
     // --- NEW PRIORITY 1: Defend (Strong Organic + High Competition) ---
@@ -216,7 +216,7 @@ export function classifyAction(
                 if (row.competition_score < 60) {
                     // Safety check: if we don't have safe coverage, downgrade to Reduce Spend or Investigate
                     if (hasSafeCoverage) {
-                        return 'Test PPC Pause';
+                        return 'Reduce Spend';
                     } else {
                         return 'Reduce Spend'; // Downgrade
                     }
@@ -304,22 +304,30 @@ export function getActionReason(row: Omit<MergedOpportunityRow, 'action' | 'oppo
             return `Keyword is currently '${matchType}' match but converting profitably (ROAS > 2). Adding as Exact Match can improve efficiency and control.`;
         case 'Scale Spend':
             return `High ROAS (>4) but low Impression Share (<50%). Significant opportunity to capture more profitable volume by increasing budget/bids.`;
-        case 'Test PPC Pause':
-            return `Strong Organic presence (Pos < 3) and low competition (Score < 40). Paid Ads are likely cannibalizing organic traffic. Safe to test pause.`;
-        case 'Test Multi-Channel Pause':
-            return `Severe Redundancy: You are paying for multiple ad placements (Search + Shopping/PMax) while dominating organically (Pos < 3). The second ad placement is highly likely to be wasted spend.`;
         case 'Reduce Spend':
+            // Logic to differentiate reasons
+            if (position_org > 0 && position_org <= 3) {
+                // Check for Multi-Channel
+                const isMultiChannel = (row as MergedOpportunityRow).channel_count && (row as MergedOpportunityRow).channel_count! > 1;
+                const hasShoppingOrPmax = (row as MergedOpportunityRow).has_shopping_coverage || (row as MergedOpportunityRow).has_pmax_coverage;
+                if (isMultiChannel && hasShoppingOrPmax) {
+                    return `Severe Redundancy: You are paying for multiple ad placements (Search + Shopping/PMax) while dominating organically (Pos < 3). The second ad placement is highly likely to be wasted spend.`;
+                }
+                // Check for PPC Pause logic (Strong Org + Low Comp)
+                if (row.competition_score < 40) {
+                    return `Strong Organic presence (Pos < 3) and low competition (Score < 40). Paid Ads are likely cannibalizing organic traffic. Safe to test pause.`;
+                }
+            }
             return `Strong Organic presence (Pos < 3) with moderate competition (Score < 50). Can reduce ad spend without losing traffic.`;
         case "Defend":
             return `Protect high-value terms where you have organic dominance but face intense auction pressure. Org < 3 + ROAS >= 4 + Comp Score >= 60. Maintain detailed defense strategy to prevent competitors from stealing clicks.`;
-        case 'Investigate PPC':
-            return `High spend keywords with zero conversions (Cost > £40). Significant waste that needs immediate stopping or reassessing.`;
         case 'SEO Focus':
             if (position_org === 0 && hasMeaningfulPaidActivity) return `Proven paid engagement (clicks or conversions), but zero organic visibility. High value target for new SEO content.`;
             if (position_org > 10 && position_org <= 20) return `Ranking in striking distance (Page 2) with meaningful paid activity. Push to Page 1 for significant traffic gain.`;
             if (position_org > 20 && hasMeaningfulPaidActivity) return `Meaningful paid engagement, but organic ranking is low (>20). Long-term SEO opportunity to reduce reliance on paid spend.`;
             return `Keyword shows potential but lacks organic visibility. Improve content relevance to rank.`;
         case 'Investigate':
+            if (cost_paid > 50 && conversions_paid === 0 && clicks_paid >= 10) return `High spend keywords with zero conversions (Cost > £50). Significant waste that needs immediate stopping or reassessing.`;
             if (position_org > 0 && position_org <= 10 && ctrRatio < 0.5) return `Organic ranking is good (Pos 1-10) but CTR is unexpectedly low. Investigate Title/Meta Description or SERP features stealing clicks.`;
             return `Performance metrics look unusual. Review queries and landing pages for relevance issues.`;
         case 'Consider PPC':
@@ -382,7 +390,7 @@ export function computeOpportunityScore(row: Omit<MergedOpportunityRow, 'opportu
 
     // 4. Multi-Channel Redundancy (Max 20 pts)
     // If we're paying for multiple ad channels AND ranking well organically, it's high waste
-    if (action === 'Test Multi-Channel Pause' || ((row as any).channel_count && (row as any).channel_count > 1)) {
+    if (((row as any).channel_count && (row as any).channel_count > 1)) {
         if (position_org > 0 && position_org <= 3) {
             savingsScore += 20; // 2nd ad placement is likely redundant if organic is winning
         }
@@ -392,12 +400,8 @@ export function computeOpportunityScore(row: Omit<MergedOpportunityRow, 'opportu
     // It's risky to stop bidding on brand terms even if they seem inefficient or organic is #1.
     // Competitors might steal the click.
     if (isBrand) {
-        // Reduced penalty for Multi-Channel: If you have Shopping/PMax coverage, Search Brand is safer to test pausing
-        if (action === 'Test Multi-Channel Pause') {
-            savingsScore = savingsScore * 0.5; // Less severe penalty because shopping still covers
-        } else {
-            savingsScore = savingsScore * 0.1; // Crush score for standard brand terms
-        }
+        // Reduced penalty for Multi-Channel checks if implemented
+        savingsScore = savingsScore * 0.1; // Crush score for standard brand terms
     }
 
     const projected_savings_score = Math.min(Math.round(savingsScore), 100);
@@ -428,7 +432,7 @@ export function computeOpportunityScore(row: Omit<MergedOpportunityRow, 'opportu
     const projected_growth_score = Math.min(Math.round(growthScore), 100);
 
     // --- Main Opportunity Score Logic ---
-    const isCostSavingAction = action === 'Test PPC Pause' || action === 'Reduce Spend' || action === 'Investigate';
+    const isCostSavingAction = action === 'Reduce Spend' || action === 'Investigate';
 
     let baseScore = isCostSavingAction ? projected_savings_score : projected_growth_score;
 
@@ -454,11 +458,8 @@ export function computeOpportunityScore(row: Omit<MergedOpportunityRow, 'opportu
 
     // Apply Action Multipliers
     const actionMultipliers: Record<OpportunityAction, number> = {
-        'Test PPC Pause': 1.1,
-        'Test Multi-Channel Pause': 1.25,
-        'Reduce Spend': 1.05,
-        'Investigate': 1.1,
-        'Investigate PPC': 1.2,
+        'Reduce Spend': 1.15, // Combined weight of previous pause/reduce actions
+        'Investigate': 1.15,  // Combined weight
         'SEO Focus': 1.2,
         'Scale Spend': 1.25,
         'Add Exact Match': 1.1,
@@ -915,13 +916,10 @@ export function calculateSummary(data: MergedOpportunityRow[]): OpportunitySumma
         'SEO Focus': 0,
         'Consider PPC': 0,
         'Investigate': 0,
-        'Investigate PPC': 0,
         'Reduce Spend': 0,
-        'Test PPC Pause': 0,
         'Add Exact Match': 0,
         'Scale Spend': 0,
         'Defend': 0,
-        'Test Multi-Channel Pause': 0,
         'No Action': 0,
     };
 
@@ -1073,11 +1071,8 @@ export function prepareScoreDistribution(data: MergedOpportunityRow[]): ScoreDis
     ];
 
     const saveActions = new Set<OpportunityAction>([
-        'Test PPC Pause',
         'Reduce Spend',
         'Investigate',
-        'Investigate PPC',
-        'Test Multi-Channel Pause'
     ]);
 
     for (const row of data) {
@@ -1242,11 +1237,8 @@ export function getActionColor(action: OpportunityAction): string {
         'SEO Focus': '#10b981',        // Green
         'Consider PPC': '#6366f1',      // Indigo
         'Investigate': '#f59e0b',       // Amber
-        'Investigate PPC': '#dc2626',   // Bright Red (Critical)
         'Reduce Spend': '#f97316',      // Orange
         'Defend': '#7c3aed',            // Violet
-        'Test PPC Pause': '#ec4899',
-        'Test Multi-Channel Pause': '#f43f5e',
         'No Action': '#f1f5f9',
     };
     return colors[action] || '#cccccc';
@@ -1303,20 +1295,6 @@ export function generateMockSerpAnalysis(query: string, action?: OpportunityActi
 
     // Action-specific recommendations - more relevant and detailed
     const actionRecommendations: Record<OpportunityAction, AiRecommendation[]> = {
-        'Test PPC Pause': [
-            {
-                action: "Pause PPC Ads Immediately",
-                reasoning: "You already rank #1-3 organically for this keyword. The organic listing will capture this traffic for free, saving your PPC budget.",
-                impact: "High - Save 100% of current spend on this keyword",
-                difficulty: "Low"
-            },
-            {
-                action: "Reduce to Branded Bidding Only",
-                reasoning: "Consider keeping a minimal bid only for brand defense. Organic ranks highly, but competitors may bid on your brand terms.",
-                impact: "Medium - Save 80%+ of current keyword spend",
-                difficulty: "Low"
-            }
-        ],
         'Reduce Spend': [
             {
                 action: "Lower Bids by 30-40%",
@@ -1329,6 +1307,12 @@ export function generateMockSerpAnalysis(query: string, action?: OpportunityActi
                 reasoning: "Apply a negative bid modifier when organic rank is in top positions. This reduces cannibalization.",
                 impact: "Medium - Better budget allocation across keywords",
                 difficulty: "Medium"
+            },
+            {
+                action: "Test PPC Pause",
+                reasoning: "If cost saving is critical and organic is #1, test a complete pause for 2 weeks.",
+                impact: "High - Maximum savings",
+                difficulty: "Low"
             }
         ],
         'Defend': [
@@ -1409,28 +1393,12 @@ export function generateMockSerpAnalysis(query: string, action?: OpportunityActi
                 difficulty: "Low"
             }
         ],
-        'Investigate PPC': [
-            {
-                action: "Immediate Cost Review",
-                reasoning: "High spend with zero conversions. Review search terms for negative keyword opportunities or reconsider landing page relevance.",
-                impact: "High - Stop wasted spend",
-                difficulty: "Low"
-            }
-        ],
         'No Action': [
             {
                 action: "No Specific Action Required",
-                reasoning: "Current data does not indicate any significant opportunity or issue. Continue data collection.",
-                impact: "None",
+                reasoning: "Current data indicates this keyword is performing well and is stable. Continue to monitor performance trends.",
+                impact: "Low",
                 difficulty: "Low"
-            }
-        ],
-        'Test Multi-Channel Pause': [
-            {
-                action: "Strategic Multi-Channel Review",
-                reasoning: "You are currently appearing in multiple ad formats (Search, Shopping/PMax) while also holding a top-3 organic position. This redundancy is likely costing you significantly in marginal CPA.",
-                impact: "High - Budget efficiency",
-                difficulty: "Medium"
             }
         ]
     };
@@ -1473,7 +1441,7 @@ export function generateMockSerpAnalysis(query: string, action?: OpportunityActi
  * Get a structured AI recommendation based on the determined action and SERP context
  */
 export function getAiRecommendation(query: string, action: OpportunityAction): AiRecommendation {
-    const actionRecommendations: Record<string, Array<Omit<AiRecommendation, 'action'> & { action: string }>> = {
+    const actionRecommendations: Record<OpportunityAction, Array<Omit<AiRecommendation, 'action'> & { action: string }>> = {
         'SEO Focus': [
             {
                 action: "Optimize Content for Top 3",
@@ -1516,6 +1484,18 @@ export function getAiRecommendation(query: string, action: OpportunityAction): A
                 reasoning: "ROAS is below target and organic rank is strong. Reducing PPC spend will improve overall account efficiency without losing significantly on total traffic.",
                 impact: "Medium - Immediate cost savings",
                 difficulty: "Low"
+            },
+            {
+                action: "Pause PPC for 7-Day Test",
+                reasoning: "High organic rank (#1) and low competition suggest you will capture most of this traffic organically. Pause PPC to see if total conversions remain stable.",
+                impact: "High - Eliminate redundant spend",
+                difficulty: "Low"
+            },
+            {
+                action: "Pause Search or Reduce Shopping Target",
+                reasoning: "Keyword has #1-3 organic rank AND coverage in both Search and Shopping/PMax. This is highly redundant. Testing a pause in Search or lowering bids in Shopping can save budget without losing total traffic.",
+                impact: "High - Eliminate double-serving redundancy",
+                difficulty: "Medium"
             }
         ],
         'Defend': [
@@ -1523,14 +1503,6 @@ export function getAiRecommendation(query: string, action: OpportunityAction): A
                 action: "Increase Bids for Top Position",
                 reasoning: "High competition and strong performance make this a critical keyword. Ensure you maintain top-of-page visibility to protect your market share.",
                 impact: "Medium - Protect existing revenue",
-                difficulty: "Low"
-            }
-        ],
-        'Test PPC Pause': [
-            {
-                action: "Pause PPC for 7-Day Test",
-                reasoning: "High organic rank (#1) and low competition suggest you will capture most of this traffic organically. Pause PPC to see if total conversions remain stable.",
-                impact: "High - Eliminate redundant spend",
                 difficulty: "Low"
             }
         ],
@@ -1548,9 +1520,7 @@ export function getAiRecommendation(query: string, action: OpportunityAction): A
                 reasoning: "Metrics are inconsistent. Check landing page experience, bounce rate, and conversion funnel for issues.",
                 impact: "Variable - Depends on what you find",
                 difficulty: "Medium"
-            }
-        ],
-        'Investigate PPC': [
+            },
             {
                 action: "Stop Loss: Reassess Strategy",
                 reasoning: "High spend with zero conversions. This keyword is currently purely cost with no ROI. Check landing page relevance and search term accuracy.",
@@ -1570,14 +1540,6 @@ export function getAiRecommendation(query: string, action: OpportunityAction): A
                 reasoning: "Current data indicates this keyword is performing well and is stable. Continue to monitor performance trends.",
                 impact: "Low",
                 difficulty: "Low"
-            }
-        ],
-        'Test Multi-Channel Pause': [
-            {
-                action: "Pause Search or Reduce Shopping Target",
-                reasoning: "Keyword has #1-3 organic rank AND coverage in both Search and Shopping/PMax. This is highly redundant. Testing a pause in Search or lowering bids in Shopping can save budget without losing total traffic.",
-                impact: "High - Eliminate double-serving redundancy",
-                difficulty: "Medium"
             }
         ]
     };

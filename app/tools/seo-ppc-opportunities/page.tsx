@@ -54,6 +54,7 @@ import {
     Tags,
     FileText,
     ExternalLink,
+    Users,
 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 
@@ -161,19 +162,14 @@ const ACTION_DEFINITIONS: Record<string, { definition: string; rule: string; col
         rule: "Organic position > 10 (or 0) AND meaningful paid activity (>=1 click/conv).",
         color: "#10b981"
     },
-    "Test PPC Pause": {
-        definition: "Strong Organic presence (Pos < 3) with unprofitable ads. Safe to test pausing if Coverage (COV) is high or NOT a brand term.",
-        rule: "Organic < 3 + ROAS < Avg + (High COV or NOT Brand).",
-        color: "#ef4444"
-    },
     "Reduce Spend": {
-        definition: "Strong organic presence (Pos < 3) where paid spend is inefficient. Prioritized if cross-channel coverage (Shopping/PMax) exists.",
-        rule: "Organic < 3 + ROAS < Target + Multi-channel coverage.",
+        definition: "Strong organic presence (Pos < 3) where paid spend is inefficient OR redundant (Multi-Channel).",
+        rule: "Organic < 3 + (ROAS < Target OR Multi-channel coverage).",
         color: "#f59e0b"
     },
     "Investigate": {
-        definition: "Good organic ranking but suspiciously low CTR. Check for title issues or SERP feature displacement.",
-        rule: "Organic 1-10 + CTR < 50% of expected.",
+        definition: "Good organic ranking but suspiciously low CTR OR High spend with zero conversions.",
+        rule: "(Organic 1-10 + CTR < 50% of expected) OR (Cost > £50 + 0 Conversions).",
         color: "#8b5cf6"
     },
     "Consider PPC": {
@@ -185,11 +181,6 @@ const ACTION_DEFINITIONS: Record<string, { definition: string; rule: string; col
         definition: "Protect high-value terms where you have organic dominance but face intense auction pressure.",
         rule: "Org < 3 + Profitable Paid + Comp Score >= 60.",
         color: "#7c3aed"
-    },
-    "Investigate PPC": {
-        definition: "High spend keywords with zero conversions. Significant waste that needs immediate stopping or reassessing.",
-        rule: "Cost > £50 + 0 Conversions.",
-        color: "#dc2626"
     }
 };
 
@@ -393,6 +384,10 @@ export default function SeoPpcOpportunitiesPage() {
     const [brandTermsInput, setBrandTermsInput] = useState<string>("");
     const [brandTerms, setBrandTerms] = useState<string[]>([]);
 
+    // Competitor settings
+    const [competitorTermsInput, setCompetitorTermsInput] = useState<string>("");
+    const [competitorTerms, setCompetitorTerms] = useState<string[]>([]);
+
     // Table state
     const [sortKey, setSortKey] = useState<keyof MergedOpportunityRow>("projected_savings_score");
     const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -505,6 +500,24 @@ export default function SeoPpcOpportunitiesPage() {
 
         return () => clearTimeout(timer);
     }, [brandTermsInput]);
+
+    // Sync competitorTermsInput to competitorTerms with debounce
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            const terms = competitorTermsInput.split(',')
+                .map(t => t.trim().toLowerCase())
+                .filter(t => t.length > 0);
+
+            setCompetitorTerms(prev => {
+                if (prev.length === terms.length && prev.every((t, i) => t === terms[i])) {
+                    return prev;
+                }
+                return terms;
+            });
+        }, 800);
+
+        return () => clearTimeout(timer);
+    }, [competitorTermsInput]);
 
     // Fetch and update data
     const handleFetchData = useCallback(async () => {
@@ -1057,6 +1070,14 @@ export default function SeoPpcOpportunitiesPage() {
                 }
             }
 
+            // Competitor filter (exclude)
+            if (competitorTerms.length > 0) {
+                const queryLower = row.query.toLowerCase();
+                if (competitorTerms.some(term => queryLower.includes(term))) {
+                    return false;
+                }
+            }
+
             return matchesAction && matchesCampaign && matchesAdGroup && matchesSearch;
         });
 
@@ -1073,7 +1094,7 @@ export default function SeoPpcOpportunitiesPage() {
 
             return sortDir === "asc" ? (aVal as number) - (bVal as number) : (bVal as number) - (aVal as number);
         });
-    }, [data, filterActions, filterCampaign, filterAdGroup, searchQuery, searchMode, sortKey, sortDir]);
+    }, [data, filterActions, filterCampaign, filterAdGroup, searchQuery, searchMode, sortKey, sortDir, competitorTerms]);
 
     const visibleData = useMemo<MergedOpportunityRow[]>(() => {
         const result: MergedOpportunityRow[] = [];
@@ -1098,7 +1119,7 @@ export default function SeoPpcOpportunitiesPage() {
     const quickWins = useMemo(() => {
         if (!data.length) return null;
         return {
-            pausePpc: [...data].filter(r => r.action === 'Test PPC Pause' || r.action === 'Test Multi-Channel Pause').sort((a, b) => b.cost_paid - a.cost_paid).slice(0, 5),
+            pausePpc: [...data].filter(r => r.action === 'Reduce Spend').sort((a, b) => b.cost_paid - a.cost_paid).slice(0, 5),
             scaleSpend: [...data].filter(r => r.action === 'Scale Spend').sort((a, b) => (b.roas_paid || 0) - (a.roas_paid || 0)).slice(0, 5),
             seoFocus: [...data].filter(r => r.action === 'SEO Focus').sort((a, b) => b.conversions_paid - a.conversions_paid).slice(0, 5),
         };
@@ -1454,6 +1475,34 @@ export default function SeoPpcOpportunitiesPage() {
                                     </div>
                                 </div>
 
+                                {/* Competitor Input */}
+                                <div className="flex-1 min-w-[240px]">
+                                    <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                                        Competitors to Remove
+                                        <div className="group relative">
+                                            <Info className="h-3 w-3 text-gray-400 cursor-help" />
+                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-gray-900 text-white text-[10px] rounded shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                                                Enter competitor names separated by commas. Queries containing these terms will be excluded from the analysis.
+                                            </div>
+                                        </div>
+                                    </label>
+                                    <div className="relative group">
+                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                            <Users className={`h-4 w-4 transition-colors ${competitorTermsInput ? 'text-rose-500' : 'text-gray-400'}`} />
+                                        </div>
+                                        <input
+                                            type="text"
+                                            value={competitorTermsInput}
+                                            onChange={(e) => setCompetitorTermsInput(e.target.value)}
+                                            placeholder="e.g. competitor1, competitor2"
+                                            className={`w-full pl-10 pr-10 bg-gray-50 dark:bg-gray-900 border rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 outline-none transition-all ${competitorTermsInput
+                                                ? 'border-rose-500 ring-2 ring-rose-500/10'
+                                                : 'border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500'
+                                                }`}
+                                        />
+                                    </div>
+                                </div>
+
                                 <div className="flex items-center gap-3">
                                     <input type="file" ref={fileInputRefGsc} onChange={handleGscFileUpload} accept=".csv" className="hidden" />
                                     <button
@@ -1574,13 +1623,13 @@ export default function SeoPpcOpportunitiesPage() {
                                         <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Quick Filters:</p>
                                         <div className="flex flex-wrap gap-2">
                                             <button
-                                                onClick={() => toggleAction("Test PPC Pause")}
-                                                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${filterActions.includes("Test PPC Pause")
-                                                    ? "bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800"
-                                                    : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                                                onClick={() => toggleAction("Reduce Spend")}
+                                                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${filterActions.includes("Reduce Spend")
+                                                    ? "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800"
+                                                    : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-orange-50 hover:text-orange-600 hover:border-orange-200 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-orange-900/20 dark:hover:text-orange-400"
                                                     }`}
                                             >
-                                                💰 Wasted Spend (Test PPC Pause)
+                                                💰 Wasted Spend (Reduce Spend)
                                             </button>
                                             <button
                                                 onClick={() => toggleAction("Scale Spend")}
@@ -1609,23 +1658,15 @@ export default function SeoPpcOpportunitiesPage() {
                                             >
                                                 📈 SEO Opportunities
                                             </button>
-                                            <button
-                                                onClick={() => toggleAction("Reduce Spend")}
-                                                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${filterActions.includes("Reduce Spend")
-                                                    ? "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800"
-                                                    : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-orange-50 hover:text-orange-600 hover:border-orange-200 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-orange-900/20 dark:hover:text-orange-400"
-                                                    }`}
-                                            >
-                                                📉 Reduce Spend
-                                            </button>
+
                                             <button
                                                 onClick={() => toggleAction("Investigate")}
                                                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${filterActions.includes("Investigate")
-                                                    ? "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800"
-                                                    : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-200 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-amber-900/20 dark:hover:text-amber-400"
+                                                    ? "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800"
+                                                    : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-purple-50 hover:text-purple-600 hover:border-purple-200 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-purple-900/20 dark:hover:text-purple-400"
                                                     }`}
                                             >
-                                                ⚠️ Needs Investigation
+                                                🔍 Investigate
                                             </button>
                                             <button
                                                 onClick={() => toggleAction("Defend")}
@@ -1707,15 +1748,7 @@ export default function SeoPpcOpportunitiesPage() {
                             )
                         }
 
-                        {/* Error */}
-                        {
-                            error && (
-                                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-center gap-3">
-                                    <AlertCircle className="w-5 h-5 text-red-500" />
-                                    <span className="text-red-700 dark:text-red-400">{error}</span>
-                                </div>
-                            )
-                        }
+
 
                         {/* KPI Cards */}
                         {
@@ -2321,6 +2354,7 @@ export default function SeoPpcOpportunitiesPage() {
                                                         onChange={(e) => setShowTop(Number(e.target.value))}
                                                         className="bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100"
                                                     >
+                                                        <option value={10}>Top 10</option>
                                                         <option value={50}>Top 50</option>
                                                         <option value={100}>Top 100</option>
                                                         <option value={500}>Top 500</option>
