@@ -192,7 +192,7 @@ export function classifyAction(
     }
 
     // --- PRIORITY 4: High-performing organic with inefficient paid ---
-    if (position_org > 0 && position_org <= 3) {
+    if (position_org > 0 && position_org < 3 && cost_paid > 0) {
         if (isBrand) {
             // BRAND RULE: If we are #1 organically, consider reducing spend to test cannibalization
             // even if ROAS is okay, unless it's "Highly Profitable".
@@ -267,7 +267,7 @@ export function classifyAction(
     }
 
     // If it's loss making but doesn't hit thresholds, still flag it as Reduce IF it has dominance
-    if (isPaidUnprofitable && cost_paid > 25 && position_org > 0 && position_org <= 3) {
+    if (isPaidUnprofitable && cost_paid > 25 && position_org > 0 && position_org < 3) {
         return 'Reduce Spend';
     }
 
