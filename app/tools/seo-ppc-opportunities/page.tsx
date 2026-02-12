@@ -34,7 +34,7 @@ import {
     TrendingUp,
     DollarSign,
     MousePointer,
-    Target,
+    Target as LucideTarget,
     BarChart3,
     Info,
     X,
@@ -51,6 +51,11 @@ import {
     Upload,
     Check,
     Globe,
+    Book,
+    HelpCircle,
+    ListFilter,
+    FileSpreadsheet,
+    Printer,
     Tags,
     FileText,
     ExternalLink,
@@ -130,11 +135,12 @@ function formatDateForApi(date: Date): string {
 }
 
 // Action badge component
-function ActionBadge({ action }: { action: OpportunityAction }) {
+function ActionBadge({ action, row }: { action: OpportunityAction; row?: MergedOpportunityRow }) {
     const color = getActionColor(action);
+    const reason = row ? getActionReason(row, action) : "Action recommended based on score analysis.";
     return (
         <span
-            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap border"
+            className="group relative inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap border cursor-help"
             style={{
                 backgroundColor: `${color}15`,
                 color: color,
@@ -142,44 +148,108 @@ function ActionBadge({ action }: { action: OpportunityAction }) {
             }}
         >
             {action}
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-gray-900 text-white text-[10px] rounded shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 text-center font-normal whitespace-normal z-[60]">
+                {reason}
+            </div>
         </span>
+    );
+}
+
+
+
+function UploadWizard() {
+    const [open, setOpen] = useState(false); // Closed by default as per user request
+    return (
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-blue-100 dark:border-blue-900/30 overflow-hidden mb-6 shadow-sm">
+            <button
+                onClick={() => setOpen(!open)}
+                className="w-full flex items-center justify-between p-4 bg-blue-50/50 dark:bg-blue-900/10 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+            >
+                <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-blue-100 dark:bg-blue-900/30 rounded-lg text-blue-600 dark:text-blue-400">
+                        <HelpCircle className="w-4 h-4" />
+                    </div>
+                    <span className="font-semibold text-gray-900 dark:text-white text-sm">How to use this tool</span>
+                </div>
+                {open ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+            </button>
+            {open && (
+                <div className="p-4 space-y-4 text-sm bg-white dark:bg-gray-800/50 border-t border-blue-50 dark:border-blue-900/30">
+                    <div className="grid gap-4">
+                        <div className="flex gap-3 relative">
+                            <div className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-xs ring-4 ring-white dark:ring-gray-800 z-10">1</div>
+                            <div className="border-l-2 border-gray-100 dark:border-gray-700 absolute left-3 top-6 bottom-[-24px] z-0"></div>
+                            <div className="pb-1">
+                                <p className="font-semibold text-gray-900 dark:text-white mb-1">Export GSC Query Data</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                                    Go to <strong>Google Search Console &gt; Performance &gt; Search Results</strong>.<br />
+                                    Select your date range (e.g., Last 3 Months).<br />
+                                    Click <strong>Export &gt; Download CSV</strong>. Use the "Queries.csv" file.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex gap-3 relative">
+                            <div className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-xs ring-4 ring-white dark:ring-gray-800 z-10">2</div>
+                            <div className="border-l-2 border-gray-100 dark:border-gray-700 absolute left-3 top-6 bottom-[-24px] z-0"></div>
+                            <div className="pb-1">
+                                <p className="font-semibold text-gray-900 dark:text-white mb-1">Export Google Ads Search Terms</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                                    Go to <strong>Google Ads &gt; Campaigns &gt; Insights and reports &gt; Search terms</strong>.<br />
+                                    Ensure the date range matches GSC.<br />
+                                    Click <strong>Download &gt; CSV</strong>.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex gap-3">
+                            <div className="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold text-xs ring-4 ring-white dark:ring-gray-800 z-10">3</div>
+                            <div className="pb-1">
+                                <p className="font-semibold text-gray-900 dark:text-white mb-1">Upload & Analyze</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                                    Upload the files using the buttons below. The tool will automatically join the data and find opportunities.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
     );
 }
 
 const ACTION_DEFINITIONS: Record<string, { definition: string; rule: string; color: string }> = {
     "Add Exact Match": {
-        definition: "High-performing broad or phrase match keywords that should be added as exact match to improve control and efficiency.",
-        rule: "Broad/Phrase match with >=1 conversion and ROAS >= 2.",
+        definition: "Converting keywords on broad/phrase match that should be added as exact match for better control.",
+        rule: "Broad/Phrase + >= 10 clicks + Profitable ROAS.",
         color: "#06b6d4"
     },
     "Scale Spend": {
-        definition: "Highly profitable keywords that are losing volume due to budget or bid constraints.",
-        rule: "ROAS >= 4 and Impression Share < 50%.",
+        definition: "Highly profitable keywords with room to grow Imp via budget or bid increases.",
+        rule: "ROAS >= 4.0 + Low Imp. Share or Budget Limited.",
         color: "#22c55e"
     },
     "SEO Focus": {
-        definition: "Proven converting keywords with low organic visibility. High-impact targets for SEO content/optimization.",
-        rule: "Organic position > 10 (or 0) AND meaningful paid activity (>=1 click/conv).",
+        definition: "Proven commercial keywords with low organic visibility. High-impact targets for SEO.",
+        rule: "Organic position > 10 (or 0) + Meaningful paid activity (>=1 click/conv).",
         color: "#10b981"
     },
     "Reduce Spend": {
-        definition: "Strong organic presence (Pos < 3) where paid spend is inefficient OR redundant (Multi-Channel).",
-        rule: "Organic < 3 + (ROAS < Target OR Multi-channel coverage).",
-        color: "#f59e0b"
+        definition: "High organic presence (Pos <= 4) where paid search spend is likely redundant or inefficient.",
+        rule: "Pos <= 4 + (Low ROAS < 2 OR Multi-channel coverage) + Cost > £75.",
+        color: "#f97316"
     },
     "Investigate": {
-        definition: "Good organic ranking but suspiciously low CTR OR High spend with zero conversions.",
-        rule: "(Organic 1-10 + CTR < 50% of expected) OR (Cost > £50 + 0 Conversions).",
-        color: "#8b5cf6"
+        definition: "Audit required: High spend with zero conversions OR good rank with poor CTR.",
+        rule: "Cost > £50 (or > Median) + 0 Conv OR CTR < 50% of expected.",
+        color: "#f59e0b"
     },
     "Consider PPC": {
-        definition: "No organic presence. Test small PPC budget to validate demand.",
+        definition: "No organic presence. Test small PPC budget to validate demand and gather data.",
         rule: "Pos 0 + No Paid Data (but high impressions).",
         color: "#6366f1"
     },
     "Defend": {
-        definition: "Protect high-value terms where you have organic dominance but face intense auction pressure.",
-        rule: "Org < 3 + Profitable Paid + Comp Score >= 60.",
+        definition: "Protect high-revenue terms where you have organic dominance (#1-4) but face intense competition.",
+        rule: "Pos <= 4 + ROAS >= 4 + Comp Score >= 60 + Above Median Rev.",
         color: "#7c3aed"
     }
 };
@@ -204,7 +274,7 @@ function ActionLegend({ expanded, onToggle }: { expanded: boolean; onToggle: () 
                 className="w-full flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors group"
             >
                 <div className="flex items-center gap-2">
-                    <Target className="w-4 h-4 text-blue-500" />
+                    <LucideTarget className="w-4 h-4 text-blue-500" />
                     <span className="text-sm font-bold text-gray-900 dark:text-white">Action Legend</span>
                 </div>
                 {expanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
@@ -325,7 +395,7 @@ function QuickWinCard({
                             <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
                                 <span>Pos: {op.position_org > 0 ? op.position_org.toFixed(1) : '-'}</span>
                                 <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
-                                <span>Vol: {formatNumber(op.impressions_paid + op.impressions_org)}</span>
+                                <span>Imp: {formatNumber(op.impressions_paid + op.impressions_org)}</span>
                                 {op.channel_group && (
                                     <>
                                         <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
@@ -399,8 +469,13 @@ export default function SeoPpcOpportunitiesPage() {
     const [competitorTermsInput, setCompetitorTermsInput] = useState<string>("");
     const [competitorTerms, setCompetitorTerms] = useState<string[]>([]);
 
+    const [filterMinRoas, setFilterMinRoas] = useState<number | ''>('');
+    const [filterMinClicks, setFilterMinClicks] = useState<number | ''>('');
+    const [filterMinConversions, setFilterMinConversions] = useState<number | ''>('');
+    const [showGlossary, setShowGlossary] = useState(false);
+
     // Table state
-    const [sortKey, setSortKey] = useState<keyof MergedOpportunityRow>("projected_savings_score");
+    const [sortKey, setSortKey] = useState<keyof MergedOpportunityRow>("opportunity_score");
     const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
     const [expandedQueries, setExpandedQueries] = useState<Set<string>>(new Set());
 
@@ -429,7 +504,7 @@ export default function SeoPpcOpportunitiesPage() {
     const [filterCampaign, setFilterCampaign] = useState<string>("all");
     const [filterAdGroup, setFilterAdGroup] = useState<string>("all");
     const [searchQuery, setSearchQuery] = useState<string>("");
-    const [searchMode, setSearchMode] = useState<'contains' | 'equals' | 'regex'>('contains');
+    const [searchMode, setSearchMode] = useState<'contains' | 'equals' | 'regex' | 'does_not_contain'>('contains');
     const [showTop, setShowTop] = useState<number>(10);
 
     // File upload ref
@@ -453,8 +528,9 @@ export default function SeoPpcOpportunitiesPage() {
         kpis: true,
         charts: true,
         table: true,
-        legend: false, // Hidden by default
-        scoring: false, // Hidden by default
+        legend: false,
+        scoring: false,
+        glossary: false,
     });
 
     const clearAllData = useCallback(() => {
@@ -1076,6 +1152,8 @@ export default function SeoPpcOpportunitiesPage() {
                     matchesSearch = rowQ === q;
                 } else if (searchMode === 'regex') {
                     matchesSearch = searchRe ? searchRe.test(row.query) : true;
+                } else if (searchMode === 'does_not_contain') {
+                    matchesSearch = !rowQ.includes(q);
                 } else {
                     matchesSearch = rowQ.includes(q);
                 }
@@ -1089,7 +1167,12 @@ export default function SeoPpcOpportunitiesPage() {
                 }
             }
 
-            return matchesAction && matchesCampaign && matchesAdGroup && matchesSearch;
+            // Numeric filters
+            const matchesMinRoas = filterMinRoas === '' || (row.roas_paid !== null && row.roas_paid >= filterMinRoas);
+            const matchesMinClicks = filterMinClicks === '' || (row.clicks_org >= filterMinClicks || row.clicks_paid >= filterMinClicks);
+            const matchesMinConversions = filterMinConversions === '' || (row.conversions_paid >= filterMinConversions);
+
+            return matchesAction && matchesCampaign && matchesAdGroup && matchesSearch && matchesMinRoas && matchesMinClicks && matchesMinConversions;
         });
 
         return [...results].sort((a, b) => {
@@ -1105,7 +1188,7 @@ export default function SeoPpcOpportunitiesPage() {
 
             return sortDir === "asc" ? (aVal as number) - (bVal as number) : (bVal as number) - (aVal as number);
         });
-    }, [data, filterActions, filterCampaign, filterAdGroup, searchQuery, searchMode, sortKey, sortDir, competitorTerms]);
+    }, [data, filterActions, filterCampaign, filterAdGroup, searchQuery, searchMode, sortKey, sortDir, competitorTerms, filterMinRoas, filterMinClicks, filterMinConversions]);
 
     const visibleData = useMemo<MergedOpportunityRow[]>(() => {
         const result: MergedOpportunityRow[] = [];
@@ -1157,6 +1240,10 @@ export default function SeoPpcOpportunitiesPage() {
         link.setAttribute('download', `seo-ppc-opportunities-${new Date().toISOString().split('T')[0]}.csv`);
         link.click();
     }, [filteredData]);
+
+    const handlePrint = useCallback(() => {
+        window.print();
+    }, []);
 
     // Loading state
     if (status === "loading") {
@@ -1312,6 +1399,49 @@ export default function SeoPpcOpportunitiesPage() {
                             )}
                         </div>
 
+                        {/* Metric Glossary Dropdown */}
+                        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                            <button
+                                onClick={() => toggleSection('glossary')}
+                                className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                            >
+                                <div className="flex items-center gap-2">
+                                    <div className="p-1.5 bg-blue-100 dark:bg-blue-900/30 rounded-lg text-blue-600 dark:text-blue-400">
+                                        <Book className="w-4 h-4" />
+                                    </div>
+                                    <span className="font-semibold text-gray-900 dark:text-white text-sm">Metric Glossary</span>
+                                </div>
+                                {expandedSections.glossary ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                            </button>
+
+                            {expandedSections.glossary && (
+                                <div className="p-4 pt-0 space-y-3 bg-gray-50/50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-700/50">
+                                    <div className="space-y-3 pt-3">
+                                        {[
+                                            { term: "POS", details: "Average organic ranking position from Google Search Console (GSC)." },
+                                            { term: "ORG CLK", details: "Number of organic clicks received from Google Search (GSC)." },
+                                            { term: "CTR", details: "Click-Through Rate: Clicks / Impressions." },
+                                            { term: "Paid Clk", details: "Number of paid clicks from Google Ads." },
+                                            { term: "Cost", details: "Total ad spend for the query/term." },
+                                            { term: "Conv", details: "Conversions: Number of goals completed (sales, leads)." },
+                                            { term: "CVR", details: "Conversion Rate: Conversions / Paid Clicks." },
+                                            { term: "ROAS", details: "Return on Ad Spend: Conversion Value / Cost. Higher is better." },
+                                            { term: "IS %", details: "Search Impression Share: The percentage of impressions your ads received compared to the total number of impressions your ads were eligible for." },
+                                            { term: "Save Score", details: "Priority for reducing spend. High score = High potential waste (e.g. paying for traffic you already win organically)." },
+                                            { term: "Grow Score", details: "Priority for increasing spend or SEO effort. High score = High potential to capture new value." },
+                                            { term: "Comp Score", details: "Competition Score (0-100): Estimate of auction intensity based on CPC and number of advertisers." },
+                                            { term: "Cov Score", details: "Coverage Score (0-100): Indicates how well you cover this term across Search, Shopping, and PMax." },
+                                        ].map((t, i) => (
+                                            <div key={i} className="bg-white dark:bg-gray-900/50 p-2 rounded border border-gray-100 dark:border-gray-800">
+                                                <span className="font-bold text-[11px] text-gray-900 dark:text-white block mb-0.5">{t.term}</span>
+                                                <span className="text-[10px] text-gray-600 dark:text-gray-400 leading-tight block">{t.details}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
                         {/* Scoring Logic Dropdown */}
                         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
                             <button
@@ -1336,21 +1466,21 @@ export default function SeoPpcOpportunitiesPage() {
                                             </p>
                                             <div className="space-y-3">
                                                 <div>
-                                                    <p className="font-bold text-emerald-600 dark:text-emerald-400">Save Score (PV): Potential Waste</p>
+                                                    <p className="font-bold text-orange-600 dark:text-orange-400">Save Score: Spend Efficiency</p>
                                                     <ul className="pl-3 mt-1 space-y-1 list-disc text-gray-500">
-                                                        <li><span className="text-gray-700 dark:text-gray-300 font-medium">Inefficiency:</span> High Spend + Low ROAS (&lt;2.0) adds up to 80pts.</li>
-                                                        <li><span className="text-gray-700 dark:text-gray-300 font-medium">Cannibalization:</span> Organic Rank 1-3 adds 20-30pts.</li>
-                                                        <li><span className="text-indigo-600 dark:text-indigo-400 font-medium">Redundancy:</span> Multi-channel coverage (Shopping/PMax) adds 20pts if Organic Pos &lt; 3.</li>
-                                                        <li><span className="text-rose-600 dark:text-rose-500 font-medium">Brand Safety:</span> 90% penalty applied to brand terms (except Multi-Channel tests).</li>
+                                                        <li><span className="text-gray-700 dark:text-gray-300 font-medium">Materiality:</span> Thresholds applied (£50/£75) to reduce noise.</li>
+                                                        <li><span className="text-gray-700 dark:text-gray-300 font-medium">Cannibalization:</span> Organic Rank 1-4 with Shopp/PMax adds safety check.</li>
+                                                        <li><span className="text-indigo-600 dark:text-indigo-400 font-medium">Redundancy:</span> Low ROAS (&lt; 2) + Multi-channel adds up to 30pts.</li>
+                                                        <li><span className="text-rose-600 dark:text-rose-500 font-medium">Brand Safety:</span> High penalty (90%) for brand unless redundancy is clear.</li>
                                                     </ul>
                                                 </div>
                                                 <div>
-                                                    <p className="font-bold text-blue-600 dark:text-blue-400">Grow Score (OV): Revenue Potential</p>
+                                                    <p className="font-bold text-emerald-600 dark:text-emerald-400">Grow Score: Revenue Magnitude</p>
                                                     <ul className="pl-3 mt-1 space-y-1 list-disc text-gray-500">
-                                                        <li><span className="text-gray-700 dark:text-gray-300 font-medium">Profitability:</span> ROAS &gt; 4.0 adds 30pts; ROAS &gt; 2.0 adds 20pts.</li>
-                                                        <li><span className="text-gray-700 dark:text-gray-300 font-medium">Strategic Tiers:</span> High Intent (1.25x), Brand Core (1.15x), Commercial focus.</li>
-                                                        <li><span className="text-gray-700 dark:text-gray-300 font-medium">Revenue Gravity:</span> Logarithmic scaling ensures high-value terms float to the top.</li>
-                                                        <li><span className="text-purple-600 dark:text-purple-400 font-medium">Competition:</span> High Competition Score (&gt;60) triggers &quot;Defend&quot; priority.</li>
+                                                        <li><span className="text-gray-700 dark:text-gray-300 font-medium">Revenue Weight:</span> Normalized LOG weighting for conversion value.</li>
+                                                        <li><span className="text-blue-600 dark:text-blue-400 font-medium">Striking Distance:</span> Organic Pos 11-25 gets +35pts (High Leverage).</li>
+                                                        <li><span className="text-gray-700 dark:text-gray-300 font-medium">Strategic Tiers:</span> High Intent (1.1x scaling), Brand (0.9x scaling).</li>
+                                                        <li><span className="text-purple-600 dark:text-purple-400 font-medium">Defend Bias:</span> High ROI + High Comp terms promoted to Defend.</li>
                                                     </ul>
                                                 </div>
                                             </div>
@@ -1370,10 +1500,10 @@ export default function SeoPpcOpportunitiesPage() {
                 <div className="p-6 border-t border-gray-200 dark:border-gray-700">
                     <ThemeToggle />
                 </div>
-            </aside >
+            </aside>
 
             {/* Main Content */}
-            < main className="flex-1 ml-80 p-8 min-h-screen" >
+            <main className="flex-1 ml-80 p-8 min-h-screen">
                 <div className="w-full mx-auto">
                     <div className="mb-8">
                         <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-3">
@@ -1388,6 +1518,9 @@ export default function SeoPpcOpportunitiesPage() {
 
                         {/* Controls */}
                         <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
+
+                            <UploadWizard />
+
                             <div className="flex flex-wrap items-end gap-6">
                                 {/* Mock Mode Toggle */}
                                 <div className="pb-2">
@@ -1617,12 +1750,15 @@ export default function SeoPpcOpportunitiesPage() {
                                             <Filter className="w-5 h-5 text-gray-500" />
                                             <h3 className="text-sm font-medium text-gray-900 dark:text-white">Filters</h3>
                                         </div>
-                                        {(filterActions.length > 0 || filterCampaign !== "all" || filterAdGroup !== "all") && (
+                                        {(filterActions.length > 0 || filterCampaign !== "all" || filterAdGroup !== "all" || filterMinRoas !== '' || filterMinClicks !== '' || filterMinConversions !== '') && (
                                             <button
                                                 onClick={() => {
                                                     setFilterActions([]);
                                                     setFilterCampaign("all");
                                                     setFilterAdGroup("all");
+                                                    setFilterMinRoas('');
+                                                    setFilterMinClicks('');
+                                                    setFilterMinConversions('');
                                                 }}
                                                 className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
                                             >
@@ -1757,6 +1893,48 @@ export default function SeoPpcOpportunitiesPage() {
                                             </select>
                                         </div>
                                     </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                                        {/* Filter by Min ROAS */}
+                                        <div>
+                                            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+                                                Min. ROAS
+                                            </label>
+                                            <input
+                                                type="number"
+                                                value={filterMinRoas}
+                                                onChange={(e) => setFilterMinRoas(e.target.value === '' ? '' : Number(e.target.value))}
+                                                placeholder="e.g. 2.0"
+                                                className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400"
+                                            />
+                                        </div>
+                                        {/* Filter by Min Clicks */}
+                                        <div>
+                                            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+                                                Min. Clicks (Org or Paid)
+                                            </label>
+                                            <input
+                                                type="number"
+                                                value={filterMinClicks}
+                                                onChange={(e) => setFilterMinClicks(e.target.value === '' ? '' : Number(e.target.value))}
+                                                placeholder="e.g. 100"
+                                                className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400"
+                                            />
+                                        </div>
+                                        {/* Filter by Min Conversions */}
+                                        <div>
+                                            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+                                                Min. Conversions (Paid)
+                                            </label>
+                                            <input
+                                                type="number"
+                                                value={filterMinConversions}
+                                                onChange={(e) => setFilterMinConversions(e.target.value === '' ? '' : Number(e.target.value))}
+                                                placeholder="e.g. 5"
+                                                className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400"
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
                             )
                         }
@@ -1806,7 +1984,7 @@ export default function SeoPpcOpportunitiesPage() {
                                                     title="Avg. CPA"
                                                     value={summary.avgCpa !== null && summary.avgCpa !== undefined ? formatCurrency(summary.avgCpa, currencyCode) : "-"}
                                                     subtitle="Cost per acquisition"
-                                                    icon={Target}
+                                                    icon={LucideTarget}
                                                 />
                                                 <KpiCard
                                                     title="Blended CTR"
@@ -1914,7 +2092,7 @@ export default function SeoPpcOpportunitiesPage() {
                                                         title="🎯 SEO Content Gaps"
                                                         subtitle="Top 'SEO Focus' opportunities by conversions"
                                                         opportunities={quickWins?.seoFocus || []}
-                                                        icon={Target}
+                                                        icon={LucideTarget}
                                                         iconColorClass="bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
                                                         valueFormatter={(v) => `${v || 0} Conv.`}
                                                         valueKey="conversions_paid"
@@ -2355,6 +2533,7 @@ export default function SeoPpcOpportunitiesPage() {
                                                         className="bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-2 text-xs text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 outline-none"
                                                     >
                                                         <option value="contains">Contains</option>
+                                                        <option value="does_not_contain">Does not contain</option>
                                                         <option value="equals">Equals</option>
                                                         <option value="regex">Regex</option>
                                                     </select>
@@ -2377,15 +2556,31 @@ export default function SeoPpcOpportunitiesPage() {
                                                     </select>
                                                 </div>
 
-                                                {/* Export */}
-                                                <button
-                                                    onClick={handleExportCsv}
-                                                    className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                                                >
-                                                    <Download className="w-4 h-4" />
-                                                    Export CSV
-                                                </button>
+                                                {/* Export & Actions */}
+                                                <div className="flex items-center gap-2">
+
+                                                    <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+                                                        <button
+                                                            onClick={handleExportCsv}
+                                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium hover:bg-white dark:hover:bg-gray-600 shadow-sm transition-all"
+                                                            title="Download CSV"
+                                                        >
+                                                            <FileSpreadsheet className="w-4 h-4 text-green-600 dark:text-green-400" />
+                                                            <span className="hidden sm:inline">CSV</span>
+                                                        </button>
+                                                        <button
+                                                            onClick={handlePrint}
+                                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium hover:bg-white dark:hover:bg-gray-600 shadow-sm transition-all"
+                                                            title="Print Report / Save as PDF"
+                                                        >
+                                                            <Printer className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                                                            <span className="hidden sm:inline">Print/PDF</span>
+                                                        </button>
+                                                    </div>
+                                                </div>
                                             </div>
+
+
 
                                             {/* Table */}
                                             <div className="overflow-x-auto">
@@ -2455,7 +2650,7 @@ export default function SeoPpcOpportunitiesPage() {
                                                                     )}
                                                                 </td>
                                                                 <td className="px-3 py-3">
-                                                                    {!row.parent_query && <ActionBadge action={row.action} />}
+                                                                    {!row.parent_query && <ActionBadge action={row.action} row={row} />}
                                                                 </td>
                                                                 <td className="px-3 py-3 text-gray-900 dark:text-gray-100 max-w-[200px] truncate">
                                                                     <div className="flex items-center gap-2">
@@ -2684,7 +2879,7 @@ export default function SeoPpcOpportunitiesPage() {
                                                                 Analyzing query: <span className="font-medium text-gray-900 dark:text-gray-200">{selectedRow?.query || "Loading..."}</span>
                                                             </p>
                                                             {selectedRow?.action && (
-                                                                <ActionBadge action={selectedRow.action} />
+                                                                <ActionBadge action={selectedRow.action} row={selectedRow} />
                                                             )}
                                                         </div>
                                                         <a
@@ -2745,20 +2940,13 @@ export default function SeoPpcOpportunitiesPage() {
                                                                     <span className="text-sm font-medium text-gray-500 dark:text-gray-400 shrink-0">Predicted Impact</span>
                                                                     <span className="text-sm font-semibold text-purple-700 dark:text-purple-300 text-right">{analysisData?.aiRecommendation?.impact}</span>
                                                                 </div>
-                                                                <div className="flex justify-between items-center gap-4 p-3 bg-white/50 dark:bg-black/20 rounded-lg border border-purple-100 dark:border-purple-800/50">
-                                                                    <span className="text-sm font-medium text-gray-500 dark:text-gray-400 shrink-0">Difficulty</span>
-                                                                    <span className={`text-sm font-semibold px-2 py-0.5 rounded ${analysisData?.aiRecommendation?.difficulty === 'Low' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
-                                                                        analysisData?.aiRecommendation?.difficulty === 'Medium' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' :
-                                                                            'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
-                                                                        }`}>{analysisData?.aiRecommendation?.difficulty}</span>
-                                                                </div>
                                                             </div>
                                                         </div>
                                                     </div>
 
                                                     {/* Metrics Grid */}
-                                                    <div className={`grid grid-cols-1 md:grid-cols-${analysisData?.targetRank ? '3' : '2'} gap-4`}>
-                                                        {analysisData?.targetRank && (
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                                        {analysisData?.targetRank ? (
                                                             <div className={`p-4 rounded-xl border transition-all duration-300 ${analysisData?.targetRank === 1
                                                                 ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 shadow-sm ring-1 ring-emerald-500/20'
                                                                 : 'bg-purple-50 dark:bg-purple-900/10 border-purple-200 dark:border-purple-800/30'
@@ -2775,40 +2963,40 @@ export default function SeoPpcOpportunitiesPage() {
                                                                     )}
                                                                 </div>
                                                             </div>
-                                                        )}
-                                                        {/* Keyword Difficulty Removed as per request */}
-                                                        {/* <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
-                                                            <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-medium">Keyword Difficulty</p>
-                                                            <div className="flex items-end gap-2 mt-1">
-                                                                <span className="text-2xl font-bold text-gray-900 dark:text-white">{analysisData.difficulty}/100</span>
-                                                                <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full mb-1.5">
-                                                                    <div
-                                                                        className={`h-full rounded-full ${analysisData.difficulty > 70 ? 'bg-red-500' : analysisData.difficulty > 40 ? 'bg-yellow-500' : 'bg-green-500'}`}
-                                                                        style={{ width: `${analysisData.difficulty}%` }}
-                                                                    />
-                                                                </div>
+                                                        ) : (
+                                                            <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
+                                                                <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-medium">Organic Rank</p>
+                                                                <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">-</p>
                                                             </div>
-                                                        </div> */}
+                                                        )}
+
+                                                        <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-medium">Est. Impressions</p>
+                                                            <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{formatNumber(analysisData?.searchVolume || 0)}</p>
+                                                        </div>
+
                                                         <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
                                                             <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-medium">Search Intent</p>
-                                                            <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1 capitalize">{analysisData?.intent}</p>
-                                                        </div>
-                                                        <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
-                                                            <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-medium">Est. Volume</p>
-                                                            <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{formatNumber(analysisData?.searchVolume || 0)}</p>
+                                                            <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1 capitalize">{analysisData?.intent || 'Unknown'}</p>
                                                         </div>
                                                     </div>
 
                                                     {/* SERP Features */}
-                                                    <div>
-                                                        <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3 uppercase tracking-wider">Present SERP Features</h4>
-                                                        <div className="flex flex-wrap gap-2">
-                                                            {analysisData?.serpFeatures?.map(feature => (
-                                                                <span key={feature} className="px-3 py-1 bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300 rounded-full text-sm font-medium border border-blue-100 dark:border-blue-800/30">
-                                                                    {feature}
-                                                                </span>
-                                                            ))}
-                                                        </div>
+                                                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+                                                        <h4 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2 mb-4">
+                                                            <LayoutDashboard className="w-4 h-4 text-purple-500" /> SERP Features
+                                                        </h4>
+                                                        {analysisData.serpFeatures && analysisData.serpFeatures.length > 0 ? (
+                                                            <div className="flex flex-wrap gap-2">
+                                                                {analysisData.serpFeatures.map((feat, idx) => (
+                                                                    <span key={idx} className="px-3 py-1 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 rounded-full text-sm font-medium border border-purple-100 dark:border-purple-800">
+                                                                        {feat}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        ) : (
+                                                            <p className="text-sm text-gray-500 italic">No special SERP features detected.</p>
+                                                        )}
                                                     </div>
 
                                                     {/* Competitive Landscape Table */}
@@ -2828,7 +3016,7 @@ export default function SeoPpcOpportunitiesPage() {
                                                                         </tr>
                                                                     </thead>
                                                                     <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                                                                        {analysisData.paidResults?.length > 0 ? (
+                                                                        {analysisData?.paidResults?.length > 0 ? (
                                                                             analysisData.paidResults.map((result) => {
                                                                                 const isTarget = selectedProperty && result.url.toLowerCase().includes(selectedProperty.toLowerCase());
                                                                                 return (
@@ -2912,11 +3100,10 @@ export default function SeoPpcOpportunitiesPage() {
                                         </div>
                                     </div>
                                 </div>
-                            )
-                        }
+                            )}
                     </div>
                 </div>
-            </main >
-        </div >
+            </main>
+        </div>
     );
 }

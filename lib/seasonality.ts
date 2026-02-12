@@ -31,7 +31,7 @@ export function analyzeSeasonality(
         ? Math.round(volumes.reduce((a, b) => a + b, 0) / volumes.length)
         : 0;
 
-    const peakVolume = Math.max(...volumes, 0);
+    const peakVolume = volumes.length > 0 ? volumes.reduce((max, val) => Math.max(max, val), 0) : 0;
     const difference = peakVolume - average;
     const percentDifference = average > 0 ? (difference / average) * 100 : 0;
 

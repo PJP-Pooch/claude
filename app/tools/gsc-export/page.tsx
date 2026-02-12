@@ -487,7 +487,8 @@ export default function GscExportPage() {
         // Filter pages by impression share threshold
         return Object.values(queryMap)
             .map(item => {
-                const topImpression = Math.max(...item.pages.map(p => p.impressions));
+                const impressionsArray = item.pages.map(p => p.impressions);
+                const topImpression = impressionsArray.length > 0 ? impressionsArray.reduce((max, val) => Math.max(max, val), 0) : 0;
                 const filteredPages = item.pages.filter(p => {
                     if (p.clicks === 0) return false;
                     if (topImpression === 0) return true;
@@ -1035,7 +1036,9 @@ export default function GscExportPage() {
                                 onProgress(message.message || "Fetching...");
                             } else if (message.type === "data") {
                                 const newRows = message.rows || [];
-                                accumulatedRows.push(...newRows);
+                                for (const row of newRows) {
+                                    accumulatedRows.push(row);
+                                }
                                 if (onData) onData(accumulatedRows);
                             } else if (message.type === "batch_error") {
                                 console.error("Batch error:", message.message);
@@ -1056,7 +1059,9 @@ export default function GscExportPage() {
                         const message = JSON.parse(buffer);
                         if (message.type === "data") {
                             const newRows = message.rows || [];
-                            accumulatedRows.push(...newRows);
+                            for (const row of newRows) {
+                                accumulatedRows.push(row);
+                            }
                             if (onData) onData(accumulatedRows);
                         }
                     } catch (e) { }

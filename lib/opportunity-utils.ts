@@ -51,6 +51,19 @@ export function microsToAmount(micros: number): number {
 }
 
 /**
+ * Calculate the median of an array of numbers
+ */
+function calculateMedian(values: number[]): number {
+    if (values.length === 0) return 0;
+    const sorted = [...values].sort((a, b) => a - b);
+    const middle = Math.floor(sorted.length / 2);
+    if (sorted.length % 2 === 0) {
+        return (sorted[middle - 1]! + sorted[middle]!) / 2;
+    }
+    return sorted[middle]!;
+}
+
+/**
  * Safely divide, returning null if divisor is 0
  */
 function safeDivide(numerator: number, denominator: number): number | null {
@@ -105,7 +118,9 @@ export function classifyStrategicTier(query: string, isBrand: boolean): Strategi
  */
 export function classifyAction(
     row: Omit<MergedOpportunityRow, 'action' | 'opportunity_score' | 'projected_savings_score' | 'projected_growth_score'>,
-    accountAvgRoas: number | null
+    accountAvgRoas: number | null,
+    medianCost: number = 0,
+    medianConvValue: number = 0
 ): OpportunityAction {
     const {
         position_org, conversions_paid, cost_paid, clicks_org, clicks_paid,
@@ -144,35 +159,28 @@ export function classifyAction(
     const hasLowImpressionShare = impressionShare !== null && impressionShare !== undefined && impressionShare < 0.5;
 
     // --- NEW PRIORITY: Investigate PPC (Stop Loss Block) ---
-    // If we've spent a significant amount with ZERO conversions, flag it immediately.
-    // Raised threshold to 50 to avoid noise.
-    if (cost_paid > 50 && conversions_paid === 0 && clicks_paid >= 10) {
-        return 'Investigate';
+    // MATERIALITY THRESHOLD: Only trigger if cost > 50 OR cost > median
+    if (conversions_paid === 0 && clicks_paid >= 10) {
+        if (cost_paid > 50 || cost_paid > medianCost) {
+            return 'Investigate';
+        }
     }
 
-    // --- NEW PRIORITY: Test Multi-Channel Pause ---
-    // Detect cases where organic rank is high (#1-3) and both search & shopping/pmax are live
-    const isMultiChannel = (row as MergedOpportunityRow).channel_count && (row as MergedOpportunityRow).channel_count! > 1;
+    // --- NEW PRIORITY: Test Multi-Channel Pause (Reduce Spend) ---
+    // Only allow if campaign is Search, has fallback coverage, ROAS < 2, low comp, good organic rank, and spend > 75
+    const isSearchCampaign = !row.campaign_type || row.campaign_type.toLowerCase().includes('search');
     const hasShoppingOrPmax = (row as MergedOpportunityRow).has_shopping_coverage || (row as MergedOpportunityRow).has_pmax_coverage;
 
-    if (position_org > 0 && position_org <= 3 && isMultiChannel && hasShoppingOrPmax && cost_paid > 20) {
-        return 'Reduce Spend';
+    if (isSearchCampaign && hasShoppingOrPmax && position_org > 0 && position_org <= 4 && cost_paid > 75) {
+        if (roas_paid !== null && roas_paid < 2 && row.competition_score < 50) {
+            return 'Reduce Spend'; // This is the "Pause" action in multi-channel context
+        }
     }
 
     // --- NEW PRIORITY 1: Defend (Strong Organic + High Competition) ---
-    // Moved up to ensure Brand + High ROAS + High Comp is caught before Reduce Spend.
-    // Loosened profitability slightly for Defend if it's high competition.
-    const isMarginallyProfitable = roas_paid !== null && roas_paid >= (avgRoas * 0.7);
-
-    // DEFEND GUARD: Standard existing guard or coverage presence
-    // If shopping/pmax is covering, we might still want to defend Search if competition is high
-    const isHighCompetition = row.competition_score >= 60;
-    const hasCoveragePressure = row.has_shopping_coverage || row.has_pmax_coverage;
-    const campaignStatusPressure = row.campaign_status_reasons && row.campaign_status_reasons.length > 0;
-
-    if (position_org > 0 && position_org <= 3 && (isPaidProfitable || (isBrand && isMarginallyProfitable))) {
-        // Trigger Defend if high competition OR we are seeing coverage pressure from other channels
-        if (isHighCompetition || hasCoveragePressure || campaignStatusPressure) {
+    // TIGHTENED DEFEND: Search only, Pos <= 4, ROAS >= 4, High Comp, Above Median Revenue
+    if (isSearchCampaign && position_org > 0 && position_org <= 4 && roas_paid !== null && roas_paid >= 4) {
+        if (row.competition_score >= 60 && (row.conv_value_paid || 0) > medianConvValue) {
             return 'Defend';
         }
     }
@@ -206,26 +214,19 @@ export function classifyAction(
         } else {
             // NON-BRAND RULE: Be more aggressive about testing pauses/reductions
 
-            // PAUSE GUARD: 
-            // 1. Only allow if coverage_score is high enough OR we have fallback coverage (Shopping/PMax)
-            const hasSafeCoverage = (row.coverage_score && row.coverage_score >= 70) || row.has_shopping_coverage || row.has_pmax_coverage;
-            // 2. Only allow if campaign type is Search (don't propose pausing Shopping/PMax rows based on keyword logic)
-            const isSearchCampaign = !row.campaign_type || row.campaign_type.toLowerCase().includes('search');
-
-            if (isPaidUnprofitable && hasSignificantPaidData && isSearchCampaign) {
-                if (row.competition_score < 60) {
-                    // Safety check: if we don't have safe coverage, downgrade to Reduce Spend or Investigate
-                    if (hasSafeCoverage) {
+            // PAUSE / REDUCE MATERIALITY GUARD: Only allow if cost_paid > 75
+            if (cost_paid > 75 && isSearchCampaign) {
+                // Check for cannibalization risks
+                if (isPaidUnprofitable && hasSignificantPaidData) {
+                    if (row.competition_score < 60) {
                         return 'Reduce Spend';
-                    } else {
-                        return 'Reduce Spend'; // Downgrade
                     }
                 }
-            }
-            // High organic strength but mediocre paid performance
-            if (!isPaidHighlyProfitable && (position_org <= 2 || ctrRatio >= 1.0) && isSearchCampaign) {
-                if (row.competition_score < 70) {
-                    return 'Reduce Spend';
+                // High organic strength but mediocre paid performance
+                if (!isPaidHighlyProfitable && (position_org <= 2 || ctrRatio >= 1.0)) {
+                    if (row.competition_score < 70) {
+                        return 'Reduce Spend';
+                    }
                 }
             }
         }
@@ -281,7 +282,7 @@ export function getActionReason(row: Omit<MergedOpportunityRow, 'action' | 'oppo
     const {
         position_org, conversions_paid, cost_paid, clicks_org, clicks_paid,
         ctr_org, impressions_org, impressions_paid, roas_paid,
-        matchType, impressionShare
+        matchType, impressionShare, isBrand
     } = row;
 
     const expectedCtr = getExpectedCtr(position_org);
@@ -303,36 +304,31 @@ export function getActionReason(row: Omit<MergedOpportunityRow, 'action' | 'oppo
         case 'Add Exact Match':
             return `Keyword is currently '${matchType}' match but converting profitably (ROAS > 2). Adding as Exact Match can improve efficiency and control.`;
         case 'Scale Spend':
-            return `High ROAS (>4) but low Impression Share (<50%). Significant opportunity to capture more profitable volume by increasing budget/bids.`;
+            return `High ROAS (>4) but low Impression Share (<50%). Significant opportunity to capture more profitable Imp by increasing budget/bids.`;
         case 'Reduce Spend':
             // Logic to differentiate reasons
-            if (position_org > 0 && position_org <= 3) {
-                // Check for Multi-Channel
-                const isMultiChannel = (row as MergedOpportunityRow).channel_count && (row as MergedOpportunityRow).channel_count! > 1;
-                const hasShoppingOrPmax = (row as MergedOpportunityRow).has_shopping_coverage || (row as MergedOpportunityRow).has_pmax_coverage;
-                if (isMultiChannel && hasShoppingOrPmax) {
-                    return `Severe Redundancy: You are paying for multiple ad placements (Search + Shopping/PMax) while dominating organically (Pos < 3). The second ad placement is highly likely to be wasted spend.`;
-                }
-                // Check for PPC Pause logic (Strong Org + Low Comp)
-                if (row.competition_score < 40) {
-                    return `Strong Organic presence (Pos < 3) and low competition (Score < 40). Paid Ads are likely cannibalizing organic traffic. Safe to test pause.`;
-                }
+            const hasShoppingOrPmax = (row as MergedOpportunityRow).has_shopping_coverage || (row as MergedOpportunityRow).has_pmax_coverage;
+            if (position_org > 0 && position_org <= 4 && hasShoppingOrPmax) {
+                return `Multi-Channel Redundancy: You rank organically in the top 4 and have coverage from Shopping/PMax. Paid Search spend is likely wasteful if ROAS is low and competition is manageable. (Cost > £75).`;
             }
-            return `Strong Organic presence (Pos < 3) with moderate competition (Score < 50). Can reduce ad spend without losing traffic.`;
+            if (position_org > 0 && position_org <= 2 && isBrand) {
+                return `Brand Dominance: You are #1-2 organically for this brand term. If ROAS isn't exceptional, reducing spend can test for organic capture and save budget.`;
+            }
+            return `Efficiency Opportunity: High organic presence with inefficient or redundant paid coverage. Can reduce spend with minimal traffic loss.`;
         case "Defend":
-            return `Protect high-value terms where you have organic dominance but face intense auction pressure. Org < 3 + ROAS >= 4 + Comp Score >= 60. Maintain detailed defense strategy to prevent competitors from stealing clicks.`;
+            return `Critical Protection: Protecting high-revenue search terms where you rank #1-4 organically but face heavy competition. High ROAS (>4) and high commercial intent make this a priority for defensive bidding.`;
         case 'SEO Focus':
             if (position_org === 0 && hasMeaningfulPaidActivity) return `Proven paid engagement (clicks or conversions), but zero organic visibility. High value target for new SEO content.`;
             if (position_org > 10 && position_org <= 20) return `Ranking in striking distance (Page 2) with meaningful paid activity. Push to Page 1 for significant traffic gain.`;
             if (position_org > 20 && hasMeaningfulPaidActivity) return `Meaningful paid engagement, but organic ranking is low (>20). Long-term SEO opportunity to reduce reliance on paid spend.`;
             return `Keyword shows potential but lacks organic visibility. Improve content relevance to rank.`;
         case 'Investigate':
-            if (cost_paid > 50 && conversions_paid === 0 && clicks_paid >= 10) return `High spend keywords with zero conversions (Cost > £50). Significant waste that needs immediate stopping or reassessing.`;
-            if (position_org > 0 && position_org <= 10 && ctrRatio < 0.5) return `Organic ranking is good (Pos 1-10) but CTR is unexpectedly low. Investigate Title/Meta Description or SERP features stealing clicks.`;
-            return `Performance metrics look unusual. Review queries and landing pages for relevance issues.`;
+            if (conversions_paid === 0 && clicks_paid >= 10) return `High Spend, Zero Conversions: This keyword has passed the materiality threshold for spend but is not converting. Needs immediate reassessment or negative keyword check.`;
+            if (position_org > 0 && position_org <= 10 && ctrRatio < 0.5) return `CTR Gap: Organic rank is good (Pos 1-10) but CTR is significantly below expected. Investigate SERP layout or Meta Titles/Descriptions.`;
+            return `Performance Anomaly: This keyword shows unusual performance patterns that require manual review.`;
         case 'Consider PPC':
             if (position_org === 0) return `No organic visibility yet. Test viability with a small PPC campaign to gauge conversion potential before investing in SEO.`;
-            if (clicks_org === 0 && impressions_org < 50) return `Low organic volume. PPC can help validate keyword demand and gather initial data.`;
+            if (clicks_org === 0 && impressions_org < 50) return `Low organic Imp. PPC can help validate keyword demand and gather initial data.`;
             return `Potential gap in coverage. Consider testing Ads to capture traffic.`;
         case 'No Action':
             return `Current performance is stable or keyword lacks sufficient signals for a specific recommendation. Maintain current monitoring.`;
@@ -355,7 +351,10 @@ export function getActionReason(row: Omit<MergedOpportunityRow, 'action' | 'oppo
  * Compute the opportunity score and component scores
  * Returns the main score and specific projection scores
  */
-export function computeOpportunityScore(row: Omit<MergedOpportunityRow, 'opportunity_score' | 'projected_savings_score' | 'projected_growth_score'>): {
+export function computeOpportunityScore(
+    row: Omit<MergedOpportunityRow, 'opportunity_score' | 'projected_savings_score' | 'projected_growth_score'>,
+    maxLogRev: number = 0
+): {
     opportunity_score: number;
     projected_savings_score: number;
     projected_growth_score: number;
@@ -451,19 +450,30 @@ export function computeOpportunityScore(row: Omit<MergedOpportunityRow, 'opportu
     const projected_growth_score = Math.min(Math.round(growthScore), 100);
 
     // --- Main Opportunity Score Logic ---
+    // STRATEGIC TIER WEIGHTING (Scaling Growth Component)
+    let adjustedGrowthScore = projected_growth_score;
+    if (strategic_tier === 'High Intent') {
+        // Maps to "High Intent Generic" requirement
+        adjustedGrowthScore *= 1.1;
+    }
+    if (isBrand) {
+        adjustedGrowthScore *= 0.9;
+    }
+
+    // --- Main Opportunity Score Logic ---
     // Logic: If action is Reduce/Investigate AND there is actual cost, use savings score as base.
     // If it's Investigate but cost is £0, it's likely an Organic CTR issue (Growth).
     const isCostSavingAction = (action === 'Reduce Spend' || action === 'Investigate') && cost_paid > 0;
 
-    let baseScore = isCostSavingAction ? projected_savings_score : projected_growth_score;
+    let baseScore = isCostSavingAction ? projected_savings_score : adjustedGrowthScore;
 
     // --- Strategic Tier Multipliers ---
     // Tiers shift base scores to align with business strategy
     const tierMultipliers: Record<StrategicTier, number> = {
-        'Brand Core': 1.15,     // Defend bias
-        'High Intent': 1.25,     // Highest growth weight - bumped from 1.2
+        'Brand Core': 1.25,     // Increased bias for protection - Defend Bias
+        'High Intent': 1.25,     // Highest growth weight
         'Mid Funnel': 1.05,
-        'Informational': 0.8     // Lowered from 0.9 to prioritize commercial
+        'Informational': 0.8     // Lowered to prioritize commercial
     };
 
     // Type-safe access with fallback
@@ -471,11 +481,12 @@ export function computeOpportunityScore(row: Omit<MergedOpportunityRow, 'opportu
     const tierMultiplier = tierMultipliers[tier as StrategicTier] || 1.0;
     baseScore *= tierMultiplier;
 
-    // --- Revenue Weight (Logarithmic Scaling) ---
-    // Using log scaling as requested to ensure big money terms float to the top
-    // without completely drowning out high-potential but lower-revenue terms.
-    const revenueWeightLog = Math.log10(1 + row.conv_value_paid) + 1; // 1 + log10(revenue+1)
-    baseScore *= revenueWeightLog;
+    // --- Revenue Weighting Improvement (No New Columns) ---
+    // Normalize revenue_factor relative to max_revenue_factor in dataset.
+    // Scale: final_score = existing_score * (0.7 + 0.3 * normalized_revenue_factor)
+    const revenueFactor = Math.log(1 + (conv_value_paid || 0));
+    const normalizedRevenueFactor = maxLogRev > 0 ? (revenueFactor / maxLogRev) : 0;
+    baseScore = baseScore * (0.7 + 0.3 * normalizedRevenueFactor);
 
     // Apply Action Multipliers
     const actionMultipliers: Record<OpportunityAction, number> = {
@@ -680,6 +691,15 @@ export function mergeDatasets(
     // Track which campaigns are matched to queries
     const usedCampaigns = new Set<string>();
 
+    // Calculate global metrics once for use in classification and scoring
+    const allCosts = adsData.map(r => microsToAmount(r.costMicros)).filter(c => c > 0);
+    const allConvValues = adsData.map(r => r.conversionValue).filter(v => v > 0);
+    const allLogRevs = adsData.map(r => Math.log(1 + r.conversionValue));
+
+    const globalMedianCost = calculateMedian(allCosts);
+    const globalMedianConvValue = calculateMedian(allConvValues);
+    const globalMaxLogRev = allLogRevs.length > 0 ? allLogRevs.reduce((max, val) => Math.max(max, val), 0) : 0;
+
     for (const query of Array.from(queries)) {
         if (!query) continue;
         const gsc = gscMap.get(query);
@@ -731,7 +751,7 @@ export function mergeDatasets(
 
             // Extended paid metrics
             const matchType = ads?.matchType;
-            const impressionShare = ads?.impressionShare ?? null;
+            let impressionShare = ads?.impressionShare ?? null;
             const budgetLostImpressionShare = ads?.budgetLostImpressionShare ?? null;
             const rankLostImpressionShare = ads?.rankLostImpressionShare ?? null;
             const conversionRate = ads?.conversionRate ?? 0;
@@ -851,6 +871,12 @@ export function mergeDatasets(
                 if (merge_level === 'default') merge_level = 'unmatched';
             }
 
+            // Fallback for Impression Share: prioritize Keyword metrics, then Search Term, then Campaign fallback
+            if (impressionShare === null) {
+                if (k_sis !== null) impressionShare = k_sis;
+                else if (campaignRow?.searchImprShare) impressionShare = campaignRow.searchImprShare;
+            }
+
             const partialRow = {
                 query,
                 clicks_org, impressions_org, ctr_org, position_org,
@@ -867,8 +893,8 @@ export function mergeDatasets(
             };
 
             const strategic_tier = classifyStrategicTier(query, isBrand);
-            const action = classifyAction({ ...partialRow, strategic_tier }, accountAvgRoas);
-            const scores = computeOpportunityScore({ ...partialRow, action, strategic_tier, isBrand });
+            const action = classifyAction({ ...partialRow, strategic_tier }, accountAvgRoas, globalMedianCost, globalMedianConvValue);
+            const scores = computeOpportunityScore({ ...partialRow, action, strategic_tier, isBrand }, globalMaxLogRev);
 
             rowsForThisQuery.push({
                 ...partialRow,
@@ -906,10 +932,20 @@ export function mergeDatasets(
             // Average or Max competition/coverage? Average is safer.
             totalRow.competition_score = rowsForThisQuery.reduce((sum, r) => sum + r.competition_score, 0) / rowsForThisQuery.length;
 
+            // Weighted Average Impression Share for Total Row
+            const rowsWithIS = rowsForThisQuery.filter(r => r.impressionShare !== null && r.impressionShare !== undefined);
+            if (rowsWithIS.length > 0) {
+                const totalISWeighted = rowsWithIS.reduce((sum, r) => sum + ((r.impressionShare || 0) * r.impressions_paid), 0);
+                const totalISImpr = rowsWithIS.reduce((sum, r) => sum + r.impressions_paid, 0);
+                totalRow.impressionShare = totalISImpr > 0 ? totalISWeighted / totalISImpr : rowsWithIS[0]?.impressionShare;
+            } else {
+                totalRow.impressionShare = null;
+            }
+
             // Re-classify Total row
             const strategic_tier = classifyStrategicTier(query, isBrand);
-            totalRow.action = classifyAction({ ...totalRow, strategic_tier }, accountAvgRoas);
-            const scores = computeOpportunityScore({ ...totalRow, action: totalRow.action, strategic_tier, isBrand });
+            totalRow.action = classifyAction({ ...totalRow, strategic_tier }, accountAvgRoas, globalMedianCost, globalMedianConvValue);
+            const scores = computeOpportunityScore({ ...totalRow, action: totalRow.action, strategic_tier, isBrand }, globalMaxLogRev);
 
             totalRow.opportunity_score = scores.opportunity_score;
             totalRow.projected_savings_score = scores.projected_savings_score;

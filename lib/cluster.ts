@@ -268,8 +268,8 @@ export function getClusterStats(cluster: Cluster): {
   }
 
   const avgOverlap = overlaps.reduce((sum, val) => sum + val, 0) / overlaps.length;
-  const minOverlap = Math.min(...overlaps);
-  const maxOverlap = Math.max(...overlaps);
+  const minOverlap = overlaps.reduce((min, val) => Math.min(min, val), overlaps[0]!);
+  const maxOverlap = overlaps.reduce((max, val) => Math.max(max, val), overlaps[0]!);
 
   return { size, avgOverlap, minOverlap, maxOverlap };
 }
