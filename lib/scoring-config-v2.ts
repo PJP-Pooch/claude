@@ -9,6 +9,7 @@ export interface ScoringConfig {
     reduce_cost_threshold: number;
     investigate_cost_threshold: number;
     defend_comp_threshold: number;
+    low_impression_share: number;
     expected_ctr_model: {
         pos_1: number;
         pos_2: number;
@@ -31,6 +32,7 @@ export const SCORING_CONFIG_V2: ScoringConfig = {
     reduce_cost_threshold: 20,
     investigate_cost_threshold: 50,
     defend_comp_threshold: 60,
+    low_impression_share: 50,
     expected_ctr_model: {
         pos_1: 0.27,
         pos_2: 0.15,
