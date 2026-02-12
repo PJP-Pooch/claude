@@ -1500,7 +1500,7 @@ export default function SeoPpcOpportunitiesPage() {
                                                     onChange={(e) => setScoringConfig(prev => ({ ...prev, organic_strong_pos: parseInt(e.target.value) || 1 }))}
                                                     className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                                                 />
-                                                <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">Default: 2 (positions 1-2 are "strong")</p>
+                                                <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">Default: 2 (positions 1-2 are &quot;strong&quot;)</p>
                                             </div>
 
                                             <div>
@@ -1516,7 +1516,7 @@ export default function SeoPpcOpportunitiesPage() {
                                                     onChange={(e) => setScoringConfig(prev => ({ ...prev, organic_near_strong_pos: parseInt(e.target.value) || 2 }))}
                                                     className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                                                 />
-                                                <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">Default: 4 (positions 3-4 are "near-strong")</p>
+                                                <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">Default: 4 (positions 3-4 are &quot;near-strong&quot;)</p>
                                             </div>
 
                                             <div>
@@ -1532,7 +1532,7 @@ export default function SeoPpcOpportunitiesPage() {
                                                     onChange={(e) => setScoringConfig(prev => ({ ...prev, organic_weak_pos: parseInt(e.target.value) || 10 }))}
                                                     className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
                                                 />
-                                                <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">Default: 10 (positions beyond 10 are "weak")</p>
+                                                <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">Default: 10 (positions beyond 10 are &quot;weak&quot;)</p>
                                             </div>
                                         </div>
 
@@ -3291,7 +3291,7 @@ export default function SeoPpcOpportunitiesPage() {
                                                                     Target Domain Not Set
                                                                 </p>
                                                                 <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
-                                                                    Enter your target domain in the sidebar (e.g., "example.com") to see your organic ranking position and identify your site in the competitive landscape tables below.
+                                                                    Enter your target domain in the sidebar (e.g., &quot;example.com&quot;) to see your organic ranking position and identify your site in the competitive landscape tables below.
                                                                 </p>
                                                             </div>
                                                         </div>
