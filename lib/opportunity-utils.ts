@@ -904,12 +904,25 @@ export function mergeDatasets(
             };
 
             const strategic_tier = classifyStrategicTier(query, isBrand);
-            const action = classifyAction({ ...partialRow, strategic_tier }, accountAvgRoas, globalMedianCost, globalMedianConvValue);
-            const scores = computeOpportunityScore({ ...partialRow, action, strategic_tier, isBrand }, globalMaxLogRev);
 
-            // V2 Classification
+            // Build row object directly — skip V1 classification since the app overrides with V2
+            const rowBase = {
+                ...partialRow,
+                strategic_tier,
+                isBrand,
+                action: 'No Action' as OpportunityAction, // V1 placeholder — overridden by V2
+                opportunity_score: 0,
+                projected_savings_score: 0,
+                projected_growth_score: 0,
+                parent_query: adsRowsForQuery.length > 1 ? query : undefined,
+                hasOrganic: !!gsc,
+                hasPaid: !!ads,
+                is_primary_channel,
+            };
+
+            // V2 Classification (primary — used by the app)
             const v2Result = classifyActionV2(
-                { ...partialRow, strategic_tier, action, opportunity_score: scores.opportunity_score, projected_growth_score: scores.projected_growth_score, projected_savings_score: scores.projected_savings_score, isBrand, revenueWeight, hasOrganic: !!gsc, hasPaid: !!ads, is_primary_channel },
+                rowBase,
                 accountAvgRoas,
                 globalMedianCost,
                 globalMedianConvValue,
@@ -917,20 +930,14 @@ export function mergeDatasets(
                 globalMedianCpa,
                 scoringConfig
             );
-            const v2Scores = computeOpportunityScore({
-                ...partialRow,
-                action: v2Result.action,
-                strategic_tier,
-                isBrand
-            }, globalMaxLogRev);
+
+            // Compute scores using V2 action
+            rowBase.action = v2Result.action;
+            const v2Scores = computeOpportunityScore(rowBase, globalMaxLogRev);
 
             rowsForThisQuery.push({
-                ...partialRow,
-                ...scores,
-                action,
-                strategic_tier,
-                isBrand,
-                parent_query: adsRowsForQuery.length > 1 ? query : undefined,
+                ...rowBase,
+                ...v2Scores,
                 // V2 Fields
                 action_v2: v2Result.action,
                 reasons: v2Result.reasons,
@@ -976,18 +983,13 @@ export function mergeDatasets(
                 totalRow.impressionShare = null;
             }
 
-            // Re-classify Total row
+            // Re-classify Total row — skip V1, use V2 directly
             const strategic_tier = classifyStrategicTier(query, isBrand);
-            totalRow.action = classifyAction({ ...totalRow, strategic_tier }, accountAvgRoas, globalMedianCost, globalMedianConvValue);
-            const scores = computeOpportunityScore({ ...totalRow, action: totalRow.action, strategic_tier, isBrand }, globalMaxLogRev);
-
-            totalRow.opportunity_score = scores.opportunity_score;
-            totalRow.projected_savings_score = scores.projected_savings_score;
-            totalRow.projected_growth_score = scores.projected_growth_score;
+            totalRow.strategic_tier = strategic_tier;
 
             // V2 Classification for Total Row
             const v2Result = classifyActionV2(
-                { ...totalRow, strategic_tier },
+                totalRow,
                 accountAvgRoas,
                 globalMedianCost,
                 globalMedianConvValue,
@@ -995,13 +997,13 @@ export function mergeDatasets(
                 globalMedianCpa,
                 scoringConfig
             );
-            const v2Scores = computeOpportunityScore({
-                ...totalRow,
-                action: v2Result.action,
-                strategic_tier,
-                isBrand
-            }, globalMaxLogRev);
 
+            totalRow.action = v2Result.action;
+            const v2Scores = computeOpportunityScore(totalRow, globalMaxLogRev);
+
+            totalRow.opportunity_score = v2Scores.opportunity_score;
+            totalRow.projected_savings_score = v2Scores.projected_savings_score;
+            totalRow.projected_growth_score = v2Scores.projected_growth_score;
             totalRow.action_v2 = v2Result.action;
             totalRow.reasons = v2Result.reasons;
             totalRow.missing_signals = v2Result.missing_signals;

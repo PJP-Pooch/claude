@@ -367,23 +367,23 @@ function ActionLegend({ expanded, onToggle, config }: { expanded: boolean; onTog
             {expanded && (
                 <div className="p-4 pt-0 space-y-3 bg-gray-50/50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-700/50">
                     <div className="space-y-4 pt-3">
-                    <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-700">
-                        <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Opportunity Rules (Live)</span>
-                    </div>
-                    {Object.entries(definitions).map(([action, info]) => (
-                        <div key={action} className="space-y-1 pb-3 border-b border-gray-100 dark:border-gray-700 last:border-0 last:pb-0">
-                            <div className="flex items-center gap-2">
-                                <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: info.color }}></div>
-                                <span className="text-xs font-bold text-gray-800 dark:text-gray-200">{action}</span>
-                            </div>
-                            <p className="text-[11px] text-gray-600 dark:text-gray-400 leading-snug">
-                                {info.definition}
-                            </p>
-                            <div className="text-[9px] font-mono text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded border border-blue-100 dark:border-blue-800 inline-block mt-1">
-                                Rule: {info.rule}
-                            </div>
+                        <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-700">
+                            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Opportunity Rules (Live)</span>
                         </div>
-                    ))}
+                        {Object.entries(definitions).map(([action, info]) => (
+                            <div key={action} className="space-y-1 pb-3 border-b border-gray-100 dark:border-gray-700 last:border-0 last:pb-0">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: info.color }}></div>
+                                    <span className="text-xs font-bold text-gray-800 dark:text-gray-200">{action}</span>
+                                </div>
+                                <p className="text-[11px] text-gray-600 dark:text-gray-400 leading-snug">
+                                    {info.definition}
+                                </p>
+                                <div className="text-[9px] font-mono text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded border border-blue-100 dark:border-blue-800 inline-block mt-1">
+                                    Rule: {info.rule}
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
             )}
@@ -578,10 +578,36 @@ export default function SeoPpcOpportunitiesPage() {
         });
     };
 
-    // Merge data whenever raw sources change
-    const mergedData = useMemo(() => {
-        if (!rawGscData.length && !rawAdsData.length) return [];
-        return mergeDatasets(rawGscData, rawAdsData, brandTerms, keywordMetricsData, rawCampaignData, scoringConfig);
+    // Merge data whenever raw sources change — async to avoid blocking UI
+    const [mergedData, setMergedData] = useState<MergedOpportunityRow[]>([]);
+    const [merging, setMerging] = useState(false);
+
+    useEffect(() => {
+        if (!rawGscData.length && !rawAdsData.length) {
+            setMergedData([]);
+            return;
+        }
+
+        const totalQueries = rawGscData.length + rawAdsData.length;
+        setMerging(true);
+        setProgress(`Merging ${totalQueries.toLocaleString()} queries...`);
+
+        // Defer heavy computation so the browser can render the progress message
+        const timeoutId = setTimeout(() => {
+            try {
+                const result = mergeDatasets(rawGscData, rawAdsData, brandTerms, keywordMetricsData, rawCampaignData, scoringConfig);
+                setMergedData(result);
+                setProgress("");
+            } catch (e) {
+                console.error("Merge error:", e);
+                setError("Error merging data: " + String(e));
+                setProgress("");
+            } finally {
+                setMerging(false);
+            }
+        }, 50); // Small delay to let the UI paint the progress message
+
+        return () => clearTimeout(timeoutId);
     }, [rawGscData, rawAdsData, brandTerms, keywordMetricsData, rawCampaignData, scoringConfig]);
 
     const data = useMemo(() => {
