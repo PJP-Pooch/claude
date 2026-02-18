@@ -528,7 +528,8 @@ export function mergeDatasets(
     userBrandTerms: string[] = [], // Optional: Passed from UI
     keywordMetricsData: KeywordMetricsRow[] = [], // Optional: New Keyword Auction Data
     campaignData: CampaignReportRow[] = [], // Optional: New Campaign Report Data
-    scoringConfig: ScoringConfig = SCORING_CONFIG_V2
+    scoringConfig: ScoringConfig = SCORING_CONFIG_V2,
+    minImpressions: number = 10 // Minimum total impressions (organic + paid) to process a query
 ): MergedOpportunityRow[] {
     // Create maps keyed by normalized query
     const gscMap = new Map<string, GscQueryRow>();
@@ -723,10 +724,10 @@ export function mergeDatasets(
             adsRowsForQuery = [{ channel: 'n/a', data: null as any }];
         }
 
-        // Note: We no longer filter out zero-click queries.
-        // Queries with impressions but zero clicks (organic or paid) can still
-        // represent valuable opportunities — e.g. terms that could convert well
-        // on paid search even if they have no organic clicks yet.
+        // Filter: Skip queries with insufficient impressions to reduce processing
+        // This is applied BEFORE expensive classification/scoring to keep performance fast.
+        const totalImpr = (gsc?.impressions || 0) + adsRowsForQuery.reduce((sum, r) => sum + (r.data?.impressions || 0), 0);
+        if (totalImpr < minImpressions) continue;
 
         if (adsRowsForQuery.length === 0) continue;
 
