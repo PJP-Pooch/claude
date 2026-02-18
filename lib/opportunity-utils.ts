@@ -528,8 +528,7 @@ export function mergeDatasets(
     userBrandTerms: string[] = [], // Optional: Passed from UI
     keywordMetricsData: KeywordMetricsRow[] = [], // Optional: New Keyword Auction Data
     campaignData: CampaignReportRow[] = [], // Optional: New Campaign Report Data
-    scoringConfig: ScoringConfig = SCORING_CONFIG_V2,
-    minImpressions: number = 10 // Minimum total impressions (organic + paid) to process a query
+    scoringConfig: ScoringConfig = SCORING_CONFIG_V2
 ): MergedOpportunityRow[] {
     // Create maps keyed by normalized query
     const gscMap = new Map<string, GscQueryRow>();
@@ -724,10 +723,12 @@ export function mergeDatasets(
             adsRowsForQuery = [{ channel: 'n/a', data: null as any }];
         }
 
-        // Filter: Skip queries with insufficient impressions to reduce processing
-        // This is applied BEFORE expensive classification/scoring to keep performance fast.
-        const totalImpr = (gsc?.impressions || 0) + adsRowsForQuery.reduce((sum, r) => sum + (r.data?.impressions || 0), 0);
-        if (totalImpr < minImpressions) continue;
+        // Filter out rows with zero organic AND zero paid clicks
+        const clicks_org_check = gsc?.clicks ?? 0;
+        adsRowsForQuery = adsRowsForQuery.filter(row => {
+            const clicks_paid = row.data?.clicks ?? 0;
+            return clicks_org_check > 0 || clicks_paid > 0;
+        });
 
         if (adsRowsForQuery.length === 0) continue;
 
@@ -905,25 +906,12 @@ export function mergeDatasets(
             };
 
             const strategic_tier = classifyStrategicTier(query, isBrand);
+            const action = classifyAction({ ...partialRow, strategic_tier }, accountAvgRoas, globalMedianCost, globalMedianConvValue);
+            const scores = computeOpportunityScore({ ...partialRow, action, strategic_tier, isBrand }, globalMaxLogRev);
 
-            // Build row object directly — skip V1 classification since the app overrides with V2
-            const rowBase = {
-                ...partialRow,
-                strategic_tier,
-                isBrand,
-                action: 'No Action' as OpportunityAction, // V1 placeholder — overridden by V2
-                opportunity_score: 0,
-                projected_savings_score: 0,
-                projected_growth_score: 0,
-                parent_query: adsRowsForQuery.length > 1 ? query : undefined,
-                hasOrganic: !!gsc,
-                hasPaid: !!ads,
-                is_primary_channel,
-            };
-
-            // V2 Classification (primary — used by the app)
+            // V2 Classification
             const v2Result = classifyActionV2(
-                rowBase,
+                { ...partialRow, strategic_tier, action, opportunity_score: scores.opportunity_score, projected_growth_score: scores.projected_growth_score, projected_savings_score: scores.projected_savings_score, isBrand, revenueWeight, hasOrganic: !!gsc, hasPaid: !!ads, is_primary_channel },
                 accountAvgRoas,
                 globalMedianCost,
                 globalMedianConvValue,
@@ -931,14 +919,20 @@ export function mergeDatasets(
                 globalMedianCpa,
                 scoringConfig
             );
-
-            // Compute scores using V2 action
-            rowBase.action = v2Result.action;
-            const v2Scores = computeOpportunityScore(rowBase, globalMaxLogRev);
+            const v2Scores = computeOpportunityScore({
+                ...partialRow,
+                action: v2Result.action,
+                strategic_tier,
+                isBrand
+            }, globalMaxLogRev);
 
             rowsForThisQuery.push({
-                ...rowBase,
-                ...v2Scores,
+                ...partialRow,
+                ...scores,
+                action,
+                strategic_tier,
+                isBrand,
+                parent_query: adsRowsForQuery.length > 1 ? query : undefined,
                 // V2 Fields
                 action_v2: v2Result.action,
                 reasons: v2Result.reasons,
@@ -984,13 +978,18 @@ export function mergeDatasets(
                 totalRow.impressionShare = null;
             }
 
-            // Re-classify Total row — skip V1, use V2 directly
+            // Re-classify Total row
             const strategic_tier = classifyStrategicTier(query, isBrand);
-            totalRow.strategic_tier = strategic_tier;
+            totalRow.action = classifyAction({ ...totalRow, strategic_tier }, accountAvgRoas, globalMedianCost, globalMedianConvValue);
+            const scores = computeOpportunityScore({ ...totalRow, action: totalRow.action, strategic_tier, isBrand }, globalMaxLogRev);
+
+            totalRow.opportunity_score = scores.opportunity_score;
+            totalRow.projected_savings_score = scores.projected_savings_score;
+            totalRow.projected_growth_score = scores.projected_growth_score;
 
             // V2 Classification for Total Row
             const v2Result = classifyActionV2(
-                totalRow,
+                { ...totalRow, strategic_tier },
                 accountAvgRoas,
                 globalMedianCost,
                 globalMedianConvValue,
@@ -998,13 +997,13 @@ export function mergeDatasets(
                 globalMedianCpa,
                 scoringConfig
             );
+            const v2Scores = computeOpportunityScore({
+                ...totalRow,
+                action: v2Result.action,
+                strategic_tier,
+                isBrand
+            }, globalMaxLogRev);
 
-            totalRow.action = v2Result.action;
-            const v2Scores = computeOpportunityScore(totalRow, globalMaxLogRev);
-
-            totalRow.opportunity_score = v2Scores.opportunity_score;
-            totalRow.projected_savings_score = v2Scores.projected_savings_score;
-            totalRow.projected_growth_score = v2Scores.projected_growth_score;
             totalRow.action_v2 = v2Result.action;
             totalRow.reasons = v2Result.reasons;
             totalRow.missing_signals = v2Result.missing_signals;
