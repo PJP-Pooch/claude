@@ -723,12 +723,10 @@ export function mergeDatasets(
             adsRowsForQuery = [{ channel: 'n/a', data: null as any }];
         }
 
-        // Filter out rows with zero organic AND zero paid clicks
-        const clicks_org_check = gsc?.clicks ?? 0;
-        adsRowsForQuery = adsRowsForQuery.filter(row => {
-            const clicks_paid = row.data?.clicks ?? 0;
-            return clicks_org_check > 0 || clicks_paid > 0;
-        });
+        // Note: We no longer filter out zero-click queries.
+        // Queries with impressions but zero clicks (organic or paid) can still
+        // represent valuable opportunities — e.g. terms that could convert well
+        // on paid search even if they have no organic clicks yet.
 
         if (adsRowsForQuery.length === 0) continue;
 
